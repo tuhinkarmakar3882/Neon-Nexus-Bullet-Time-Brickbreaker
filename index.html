@@ -288,14 +288,14 @@
     </div>
   </section>
 
-  <audio id="audio-elem" loop src="https://cdn.pixabay.com/audio/2025/03/18/audio_7d5c12b31a.mp3"></audio>
+  <audio id="audio-elem" autoplay loop src=""></audio>
 </div>
 
 <!-- =================== GAME SCRIPT =================== -->
 <script>
     /************ CONFIG & HELPERS ************/
     const CFG = {
-        COLS: 12,
+        COLS: 14,
         MAX_ROWS: 8,
         MAX_SPEED: 12,
         DUR: {
@@ -349,7 +349,6 @@
             defaultColor: 'red',
             activeColor: 'yellow',
         }
-
     };
 
     const POWERS = Object.keys(CFG.COLORS);
@@ -376,12 +375,15 @@
     let isBulletTime = false;
     let last = performance.now();
 
-    function flash(text) {
+    function flash(text, color = '#00ffc3') {
         const box = $('#flash');
         box.textContent = text;
-        box.style.opacity = 1;
+        box.style.opacity = '1';
+        box.style.color = color;
+        box.style.textShadow = `0 0 14px ${color}`;
+
         setTimeout(() => {
-            box.style.opacity = 0;
+            box.style.opacity = '0';
         }, 800);
     }
 
@@ -445,7 +447,7 @@
             if (keys.L) this.x -= this.speed * timeScale * direction;
             if (keys.R) this.x += this.speed * timeScale * direction;
 
-            this.x = clamp(this.x, 0, cvs.width - this.w);
+            this.x = clamp(this.x, -this.w / 2, cvs.width - (this.w / 2));
         }
 
         draw() {
@@ -464,7 +466,7 @@
             super();
             this.r = 8;
             this.paddle = paddle;
-            this.baseSp = 4;
+            this.baseSp = 5;
             this.sp = this.baseSp;
             this.vx = 0;
             this.vy = 0;
@@ -490,41 +492,52 @@
             this.x += this.vx * timeScale;
             this.y += this.vy * timeScale;
 
-            /* side walls */
-            if (this.x < this.r || this.x > cvs.width - this.r) {
-                if (!game.wrap) {
-                    this.vx *= -1
+            /* SIDE‐WALL HANDLING */
+            if (game.active.has('Wrap')) {
+                // Pac‑Man style wrap
+                if (this.x < -this.r) this.x = cvs.width + this.r;
+                else if (this.x > cvs.width + this.r) this.x = -this.r;
+            } else {
+                // Standard bounce + clamp
+                if (this.x <= this.r) {
+                    this.x = this.r;
+                    this.vx *= -1;
+                } else if (this.x >= cvs.width - this.r) {
+                    this.x = cvs.width - this.r;
+                    this.vx *= -1;
                 }
-                if (this.x < 0) this.x = cvs.width;
-                if (this.x > cvs.width) this.x = 0;
             }
 
-            /* top wall */
+            /* TOP WALL */
             if (this.y < this.r) {
                 this.y = this.r;
                 this.vy *= -1;
             }
 
-            /* shield bounce */
+            /* SHIELD BOUNCE */
             if (game.active.has('Shield') && this.y + this.r > cvs.height - 6) {
                 this.vy = -Math.abs(this.vy);
                 game.clear('Shield');
             }
 
-            /* bottom -> lose ball */
-            if (this.y > cvs.height + this.r) game.ballLost(this);
+            /* BOTTOM → LOSE BALL */
+            if (this.y > cvs.height + this.r) {
+                game.ballLost(this);
+                return;
+            }
 
+            /* BOOMERANG CURVE */
             if (this.boom) {
                 const ang = Math.atan2(
                     game.paddle.y - this.y,
                     game.paddle.x + game.paddle.w / 2 - this.x
                 );
-                // Stronger curvature for higher arc
-                const strength = -0.25; // increased from 0.1 to 0.3
+                const strength = 0.3;  // higher arc
                 this.vx += Math.cos(ang) * strength;
                 this.vy += Math.sin(ang) * strength;
             }
         }
+
 
         draw() {
             ctx.save();
@@ -742,6 +755,13 @@
             const layouts = ['mixed', 'procedural', 'emoji', 'tunnel', 'grid'];
             const levelType = layouts[(Math.random() * 100) % layouts.length];
             this._buildLevel(levelType);
+            this._applyLevelSound()
+        }
+
+        _applyLevelSound() {
+            $('#audio-elem').src = LevelSounds.sort(
+                () => Math.random() > 0.5 ? -1 : 1
+            )[this.level % LevelSounds.length]
         }
 
         _buildLevel(layout = 'procedural') {
@@ -947,7 +967,7 @@
             /* avoid duplicates */
             if (key !== 'Heart' && this.active.has(key)) return;
 
-            flash(key);
+            flash(key, CFG.COLORS[key]);
             bulletTime();
 
             const dur = CFG.DUR[key.toLowerCase()] || 5000;
@@ -1042,7 +1062,7 @@
                     this.active.set(key, performance.now() + dur);
 
                     this.balls.forEach(b => {
-                        b.sp = Math.max(2, b.sp - 2);
+                        b.sp = Math.max(4, b.sp - 2);
                         const ang = Math.atan2(b.vy, b.vx);
                         b.vx = Math.cos(ang) * b.sp;
                         b.vy = Math.sin(ang) * b.sp;
@@ -1221,10 +1241,11 @@
                 /* clear temporary powers (except Heart) */
                 this.active.clear();
                 this.powers.forEach(pow => {
-                    console.log(pow)
                     pow.applyStun?.()
                 })
-                this.syncSidebar();
+
+                this.powers = []
+                this.sync();
             }
             if (this.lives <= 0) {
                 $('#gameover').classList.add('show');
@@ -1253,6 +1274,8 @@
 
         /* ----- UPDATE STEP ----- */
         update(dt) {
+            if (this.lvlUp) return
+
             this._frameCount++; // increment per frame
 
             /* expire powers */
@@ -1291,14 +1314,19 @@
                 if (!this.bricks.length) {
                     this.level++;
                     this.lives++;
+
                     $('#lvl-text').textContent = `Level ${this.level}`;
                     $('#lvlup').classList.add('show');
+                    this.lvlUp = true
+
                     setTimeout(() => {
                         $('#lvlup').classList.remove('show');
                         this.buildLevel();
+                        this.lvlUp = false
                     }, 1200);
                 }
             }
+
 
             if (this.echo) {
                 const count = this.echoSegments.length;
@@ -1337,7 +1365,7 @@
                     this.paddle.stun = CFG.DUR.stun / 16;
                     cvs.classList.add('hit');
                     bulletTime()
-                    flash('Stun!')
+                    flash('Stun!', '#ff3131')
                     this.score -= 10
                     this.score = Math.max(0, this.score)
 
@@ -1434,13 +1462,28 @@
                 this.lives++;
                 $('#lvl-text').textContent = `Level ${this.level}`;
                 $('#lvlup').classList.add('show');
+                this.lvlUp = true
                 setTimeout(() => {
+                    this.moveToNextLevel()
                     $('#lvlup').classList.remove('show');
                     this.buildLevel();
+                    this.lvlUp = false
                 }, 1200);
             }
 
             this.syncHUD();
+        }
+
+        moveToNextLevel() {
+            this.active = new Map(); // key -> expires timestamp
+            this.paddle = new Paddle();
+            this.balls = [new Ball(this.paddle)];
+            this.bricks = [];
+            this.powers = [];
+            this.parts = [];
+            this.bullets = [];
+            this._frameCount = 0;  // initialize frame counter
+            this.sync();
         }
 
         /* ----- RENDER STEP ----- */
@@ -1508,7 +1551,7 @@
 
     $('#btn-start').addEventListener('click', () => {
         $('#start').classList.remove('show')
-        $('#audio-elem').play();
+
         /************ INIT GAME ************/
         game = new Game();
     });
@@ -1537,6 +1580,16 @@
         const prob = max - (max - min) * (1 - Math.exp(-rate * level));
         return Math.max(min, prob);
     }
+
+    const LevelSounds = [
+        'https://cdn.pixabay.com/audio/2025/03/19/audio_56ae1dae5f.mp3',
+        'https://cdn.pixabay.com/audio/2025/02/19/audio_3b45f7d855.mp3',
+        'https://cdn.pixabay.com/audio/2025/02/18/audio_67a824edf7.mp3',
+        'https://cdn.pixabay.com/audio/2024/09/09/audio_7556bb3a41.mp3',
+        'https://cdn.pixabay.com/audio/2024/07/24/audio_5ec636ca14.mp3',
+        'https://cdn.pixabay.com/audio/2025/03/18/audio_7d5c12b31a.mp3',
+        'https://cdn.pixabay.com/audio/2024/09/16/audio_a10608d6cd.mp3'
+    ]
 </script>
 </body>
 </html>
