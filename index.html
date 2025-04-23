@@ -45,7 +45,9 @@
           margin: 0;
           padding: 0;
           box-sizing: border-box;
-          transition: all ease-in-out 250ms;
+          transition-property: transform, height, width, text-shadow, box-shadow;
+          transition-duration: 250ms;
+          transition-timing-function: ease-in-out;
           line-height: 1.2;
           font-family: var(--font), monospace;
           font-weight: 400;
@@ -122,6 +124,27 @@
               height: 100% !important;
               padding-inline: 0 !important;
           }
+
+          #hud-logo {
+              display: none;
+          }
+      }
+
+      #hud-logo {
+          position: absolute;
+          bottom: 8px;
+          left: 50%;
+          width: 100%;
+          transform: translateX(-50%);
+          background: var(--hud-bg);
+          padding: 6px 14px;
+          border-radius: 6px;
+          display: flex;
+          flex-direction: column;
+          font-size: 14px;
+          z-index: 2;
+          justify-content: center;
+          align-items: center;
       }
 
       /* ---------- GAME CANVAS ---------- */
@@ -218,9 +241,7 @@
       }
 
       .overlay > * {
-          border: 1px solid var(--accent);
           border-radius: 8px;
-          box-shadow: 0 0 4px var(--accent);
       }
 
       .overlay.show {
@@ -247,15 +268,21 @@
           }
       }
 
-      .overlay button, .primaryButton {
+      .overlay button, .primaryButton, .secondaryButton {
           padding: 10px 26px;
           border: 2px solid var(--accent);
           border-radius: 6px;
-          background: transparent;
-          color: var(--accent);
+          background: hsl(170, 100%, 50%);
+          color: black;
           font-size: 18px;
           cursor: pointer;
       }
+
+      .secondaryButton {
+          background: transparent !important;
+          color: hsl(170, 100%, 50%) !important;
+      }
+
 
       .overlay button:hover {
           background: var(--accent);
@@ -302,18 +329,17 @@
   <aside class="sidebar">
     <header>
       <h2>Neon Nexus Bullet‑Time Brick Breaker</h2>
-      <p style="margin-top: 0.5rem">v0.5-beta</p>
+      <p style="margin-top: 0.5rem">v1.1</p>
     </header>
 
     <hr style="margin-block: 1rem;"/>
-
 
     <main class="sidebar-powerups"></main>
 
     <hr style="margin-block: 1rem;"/>
 
     <footer>
-      <h3>Like the concept?</h3>
+      <h3>Like the game?</h3>
       <a href="https://linkedin.com/in/tuhinkarmakar3882" target="_blank">
         <button class="primaryButton" style="margin-top: 1rem; font-size: 1rem">
           Connect on LinkedIn
@@ -330,11 +356,18 @@
 
     <!-- HUD -->
     <div id="hud">
-      <p>Score <span id="score">0</span></p>
+      <p>🏁 <span id="score">0</span></p>
       <p>|</p>
-      <p>Lives <span id="lives">3</span></p>
+      <p>❤️ <span id="lives">3</span></p>
       <p>|</p>
-      <p>Level <span id="level">1</span></p>
+      <p>🎚️ <span id="level">1</span></p>
+      <p>|</p>
+      <p>🧱 <span id="remaining-bricks-count">1</span></p>
+    </div>
+
+    <div id="hud-logo">
+      <p style="text-align: center; margin-top: 2rem;">Neon Nexus: Bullet‑Time Brick Breaker</p>
+      <blockquote style="text-align: center; margin-top: 1rem;"><q>Made With ❤️</q> <cite>- Tuhin</cite></blockquote>
     </div>
 
     <!-- Flash text -->
@@ -349,17 +382,25 @@
           >
           <h1>Neon Nexus <br> Bullet‑Time Brick Breaker</h1>
         </section>
-        <button id="btn-start" autofocus style="width: 100%; margin-top: 2rem">Start</button>
+        <button id="btn-start" autofocus style="width: 50%; margin-top: 2rem"><b>Start</b></button>
       </div>
     </div>
 
     <div id="lvlup" class="overlay">
-      <h1 id="lvl-text"></h1>
+      <h1 id="lvl-text" style="font-weight: bold">Level 2</h1>
+      <p id="lvlup-text" style="font-weight: bold">Hello</p>
     </div>
 
-    <div id="gameover" class="overlay">
+    <div id="gameover" class="overlay" style="padding: 1rem">
       <h1>Game Over</h1>
-      <button id="btn-restart">Restart</button>
+      <p id="game-over-text" style="text-align: center">Come on you can do better than this!</p>
+
+      <section
+          style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 1.5rem;"
+      >
+        <button class="primaryButton" id="btn-continue"><b id="btn-continue-text">Continue</b></button>
+        <button class="secondaryButton" id="btn-restart"><b>Restart</b></button>
+      </section>
     </div>
   </section>
 
@@ -367,6 +408,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/noisejs@2.1.0/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+
 <!-- =================== GAME SCRIPT =================== -->
 <script defer>
     const $ = q => document.querySelector(q);
@@ -378,6 +421,7 @@
     const gameCanvasContext = gameCanvas.getContext('2d');
     const gameContainer = $('#game-container');
     const canvasContainer = $('div.canvas-container');
+
 
     /* ---------- Utilities ---------- */
 
@@ -416,7 +460,18 @@
         return Math.max(min, prob);
     }
 
+    function getDt() {
+        const now = performance.now();
+        // raw frames (16 ms ⇒ 1 unit), cap at 4 frames
+        const raw = Math.min((now - last) / 16, 4);
+        last = now;
+        return raw * timeScale;
+    }
+
     /************ CONFIG & HELPERS ************/
+    const textWidths = {}
+    const MAX_BOUNCE_ANGLE = Math.PI / 3; // 60°
+
     const CFG = {
         COLS: 14,
         MAX_ROWS: 8,
@@ -442,62 +497,47 @@
             freeze: 10000,
             chargeshot: 15000,
             blackhole: 4000,
-            gravity: 7000,
+            gravity: 5000,
+            missile: 7000,
             echo: 8000
         },
         CANNON: {RATE: 2500, SPD: 5},
-        HUES: {
-            Burst: 317,
-            Chill: 165,
-            Expand: 220,
-            Flip: 270,
-            Glue: 163,
-            Heart: 334,
-            Laser: 358,
-            Magnet: 48,
-            Reduce: 273,
-            Shield: 0,
-            Teleport: 177,
-            Velocity: 212,
-            Joker: 83,
-            Reverse: 349,
-            Wrap: 49,
-            Freeze: 200,
-            ChargeShot: 36,
-            BlackHole: 0,
-            Gravity: 280,
-            Echo: 0,
-        },
         COLORS: {
-            Burst: '#FF4ECD',        // Vibrant pink
-            Chill: '#5BE7C4',        // Mint green
-            Expand: '#6699FF',       // Soft blue
-            Flip: '#C084FC',         // Orchid purple
-            Glue: '#00C48C',         // Emerald green
-            Heart: '#FFD6E8',        // Blush pink
-            Laser: '#FF5A5F',        // Bold red
-            Magnet: '#FFD93D',       // Sunflower yellow
-            Reduce: '#9D4EDD',       // Deep violet
-            Shield: '#F5F5F5',       // Soft white
-            Teleport: '#72F2EB',     // Aqua blue
-            Velocity: '#0077FF',     // Deep sky blue
-
-            Joker: '#A3FF12',        // Lively lime
-            Reverse: '#FFB3C1',      // Pastel coral
-            Wrap: '#FFE156',         // Banana yellow
-            Freeze: '#1FB6FF',       // Ice blue
-            ChargeShot: '#FFAC33',   // Orange amber
-            BlackHole: '#be0000',    // Deep space black
-            Gravity: '#D88BFF',      // Lavender haze
-            Echo: '#E0E0E0'          // Gentle gray
+            BlackHole: '#be0000',        // Mint green
+            ChargeShot: '#FFAC33',       // Soft blue
+            Chill: '#5BE7C4',
+            Echo: '#E0E0E0',         // Emerald green
+            Expand: '#6699FF',        // Bold red
+            Flip: '#C084FC',
+            Freeze: '#1FB6FF',       // Soft white
+            Glue: '#00C48C',
+            Gravity: '#D88BFF',     // Aqua blue
+            Heart: '#FFD6E8',        // Lively lime
+            Joker: '#A3FF12',
+            Laser: '#FF5A5F',      // Pastel coral
+            Missile: '#00ff8b',         // Banana yellow
+            Reverse: '#FFB3C1',       // Ice blue
+            Shield: '#F5F5F5',   // Orange amber
+            Teleport: '#72F2EB',    // Deep space black
+            Velocity: '#0077FF',      // Lavender haze
+            Wrap: '#FFE156',          // Gentle gray
         },
         PADDLE: {
-            defaultColor: 'red',
-            activeColor: 'yellow',
+            defaultColor: 'white',
+        },
+        BALL: {
+            defaultColor: 'white',
+            teleportColor: '#72F2EB',
+            chargedColor: '#FFAC33'
         }
     };
     const POWERS = Object.keys(CFG.COLORS);
+    const MAX_PARTICLES = 200;
+    const MAX_RIPPLES = 5;
 
+
+    gameCanvasContext.font = '14px monospace';
+    POWERS.forEach(k => textWidths[k] = gameCanvasContext.measureText(k).width);
 
     window.addEventListener('resize', resize);
     $('#btn-start').addEventListener('click', () => {
@@ -512,8 +552,14 @@
         /************ INIT GAME ************/
 
     });
-    resize();
+    $('#btn-restart').addEventListener('click', () => {
+        game.restartGame()
+    });
+    $('#btn-continue').addEventListener('click', () => {
+        game.continueGame()
+    })
 
+    resize();
 
     /* ---------- GLOBAL STATE ---------- */
 
@@ -585,20 +631,21 @@
 
     function triggerRippleEffect(x, y) {
         ripples.push({x, y, radius: 0});
+
+        while (ripples.length > MAX_RIPPLES) {
+            ripples.shift()
+        }
     }
 
-    function bulletTime({power} = {}) {
+    function bulletTime() {
+        if (isBulletTime) return;
+
         timeScale = 0.25;
         isBulletTime = true;
-
-        if (power) {
-            gameCanvas.style.filter = `sepia(0.1)`
-        }
 
         setTimeout(() => {
             timeScale = 1;
             isBulletTime = false;
-            gameCanvas.style.filter = `hue-rotate(0) blur(0) sepia(0)`
         }, CFG.DUR.bullet);
     }
 
@@ -662,8 +709,8 @@
         draw() {
             gameCanvasContext.save();
             gameCanvasContext.shadowBlur = 15;
-            gameCanvasContext.shadowColor = CFG.COLORS.Expand;
-            gameCanvasContext.fillStyle = this.stun ? '#888' : CFG.COLORS.Expand;
+            gameCanvasContext.shadowColor = CFG.COLORS.defaultColor;
+            gameCanvasContext.fillStyle = this.stun ? '#888' : CFG.PADDLE.defaultColor;
             gameCanvasContext.fillRect(this.x, this.y, this.w, this.h);
             gameCanvasContext.restore();
         }
@@ -675,24 +722,44 @@
             super();
             this.r = 8;
             this.paddle = paddle;
-            this.baseSp = calculateSpeedBasedOnScreenSize(2.7, 6);
+            this.baseSp = calculateSpeedBasedOnScreenSize(1, 3.7);
             this.sp = this.baseSp;
             this.vx = 0;
             this.vy = 0;
             this.stuck = true;
+            this.stuckOffsetX = this.paddle.w / 2;    // ← record where on paddle it stuck
+            this.x = this.paddle.x + this.paddle.w / 2;
+            this.y = this.paddle.y - this.r;
         }
 
         release() {
             if (!this.stuck) return;
-            this.vx = this.sp;
-            this.vy = -this.sp;
+
+            this.stuckOffsetX = 0;  // ← clear the saved offset
+
+            // 1. Compute relative offset
+            const relX = (this.x - this.paddle.x) - this.paddle.w / 2;
+
+            // 2. Normalize to [-1,1]
+            const norm = relX / (this.paddle.w / 2);
+
+            // 3. Compute bounce angle
+            const angle = norm * MAX_BOUNCE_ANGLE;
+
+            // 4. Set new velocity
+            this.vx = this.sp * Math.sin(angle);
+            this.vy = -this.sp * Math.cos(angle);
+
             this.stuck = false;
+
         }
 
         update(game) {
+            this.chargeReady = game.chargeReady
+            this.isTeleportAvailable = game.active.has('Teleport')
             /* follow paddle until release */
             if (this.stuck) {
-                this.x = this.paddle.x + this.paddle.w / 2;
+                this.x = this.paddle.x + this.stuckOffsetX;
                 this.y = this.paddle.y - this.r;
                 return;
             }
@@ -736,22 +803,39 @@
             }
 
             /* BOOMERANG CURVE */
-            if (this.boom) {
+            if (this.missile && !game._frameThrottle) {
                 const ang = Math.atan2(
                     game.paddle.y - this.y,
                     game.paddle.x + game.paddle.w / 2 - this.x
                 );
-                const strength = 0.3;  // higher arc
+                const strength = -0.075;  // higher arc
+                this.vx += Math.cos(ang) * strength;
+                this.vy += Math.sin(ang) * strength;
+            }
+
+            if (this.gravity && !game._frameThrottle) {
+                const ang = Math.atan2(
+                    game.paddle.y - this.y,
+                    game.paddle.x + game.paddle.w / 2 - this.x
+                );
+                const strength = 0.075;  // higher arc
                 this.vx += Math.cos(ang) * strength;
                 this.vy += Math.sin(ang) * strength;
             }
         }
 
+        getBallColor() {
+            if (this.chargeReady) return CFG.BALL.chargedColor
+            if (this.isTeleportAvailable) return CFG.BALL.teleportColor
+
+            return CFG.BALL.defaultColor
+        }
+
         draw() {
             gameCanvasContext.save();
             gameCanvasContext.shadowBlur = 15;
-            gameCanvasContext.shadowColor = CFG.COLORS.Expand;
-            gameCanvasContext.fillStyle = CFG.COLORS.Expand;
+            gameCanvasContext.shadowColor = this.getBallColor();
+            gameCanvasContext.fillStyle = this.getBallColor();
             gameCanvasContext.beginPath();
             gameCanvasContext.arc(this.x, this.y, this.r, 0, Math.PI * 2);
             gameCanvasContext.fill();
@@ -864,8 +948,7 @@
 
         draw() {
             const text = this.key;
-            const textMetrics = gameCanvasContext.measureText(text);
-            const textWidth = textMetrics.width;
+            const textWidth = textWidths[text]
 
             gameCanvasContext.fillStyle = CFG.COLORS[this.key];
             this.sz = 20;
@@ -910,6 +993,7 @@
             /* basic state */
             this.score = 0;
             this.lives = 3;
+            this.canContinue = 3;
             this.level = 1;
 
             /* active power‑ups */
@@ -923,6 +1007,8 @@
             this.parts = [];
             this.bullets = [];
             this._frameCount = 0;  // initialize frame counter
+            this._frameThrottle = false;
+
 
             /* build first level */
             this.buildLevel();
@@ -935,10 +1021,6 @@
 
         /* ----- UI BINDINGS ----- */
         bindUI() {
-            $('#btn-restart').addEventListener('click', () => {
-                location.reload()
-            });
-
             document.addEventListener('keydown', e => {
                 e.preventDefault()
                 if (e.code === 'ArrowLeft') keys.L = true;
@@ -1089,8 +1171,8 @@
 
         _buildNoiseLayout(zone) {
             noise.seed(this.level + ((Math.random() * 10) + (Math.random() * 10)));
-            const cols = CFG.COLS
-            const rows = Math.floor(zone.height / 24)
+            const cols = Math.floor(zone.width / (CFG.COLS + 20))
+            const rows = Math.floor(zone.height / 28)
             const bw = zone.width / cols
             const bh = 20;
             for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
@@ -1102,8 +1184,8 @@
         }
 
         _buildWaveLayout(zone) {
-            const cols = CFG.COLS
-            const rows = Math.floor(zone.height / 24)
+            const cols = Math.floor(zone.width / (CFG.COLS + 20))
+            const rows = Math.floor(zone.height / 28)
             const bw = zone.width / cols;
             const bh = 20;
             for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
@@ -1123,8 +1205,8 @@
         }
 
         _buildGridLayout({x, y, width, height}) {
-            const cols = CFG.COLS;
-            const rows = Math.floor(height / 30);
+            const cols = Math.floor(width / (CFG.COLS + 20))
+            const rows = Math.floor(height / 28)
             const bw = (width - 40) / cols;
             const bh = 20;
 
@@ -1143,7 +1225,7 @@
             const centerX = x + width / 2;
             const centerY = y + height / 2;
             const radius = Math.min(width, height) / 3;
-            const total = 24;
+            const total = 16;
 
             for (let i = 0; i < total; i++) {
                 const angle = (2 * Math.PI * i) / total;
@@ -1171,7 +1253,8 @@
         }
 
         _buildEmojiPatternInZone({x, y, width, height}) {
-            const rows = 7, cols = 15;
+            const cols = Math.floor(width / (CFG.COLS + 20))
+            const rows = Math.floor(height / 28)
             const pattern = [];
 
             for (let r = 0; r < rows; r++) {
@@ -1206,8 +1289,8 @@
         }
 
         _buildTunnelLayout({x, y, width, height}) {
-            const cols = CFG.COLS;
-            const rows = Math.floor(height / 30);
+            const cols = Math.floor(width / (CFG.COLS + 20))
+            const rows = Math.floor(height / 28)
             const bw = (width - 40) / cols;
             const bh = 20;
 
@@ -1232,6 +1315,7 @@
             $('#score').textContent = this.score;
             $('#lives').textContent = this.lives;
             $('#level').textContent = this.level;
+            $('#remaining-bricks-count').textContent = this.bricks.length;
         }
 
         syncSidebar() {
@@ -1255,9 +1339,7 @@
 
         applyPower(key) {
             flash(key, CFG.COLORS[key]);
-            bulletTime({
-                power: key
-            });
+            bulletTime();
 
             const dur = CFG.DUR[key.toLowerCase()] || 5000;
             this.clear(key);
@@ -1376,7 +1458,6 @@
                     this.clear(key);
                     break;
                 }
-
                 case 'Joker': {
                     const opts = POWERS.filter(p => p !== 'Joker');
                     this.applyPower(opts[Math.random() * opts.length | 0]);
@@ -1418,7 +1499,6 @@
                 case 'ChargeShot': {
                     clearTimeout(this.chargeReadyPowerTimeout)
 
-
                     this.chargeReady = true;
                     this.chargeReadyPowerTimeout = setTimeout(() => {
                         this.chargeReady = false;
@@ -1440,14 +1520,30 @@
                     }, dur);
                     break;
                 }
+                case 'Missile': {
+                    clearTimeout(this.missilePowerTimeout)
+
+                    this.balls.forEach(b => {
+                        b.gravity = false
+                        b.missile = true
+                    });
+
+                    this.missilePowerTimeout = setTimeout(() => {
+                        this.balls.forEach(b => b.missile = false);
+                        this.clear(key);
+                    }, dur);
+                    break;
+                }
                 case 'Gravity': {
                     clearTimeout(this.gravityPowerTimeout)
 
-                    this.balls.forEach(b => b.boom = false);
+                    this.balls.forEach(b => {
+                        b.gravity = true
+                        b.missile = false
+                    });
 
-                    this.balls.forEach(b => b.boom = true);
                     this.gravityPowerTimeout = setTimeout(() => {
-                        this.balls.forEach(b => b.boom = false);
+                        this.balls.forEach(b => b.gravity = false);
                         this.clear(key);
                     }, dur);
                     break;
@@ -1480,6 +1576,10 @@
         /* ----- BULLET SPAWN ----- */
         spawnBullet(x, y, vy, owner) {
             this.bullets.push(new Bullet(x, y, vy, owner));
+
+            while (this.bullets.length > 200) {
+                this.bullets.shift()
+            }
         }
 
         /* ----- EXPLOSION EVENT ----- */
@@ -1512,16 +1612,52 @@
                 this.powers.forEach(pow => {
                     pow.applyStun?.()
                 })
-
                 this.powers = []
                 this.sync();
             }
             if (this.lives <= 0) {
                 $('#gameover').classList.add('show');
+
+                if (!this.canContinue) {
+                    $('#btn-continue').style.display = 'none'
+                }
+
+                $('#btn-continue-text').textContent = `Continue (${this.canContinue})`
+
+                const messageIdx = Math.floor(rand(0, GameOverTauntMessages.length - 1) % GameOverTauntMessages.length);
+                $('#game-over-text').textContent = GameOverTauntMessages[messageIdx]
+
                 document.exitPointerLock();
+
                 this.stop = true;
             }
             this.syncHUD();
+        }
+
+        continueGame() {
+            if (this.canContinue <= 0) this.restartGame();
+
+            this.canContinue--;
+
+            this.paddle = new Paddle();
+            this.balls = [new Ball(this.paddle)];
+            this.parts = [];
+            this._frameCount = 0;  // initialize frame counter
+
+            // add hook to show ads!
+            this.lives = 3
+            this.stop = false
+
+            this.sync();
+            gameCanvas.requestPointerLock();
+
+            $('#gameover').classList.remove('show');
+
+            this.loop();
+        }
+
+        restartGame() {
+            location.reload()
         }
 
         /* ----- MAIN LOOP ----- */
@@ -1529,27 +1665,33 @@
             requestAnimationFrame(() => this.loop());
         }
 
-        loop() {
+        async loop() {
             if (this.stop) return;
+            this._frameToggle = !this._frameToggle;
 
-            const now = performance.now();
-            const dt = (now - last) / 16 * timeScale; // frame‑scaled delta
-            last = now;
+            //
+            // const now = performance.now();
+            // const dt = (now - last) / 16 * timeScale; // frame‑scaled delta
+            // last = now;
 
-            this.update(dt);
+            const dt = getDt();
+            await this.update(dt);
             this.render();
 
             requestAnimationFrame(() => this.loop());
         }
 
         /* ----- UPDATE STEP ----- */
-        update(dt) {
+        async update(dt) {
             if (this.lvlUp) return
 
-            ripples = ripples.filter(ripple => {
-                ripple.radius += 200 * dt * timeScale * 0.1;
-                return ripple.radius <= 100;
-            });
+            if (!this._frameToggle) {
+
+                ripples = ripples.filter(ripple => {
+                    ripple.radius += 200 * dt * timeScale * 0.1;
+                    return ripple.radius <= 100;
+                });
+            }
 
             this._frameCount++; // increment per frame
 
@@ -1559,14 +1701,17 @@
             }
 
             // BlackHole gravity & destruction
-            if (this.blackHole) {
+            if (this.blackHole && !this._frameToggle) {
                 this._blackHoleAngle += 0.05;
                 for (let b of this.bricks) {
                     if (!b.alive) continue;
                     const dx = this.blackHole.x - (b.x + b.w / 2);
                     const dy = this.blackHole.y - (b.y + b.h / 2);
-                    const dist = Math.hypot(dx, dy);
-                    if (dist < this.blackHole.r) {
+                    // const dist = Math.hypot(dx, dy);
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq < this.blackHole.r * this.blackHole.r) {
+                        const dist = Math.sqrt(distSq);
+                        // if (dist < this.blackHole.r) {
                         // spiral inwards
                         const pull = (this.blackHole.r - dist) / this.blackHole.r * 4 * timeScale;
                         b.x += (dx / dist) * pull;
@@ -1607,7 +1752,7 @@
             }
 
 
-            if (this.echo) {
+            if (this.echo && !this._frameToggle) {
                 const count = this.echoSegments.length;
                 const r = 30;
                 this.echoSegments.forEach((alive, i) => {
@@ -1691,7 +1836,11 @@
                     const ang = rel * (Math.PI / 3);
                     ball.vx = ball.sp * Math.sin(ang);
                     ball.vy = -Math.abs(ball.sp * Math.cos(ang));
-                    if (this.paddle.sticky) ball.stuck = true;
+                    if (this.paddle.sticky) {
+                        ball.stuck = true;
+                        // record exactly where on the paddle the ball landed:
+                        ball.stuckOffsetX = ball.x - this.paddle.x;
+                    }
                 }
 
 
@@ -1743,18 +1892,38 @@
             this.parts = this.parts.filter(pt => pt.life > 0);
 
             /* level clear */
-            if (!this.bricks.length) {
+            if (this.bricks.length <= 0) {
+                await confetti.create(gameCanvas, {
+                    resize: true,
+                })({
+                    particleCount: 200,
+                    spread: 100,
+                    origin: {y: 0.5},
+                    scalar: 2
+                });
+
                 this.level++;
                 this.lives++;
                 $('#lvl-text').textContent = `Level ${this.level}`;
+
+                const messageIdx = Math.floor(rand(0, LevelClearedMessages.length - 1) % LevelClearedMessages.length);
+                $('#lvlup-text').textContent = LevelClearedMessages[messageIdx]
+
                 $('#lvlup').classList.add('show');
-                this.lvlUp = true
+                this.lvlUp = true;
+
                 setTimeout(() => {
                     this.moveToNextLevel()
                     $('#lvlup').classList.remove('show');
                     this.buildLevel();
                     this.lvlUp = false
-                }, 1200);
+                }, 2000);
+            }
+
+            this.parts = this.parts.filter(p => p.life > 0);
+
+            while (this.parts.length > MAX_PARTICLES) {
+                this.parts.shift()
             }
 
             this.syncHUD();
@@ -1776,7 +1945,7 @@
         render() {
             gameCanvasContext.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
 
-            if (this.blackHole) {
+            if (this.blackHole && !this._frameThrottle) {
                 const bh = this.blackHole;
                 // swirling vortex effect
                 const grad = gameCanvasContext.createRadialGradient(bh.x, bh.y, 0, bh.x, bh.y, bh.r);
@@ -1799,7 +1968,7 @@
                 gameCanvasContext.stroke();
             }
 
-            if (this.echo) {
+            if (this.echo && !this._frameThrottle) {
                 const count = this.echoSegments.length;
                 const r = 30;
                 gameCanvasContext.save();
@@ -1844,6 +2013,109 @@
         'https://cdn.pixabay.com/audio/2024/07/24/audio_5ec636ca14.mp3',
         'https://cdn.pixabay.com/audio/2025/03/18/audio_7d5c12b31a.mp3',
         'https://cdn.pixabay.com/audio/2024/09/16/audio_a10608d6cd.mp3'
+    ]
+    const GameOverTauntMessages = [
+        "You’ve met with a terrible fate, haven’t you?",
+        "Press F to pay respects—to your dignity.",
+        "Ight, imma head out… straight to the tutorial.",
+        "This is fine. 🔥🐶",
+        "Not even Doge could save you: much fail, so wow.",
+        "Thanos snapped. You snapped. Same thing.",
+        "When life gives you lemons… you still die in one hit.",
+        "OK boomer, learn how to dodge.",
+        "Your k/d ratio called; it wants a refund.",
+        "Are you a Karen? Because you just got told, ‘Game over, Karen.’",
+        "Your loot hopes are as dead as your last respawn.",
+        "BRB—grabbing popcorn while you keep failing.",
+        "Achievement unlocked: Most spectacular crash.",
+        "Error 404: Victory not found.",
+        "Nobody exists on purpose—you exist to die here.",
+        "Rickrolled by gravity! Never gonna give you up.",
+        "Your combo break was more tragic than your Wi-Fi.",
+        "When the final boss is lag—and you lost.",
+        "Literally unplayable. (Except you keep playing.)",
+        "Your save file just face-palmed.",
+        "Git gud? You might want to ‘git help.’",
+        "RIP your hopes and dreams.",
+        "You fell faster than my respect for you.",
+        "At least you’re consistent: consistently bad.",
+        "Even the loading screen is judging you.",
+        "Game over, man! Game over! (Apollo 13 vibes.)",
+        "If only your reflexes respawned, too.",
+        "That death was sponsored by Clippy: ‘It looks like you died. Need help?’",
+        "Your face when you realize you’re the final boss.",
+        "Plot twist: you were the tutorial level. Again.",
+        "Your XP just refunded itself.",
+        "Your character left the chat.",
+        "You just hit ‘U’ for Universe reset.",
+        "Cue Despacito—you couldn’t go on.",
+        "Your stamina bar is life goals: depletes instantly.",
+        "404 skill not found.",
+        "That was so cringe your controller unplugged itself.",
+        "Your ghost wants a rematch. You don’t.",
+        "Keep calm and blame lag.",
+        "You respawn so much, you need a loyalty card.",
+        "Your fatality was more ‘face-palm’ than ‘fatal.’",
+        "Nobody panic—I only died 47 times.",
+        "Your DRAMA meter: over 9000.",
+        "Not even Shrek could swamp you—layer upon layer of fail.",
+        "Your death animation deserves an Oscar.",
+        "Keep respawning—maybe RNGesus will bless you.",
+        "When your controller says ‘try again,’ you say ‘no thanks.’",
+        "Your AFK skills are on point… too bad you’re not AFK.",
+        "Game over: Now loading humility.",
+        "You’re the real final boss of failure."
+    ]
+    const LevelClearedMessages = [
+        "Level complete! You make victory look easy.",
+        "You smashed that level like Thanos snapped.",
+        "Congratulations, you’ve unlocked a hair-trigger brain!",
+        "Level conquered! Time to ascend.",
+        "You just leveled up IRL—feel that power?",
+        "Next level? More like next dimensions.",
+        "You’re on fire! 🔥 Level done.",
+        "Boss level? More like BOSS-YOU!",
+        "Game: 0  You: 1.",
+        "Whoa—did you code that win yourself?",
+        "Leveled up faster than Mario on mushrooms.",
+        "Achievement unlocked: Legendary status.",
+        "Nailed it like a pro tutorial.",
+        "Sweet! You made the tutorial jealous.",
+        "Hello from the other side… of that level.",
+        "You broke the level meter—epic!",
+        "GG WP (Good Game, Well Played)!",
+        "Your K/D (Keep Defeating) ratio is insane.",
+        "Next stop: world domination.",
+        "Level-up dance time! 🕺💃",
+        "You just earned maximum bragging rights.",
+        "Level done! Brain: 100, Ego: 1000.",
+        "You didn’t beat it—you schooled it.",
+        "Pro tip: You’re officially a pro.",
+        "Epic win! Savor that moment.",
+        "Streamer mode: activated.",
+        "Your reflexes just got a medal.",
+        "Teleporting to the next challenge…",
+        "Score: UNSTOPPABLE.",
+        "You’re the hero this game deserves.",
+        "Too easy? Try harder next time.",
+        "Your thumbs are now legendary.",
+        "You leveled up your flex game.",
+        "Game: 0  Level: ROFL.",
+        "That level didn’t know what hit it.",
+        "You’re rewriting the game’s code with skill.",
+        "New win streak—update complete.",
+        "You’re earning more XP than a celeb.",
+        "Next level is quivering in fear.",
+        "Power-up: You’re unstoppable!",
+        "You’ve got the Midas touch on levels.",
+        "Your victory is now trending.",
+        "Unbelievable! You’re a glitch in the matrix.",
+        "Did you just respawn in style?",
+        "Certified legendary status unlocked.",
+        "You leveled up and the universe noticed.",
+        "360 no-scope your way forward!",
+        "You and that level: besties now.",
+        "New high score—eternally enshrined."
     ]
 </script>
 </body>
