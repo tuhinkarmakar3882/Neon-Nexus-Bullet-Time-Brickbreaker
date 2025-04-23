@@ -1044,7 +1044,7 @@
         }
 
         _buildNoiseLayout(zone) {
-            noise.seed(this.level + (Math.random() * 200));
+            noise.seed(this.level + ((Math.random() * 10) + (Math.random() * 10)));
             const cols = CFG.COLS
             const rows = Math.floor(zone.height / 24)
             const bw = zone.width / cols
