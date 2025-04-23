@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Neon Nexus: Bullet‑Time Brick Breaker</title>
+  <title>Neon Nexus b>Bullet‑Time Brick Breaker</title>
 
   <!-- =================== THEME & GLOBAL STYLES =================== -->
   <style>
@@ -22,6 +22,7 @@
           padding: 0;
           box-sizing: border-box;
           transition: all ease-in-out 250ms;
+          line-height: 1.2;
       }
 
       html, body {
@@ -53,6 +54,7 @@
 
       /* ---------- SIDEBAR ---------- */
       .sidebar {
+          display: none;
           width: 250px;
           background: var(--hud-bg);
           padding: 12px;
@@ -83,9 +85,20 @@
           margin-right: 6px;
       }
 
-      @media (max-width: 768px) {
+      @media screen and (min-width: 768px) {
+          #hud {
+              left: initial !important;
+              right: 8px !important;
+              transform: translateX(0) !important;
+          }
+
           .sidebar {
-              display: none;
+              display: block;
+          }
+
+          .canvas-container {
+              height: 100% !important;
+              padding-inline: 0 !important;
           }
       }
 
@@ -114,6 +127,12 @@
           gap: 1rem;
       }
 
+      .canvas-container {
+          padding-inline: 1rem;
+          height: calc(100% - 10rem);
+          width: 100%;
+      }
+
       canvas {
           width: 100%;
           height: 100%;
@@ -122,15 +141,16 @@
           box-shadow: 0 0 14px var(--accent);
           display: block;
           border-radius: 4px;
+          padding: 1rem;
       }
 
       /* ---------- HUD ---------- */
       #hud {
           position: absolute;
           top: 8px;
-          /*left: 50%;*/
-          right: 8px;
-          /*transform: translateX(-50%);*/
+          left: 50%;
+          width: fit-content;
+          transform: translateX(-50%);
           background: var(--hud-bg);
           padding: 6px 14px;
           border-radius: 6px;
@@ -160,7 +180,7 @@
       .overlay {
           position: absolute;
           inset: 0;
-          background: #000d;
+          background: #000A;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -178,9 +198,21 @@
       }
 
       .overlay h1 {
-          font-size: 46px;
+          font-size: 2rem;
           margin-bottom: 16px;
           text-align: center;
+          text-shadow: 0 0 14px var(--accent);
+          animation: glow 1500ms alternate infinite ease-in-out;
+      }
+
+      @keyframes glow {
+          0% {
+              text-shadow: 0 0 8px var(--accent);
+          }
+
+          100% {
+              text-shadow: 0 0 16px var(--accent);
+          }
       }
 
       .overlay button, .primaryButton {
@@ -237,8 +269,8 @@
   <!-- ===== SIDEBAR ===== -->
   <aside class="sidebar">
     <header>
-      <h1>Neon Nexus: Bullet‑Time Brick Breaker</h1>
-      <p>v1.0</p>
+      <h2>Neon Nexus Bullet‑Time Brick Breaker</h2>
+      <p style="margin-top: 0.5rem">v1.0</p>
     </header>
 
     <hr style="margin-block: 1rem;"/>
@@ -260,7 +292,9 @@
 
   <!-- ===== GAME SECTION ===== -->
   <section id="game-container">
-    <canvas id="game"></canvas>
+    <div class="canvas-container">
+      <canvas id="game"></canvas>
+    </div>
 
     <!-- HUD -->
     <div id="hud">
@@ -273,7 +307,7 @@
     <!-- Overlays -->
     <div id="start" class="overlay show">
       <div class="content">
-        <h1>Neon Nexus: Bullet‑Time Brick Breaker</h1>
+        <h1>Neon Nexus <br> Bullet‑Time Brick Breaker</h1>
         <button id="btn-start" autofocus>Start</button>
       </div>
     </div>
@@ -293,35 +327,105 @@
 
 <!-- =================== GAME SCRIPT =================== -->
 <script>
+    const $ = q => document.querySelector(q);
+    const rand = (a, b) => Math.random() * (b - a) + a;
+    const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
+
+    /* ---------- CANVAS SETUP ---------- */
+    const gameCanvas = $('#game');
+    const gameCanvasContext = gameCanvas.getContext('2d');
+    const gameContainer = $('#game-container');
+    const canvasContainer = $('div.canvas-container');
+
+    /* ---------- Utilities ---------- */
+
+    function calculateSpeedBasedOnScreenSize(minSpeed, maxSpeed) {
+        const minHeight = 400;
+        const maxHeight = 1080;
+
+        const screenHeight = canvasContainer.offsetHeight || window.innerHeight;
+
+        // Clamp the height
+        const clampedHeight = Math.max(minHeight, Math.min(maxHeight, screenHeight));
+
+        // Ratio between 0 and 1
+        const ratio = (clampedHeight - minHeight) / (maxHeight - minHeight);
+
+        // Exponential mapping
+        return minSpeed * Math.pow((maxSpeed / minSpeed), ratio);
+    }
+
+    function resize() {
+        gameCanvas.width = canvasContainer.clientWidth;
+        gameCanvas.height = canvasContainer.clientHeight;
+    }
+
+    function getProbability(level, min = 0.1, max = 0.7, rate = 0.1) {
+        const raw = max * Math.exp(-rate * level);
+        return Math.max(min, raw);
+    }
+
+    function getDecreasingProbability(level) {
+        const min = 0.01;
+        const max = 1;
+        const rate = 0.3; // adjust this for faster/slower growth
+
+        const prob = max - (max - min) * (1 - Math.exp(-rate * level));
+        return Math.max(min, prob);
+    }
+
     /************ CONFIG & HELPERS ************/
     const CFG = {
         COLS: 14,
         MAX_ROWS: 8,
-        MAX_SPEED: 12,
+        MAX_SPEED: calculateSpeedBasedOnScreenSize(8, 12),
+        MIN_SPEED: calculateSpeedBasedOnScreenSize(3, 4),
         DUR: {
             expand: 10000,
             reduce: 10000,
             chill: 15000,
             velocity: 10000,
-            glue: 20000,
-            magnet: 5000,
-            laser: 5000,
-            shield: 7000,
-            teleport: 10000,
-            flip: 5000,
+            glue: 15000,
+            magnet: 9000,
+            laser: 7000,
+            shield: 15000,
+            teleport: 8000,
+            flip: 10000,
             bullet: 1200,
             stun: 800,
 
-            joker: 8000,
-            reverse: 10000,
+            joker: 10000,
+            reverse: 7000,
             wrap: 15000,
             freeze: 10000,
-            chargeshot: 7000,
-            blackhole: 6000,
+            chargeshot: 15000,
+            blackhole: 4000,
             gravity: 7000,
             echo: 8000
         },
         CANNON: {RATE: 2500, SPD: 5},
+        HUES: {
+            Burst: 317,
+            Chill: 165,
+            Expand: 220,
+            Flip: 270,
+            Glue: 163,
+            Heart: 334,
+            Laser: 358,
+            Magnet: 48,
+            Reduce: 273,
+            Shield: 0,
+            Teleport: 177,
+            Velocity: 212,
+            Joker: 83,
+            Reverse: 349,
+            Wrap: 49,
+            Freeze: 200,
+            ChargeShot: 36,
+            BlackHole: 0,
+            Gravity: 280,
+            Echo: 0,
+        },
         COLORS: {
             Burst: '#FF4ECD',        // Vibrant pink
             Chill: '#5BE7C4',        // Mint green
@@ -350,30 +454,37 @@
             activeColor: 'yellow',
         }
     };
-
     const POWERS = Object.keys(CFG.COLORS);
 
-    const $ = q => document.querySelector(q);
-    const rand = (a, b) => Math.random() * (b - a) + a;
-    const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
-
-    /* ---------- CANVAS SETUP ---------- */
-    const cvs = $('#game');
-    const ctx = cvs.getContext('2d');
-    const ctn = $('#game-container');
-
-    function resize() {
-        cvs.width = ctn.clientWidth;
-        cvs.height = ctn.clientHeight;
-    }
 
     window.addEventListener('resize', resize);
+    $('#btn-start').addEventListener('click', () => {
+        gameCanvas.requestPointerLock();
+        $('#app').requestFullscreen();
+
+
+        setTimeout(() => {
+            $('#start').classList.remove('show')
+            game = new Game();
+        }, 100)
+        /************ INIT GAME ************/
+
+    });
     resize();
 
+
     /* ---------- GLOBAL STATE ---------- */
+
+    /************ INPUT KEYS ************/
+    const keys = {L: false, R: false};
+
+    let game;
+
     let timeScale = 1;
     let isBulletTime = false;
     let last = performance.now();
+
+    let ripples = []; // Store multiple ripples
 
     function flash(text, color = '#00ffc3') {
         const box = $('#flash');
@@ -387,12 +498,64 @@
         }, 800);
     }
 
-    function bulletTime() {
-        timeScale = 0.2;
+    function drawShockwave(x, y, radius) {
+        const maxRadius = 100;
+        const opacity = 1 - radius / maxRadius;
+        const hueValue = 50;
+
+        gameCanvasContext.beginPath();
+        gameCanvasContext.arc(x, y, radius, 0, Math.PI * 2);
+        gameCanvasContext.strokeStyle = `hsla(${hueValue}, 100%, 50%, ${opacity})`;
+        gameCanvasContext.lineWidth = 3 + 2 * opacity;
+        gameCanvasContext.stroke();
+
+        if (radius > 20) {
+            gameCanvasContext.beginPath();
+            gameCanvasContext.arc(x, y, radius * 0.7, 0, Math.PI * 2);
+            gameCanvasContext.strokeStyle = `hsla(${hueValue}, 100%, 40%, ${opacity * 0.5})`;
+            gameCanvasContext.lineWidth = 2;
+            gameCanvasContext.setLineDash([5, 10]);
+            gameCanvasContext.stroke();
+            gameCanvasContext.setLineDash([]);
+        }
+
+        if (radius > 50) {
+            gameCanvasContext.beginPath();
+            gameCanvasContext.arc(x, y, radius * 0.5, 0, Math.PI * 2);
+            gameCanvasContext.strokeStyle = `hsla(${hueValue}, 100%, 30%, ${opacity * 0.35})`;
+            gameCanvasContext.lineWidth = 2;
+            gameCanvasContext.setLineDash([10, 15]);
+            gameCanvasContext.stroke();
+            gameCanvasContext.setLineDash([]);
+        }
+
+        if (radius > 100) {
+            gameCanvasContext.beginPath();
+            gameCanvasContext.arc(x, y, radius * 0.3, 0, Math.PI * 2);
+            gameCanvasContext.strokeStyle = `hsla(${hueValue}, 100%, 20%, ${opacity * 0.20})`;
+            gameCanvasContext.lineWidth = 2;
+            gameCanvasContext.setLineDash([15, 20]);
+            gameCanvasContext.stroke();
+            gameCanvasContext.setLineDash([]);
+        }
+    }
+
+    function triggerRippleEffect(x, y) {
+        ripples.push({x, y, radius: 0});
+    }
+
+    function bulletTime({power} = {}) {
+        timeScale = 0.25;
         isBulletTime = true;
+
+        if (power) {
+            gameCanvas.style.filter = `sepia(0.1)`
+        }
+
         setTimeout(() => {
             timeScale = 1;
             isBulletTime = false;
+            gameCanvas.style.filter = `hue-rotate(0) blur(0) sepia(0)`
         }, CFG.DUR.bullet);
     }
 
@@ -427,8 +590,11 @@
 
         reset() {
             this.w = this.baseW;
-            this.x = (cvs.width - this.w) / 2;
-            this.y = cvs.height - 34;
+            this.x = (gameCanvas.width - this.w) / 2;
+            this.y = gameCanvas.height - 34;
+            this.sticky = false;
+            this.magnet = false;
+            this.isReversed = false;
         }
 
         update(keys, mouseX) {
@@ -440,23 +606,23 @@
             }
 
             if (!keys) {
-                this.x = this.isReversed ? (cvs.width - this.w) - mouseX : mouseX;
+                this.x = this.isReversed ? (gameCanvas.width - this.w) - mouseX : mouseX;
                 return;
             }
 
             if (keys.L) this.x -= this.speed * timeScale * direction;
             if (keys.R) this.x += this.speed * timeScale * direction;
 
-            this.x = clamp(this.x, -this.w / 2, cvs.width - (this.w / 2));
+            this.x = clamp(this.x, 0, gameCanvas.width - this.w);
         }
 
         draw() {
-            ctx.save();
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = CFG.COLORS.Expand;
-            ctx.fillStyle = this.stun ? '#888' : CFG.COLORS.Expand;
-            ctx.fillRect(this.x, this.y, this.w, this.h);
-            ctx.restore();
+            gameCanvasContext.save();
+            gameCanvasContext.shadowBlur = 15;
+            gameCanvasContext.shadowColor = CFG.COLORS.Expand;
+            gameCanvasContext.fillStyle = this.stun ? '#888' : CFG.COLORS.Expand;
+            gameCanvasContext.fillRect(this.x, this.y, this.w, this.h);
+            gameCanvasContext.restore();
         }
     }
 
@@ -466,7 +632,8 @@
             super();
             this.r = 8;
             this.paddle = paddle;
-            this.baseSp = 5;
+            this.baseSp = calculateSpeedBasedOnScreenSize(2.7, 6);
+            console.log({baseSp: this.baseSp});
             this.sp = this.baseSp;
             this.vx = 0;
             this.vy = 0;
@@ -495,15 +662,15 @@
             /* SIDE‐WALL HANDLING */
             if (game.active.has('Wrap')) {
                 // Pac‑Man style wrap
-                if (this.x < -this.r) this.x = cvs.width + this.r;
-                else if (this.x > cvs.width + this.r) this.x = -this.r;
+                if (this.x < -this.r) this.x = gameCanvas.width + this.r;
+                else if (this.x > gameCanvas.width + this.r) this.x = -this.r;
             } else {
                 // Standard bounce + clamp
                 if (this.x <= this.r) {
                     this.x = this.r;
                     this.vx *= -1;
-                } else if (this.x >= cvs.width - this.r) {
-                    this.x = cvs.width - this.r;
+                } else if (this.x >= gameCanvas.width - this.r) {
+                    this.x = gameCanvas.width - this.r;
                     this.vx *= -1;
                 }
             }
@@ -515,13 +682,13 @@
             }
 
             /* SHIELD BOUNCE */
-            if (game.active.has('Shield') && this.y + this.r > cvs.height - 6) {
+            if (game.active.has('Shield') && this.y + this.r > gameCanvas.height - 6) {
                 this.vy = -Math.abs(this.vy);
                 game.clear('Shield');
             }
 
             /* BOTTOM → LOSE BALL */
-            if (this.y > cvs.height + this.r) {
+            if (this.y > gameCanvas.height + this.r) {
                 game.ballLost(this);
                 return;
             }
@@ -540,14 +707,14 @@
 
 
         draw() {
-            ctx.save();
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = CFG.COLORS.Expand;
-            ctx.fillStyle = CFG.COLORS.Expand;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
+            gameCanvasContext.save();
+            gameCanvasContext.shadowBlur = 15;
+            gameCanvasContext.shadowColor = CFG.COLORS.Expand;
+            gameCanvasContext.fillStyle = CFG.COLORS.Expand;
+            gameCanvasContext.beginPath();
+            gameCanvasContext.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+            gameCanvasContext.fill();
+            gameCanvasContext.restore();
         }
     }
 
@@ -584,13 +751,13 @@
             if (!this.alive) return;
             const pal = {
                 static: 'rgba(179,86,255,0.42)',
-                moving: '#fb4',
-                explode: '#ff0',
-                cannon: '#c4f',
+                moving: 'hsl(30,100%,63%)',
+                explode: 'hsl(60,100%,50%)',
+                cannon: 'hsl(284,100%,63%)',
                 boss: ['#ffebd8', '#f90', '#f44'][this.hp - 1]
             };
-            ctx.fillStyle = pal[this.type] || pal.static;
-            ctx.fillRect(this.x, this.y, this.w, this.h);
+            gameCanvasContext.fillStyle = pal[this.type] || pal.static;
+            gameCanvasContext.fillRect(this.x, this.y, this.w, this.h);
         }
     }
 
@@ -607,8 +774,8 @@
         }
 
         draw() {
-            ctx.fillStyle = this.owner === 'player' ? '#ff3131' : '#ffa600';
-            ctx.fillRect(this.x - 2, this.y, 4, 10);
+            gameCanvasContext.fillStyle = this.owner === 'player' ? '#ff3131' : '#ffa600';
+            gameCanvasContext.fillRect(this.x - 2, this.y, 4, 10);
         }
     }
 
@@ -641,7 +808,7 @@
             }
 
             /* out of bounds */
-            if (this.y > cvs.height) this.dead = true;
+            if (this.y > gameCanvas.height) this.dead = true;
 
             /* pickup */
             if (
@@ -656,14 +823,14 @@
 
         draw() {
             const text = this.key;
-            const textMetrics = ctx.measureText(text);
+            const textMetrics = gameCanvasContext.measureText(text);
             const textWidth = textMetrics.width;
 
-            ctx.fillStyle = CFG.COLORS[this.key];
-            ctx.fillRect(this.x, this.y, textWidth + 10, this.sz);
-            ctx.fillStyle = '#000';
-            ctx.font = '14px monospace';
-            ctx.fillText(this.key, this.x + 5, this.y + 15);
+            gameCanvasContext.fillStyle = CFG.COLORS[this.key];
+            gameCanvasContext.fillRect(this.x, this.y, textWidth + 10, this.sz);
+            gameCanvasContext.fillStyle = '#000';
+            gameCanvasContext.font = '14px monospace';
+            gameCanvasContext.fillText(this.key, this.x + 5, this.y + 15);
         }
     }
 
@@ -684,10 +851,10 @@
         }
 
         draw() {
-            ctx.globalAlpha = this.life / 40;
-            ctx.fillStyle = this.col;
-            ctx.fillRect(this.x, this.y, 3, 3);
-            ctx.globalAlpha = 1;
+            gameCanvasContext.globalAlpha = this.life / 40;
+            gameCanvasContext.fillStyle = this.col;
+            gameCanvasContext.fillRect(this.x, this.y, 3, 3);
+            gameCanvasContext.globalAlpha = 1;
         }
     }
 
@@ -722,7 +889,9 @@
 
         /* ----- UI BINDINGS ----- */
         bindUI() {
-            $('#btn-restart').addEventListener('click', () => location.reload());
+            $('#btn-restart').addEventListener('click', () => {
+                location.reload()
+            });
 
             document.addEventListener('keydown', e => {
                 e.preventDefault()
@@ -735,20 +904,40 @@
                 if (e.code === 'ArrowLeft') keys.L = false;
                 if (e.code === 'ArrowRight') keys.R = false;
             });
+            let paddleX = (gameCanvas.width - this.paddle.w) / 2;
 
-            cvs.addEventListener('click', () => this.balls.forEach(b => b.release()));
-            cvs.addEventListener('mousemove', (e) => {
-                const r = cvs.getBoundingClientRect();
-                this.paddle.update(null, e.clientX - r.left - this.paddle.w / 2);
+            gameCanvas.addEventListener('click', () => this.balls.forEach(b => b.release()));
+            window.addEventListener('mousemove', (e) => {
+                paddleX += e.movementX;
+
+                // Clamp within canvas bounds
+                if (paddleX < 0) {
+                    paddleX = 0;
+                }
+                if (paddleX > gameCanvas.width - this.paddle.w) {
+                    paddleX = gameCanvas.width - this.paddle.w;
+                }
+                // const r = cvs.getBoundingClientRect();
+                this.paddle.update(null, paddleX || 0);
             });
-            cvs.addEventListener('touchmove', (e) => {
+
+            window.addEventListener('touchmove', (e) => {
+                if (document.pointerLockElement) {
+                    document.exitPointerLock()
+                }
                 const touch = e.touches[0]; // First touch
                 const x = touch.clientX; // X coordinate relative to viewport
                 const y = touch.clientY; // Y coordinate relative to viewport
 
-                const r = cvs.getBoundingClientRect();
+                const r = gameCanvas.getBoundingClientRect();
                 this.paddle.update(null, x - r.left - this.paddle.w / 2);
             });
+        }
+
+        _applyLevelSound() {
+            $('#audio-elem').src = LevelSounds.sort(
+                () => Math.random() > 0.5 ? -1 : 1
+            )[this.level % LevelSounds.length]
         }
 
         buildLevel() {
@@ -756,12 +945,6 @@
             const levelType = layouts[(Math.random() * 100) % layouts.length];
             this._buildLevel(levelType);
             this._applyLevelSound()
-        }
-
-        _applyLevelSound() {
-            $('#audio-elem').src = LevelSounds.sort(
-                () => Math.random() > 0.5 ? -1 : 1
-            )[this.level % LevelSounds.length]
         }
 
         _buildLevel(layout = 'procedural') {
@@ -780,20 +963,20 @@
                 }
             } else {
                 // Fallback for single layout type
-                const zone = {x: 0, y: 0, width: cvs.width, height: cvs.height / 2};
+                const zone = {x: 0, y: 0, width: gameCanvas.width, height: gameCanvas.height / 2};
                 this._generateLayoutInZone(zone, layout);
             }
         }
 
         _createZones() {
             const zoneCount = Math.floor(rand(2, 4));
-            const zoneHeight = (cvs.height / zoneCount) - 100;
+            const zoneHeight = (gameCanvas.height * .8) / zoneCount;
             const zones = [];
             for (let i = 0; i < zoneCount; i++) {
                 zones.push({
                     x: 0,
                     y: i * zoneHeight,
-                    width: cvs.width,
+                    width: gameCanvas.width,
                     height: zoneHeight
                 });
             }
@@ -948,7 +1131,9 @@
 
         syncSidebar() {
             const sb = $('.sidebar > .sidebar-powerups');
+
             sb.innerHTML = '<h3>Power‑Ups</h3>';
+
             POWERS.forEach(k => {
                 const row = document.createElement('div');
                 row.className = 'power' + (this.active.has(k) ? ' active' : '');
@@ -964,19 +1149,21 @@
         }
 
         applyPower(key) {
-            /* avoid duplicates */
-            if (key !== 'Heart' && this.active.has(key)) return;
-
             flash(key, CFG.COLORS[key]);
-            bulletTime();
+            bulletTime({
+                power: key
+            });
 
             const dur = CFG.DUR[key.toLowerCase()] || 5000;
-            this.active.set(key, performance.now() + dur);
-            this.syncSidebar();
+            this.clear(key);
 
+            this.active.set(key, performance.now() + dur);
             switch (key) {
                 case 'Expand': {
-                    this.paddle.w = Math.min(this.paddle.w * 1.3, this.paddle.baseW * 5);
+                    this.paddle.w = Math.min(
+                        this.paddle.w * 1.3,
+                        Math.min(gameCanvas.width * 0.5, this.paddle.baseW * 3)
+                    );
                     break;
                 }
                 case 'Reduce': {
@@ -985,8 +1172,6 @@
                 }
                 case 'Magnet': {
                     clearTimeout(this.magnetPowerTimeout)
-                    this.clear(key);
-                    this.active.set(key, performance.now() + dur);
 
                     this.paddle.magnet = true;
                     this.magnetPowerTimeout = setTimeout(() => {
@@ -997,8 +1182,6 @@
                 }
                 case 'Glue': {
                     clearTimeout(this.gluePowerTimeout)
-                    this.clear(key);
-                    this.active.set(key, performance.now() + dur);
 
                     this.paddle.sticky = true;
                     this.gluePowerTimeout = setTimeout(() => {
@@ -1029,20 +1212,16 @@
                 }
                 case 'Shield': {
                     clearTimeout(this.shieldPowerTimeout)
-                    this.clear(key);
-                    this.active.set(key, performance.now() + dur);
 
                     this.shieldPowerTimeout = setTimeout(() => this.clear(key), dur);
                     break;
                 }
                 case 'Flip': {
                     clearTimeout(this.flipPowerTimeout)
-                    this.clear(key);
-                    this.active.set(key, performance.now() + dur);
 
-                    cvs.style.transform = 'rotateX(180deg)';
+                    gameCanvas.style.transform = 'rotateX(180deg)';
                     this.flipPowerTimeout = setTimeout(() => {
-                        cvs.style.transform = '';
+                        gameCanvas.style.transform = '';
                         this.clear(key);
                     }, dur);
                     break;
@@ -1058,8 +1237,6 @@
                 }
                 case 'Chill': {
                     clearTimeout(this.chillPowerTimeout)
-                    this.clear(key);
-                    this.active.set(key, performance.now() + dur);
 
                     this.balls.forEach(b => {
                         b.sp = Math.max(4, b.sp - 2);
@@ -1103,8 +1280,6 @@
                 }
                 case 'Reverse': {
                     clearTimeout(this.reversePowerTimeout)
-                    this.clear(key);
-                    this.active.set(key, performance.now() + dur);
 
                     this.paddle.isReversed = true;
                     this.reversePowerTimeout = setTimeout(() => {
@@ -1115,8 +1290,6 @@
                 }
                 case 'Wrap': {
                     clearTimeout(this.wrapPowerTimeout)
-                    this.clear(key);
-                    this.active.set(key, performance.now() + dur);
 
                     this.wrap = true;
                     this.wrapPowerTimeout = setTimeout(() => {
@@ -1139,8 +1312,6 @@
                 }
                 case 'ChargeShot': {
                     clearTimeout(this.chargeReadyPowerTimeout)
-                    this.clear(key);
-                    this.active.set(key, performance.now() + dur);
 
 
                     this.chargeReady = true;
@@ -1152,12 +1323,10 @@
                 }
                 case 'BlackHole': {
                     clearTimeout(this.blackHolePowerTimeout)
-                    this.clear(key);
-                    this.active.set(key, performance.now() + dur);
 
                     this.blackHole = {
-                        x: rand(0, cvs.width),
-                        y: rand(0, cvs.width),
+                        x: rand(0, gameCanvas.width),
+                        y: rand(0, gameCanvas.width),
                         r: 100 * getDecreasingProbability(this.level)
                     };
                     this.blackHolePowerTimeout = setTimeout(() => {
@@ -1168,8 +1337,6 @@
                 }
                 case 'Gravity': {
                     clearTimeout(this.gravityPowerTimeout)
-                    this.clear(key);
-                    this.active.set(key, performance.now() + dur);
 
                     this.balls.forEach(b => b.boom = false);
 
@@ -1182,8 +1349,6 @@
                 }
                 case 'Echo': {
                     clearTimeout(this.echoPowerTimeout)
-                    this.clear(key);
-                    this.active.set(key, performance.now() + dur);
 
                     this.echo = true;
                     this.echoSegments = new Array(8).fill(true)
@@ -1201,11 +1366,9 @@
         }
 
         applyStun() {
-            this.paddle.sticky = false;
-            this.paddle.magnet = false;
-            this.balls.forEach(b => b.sp = Math.max(b.baseSp * 1.5, b.sp));
-            this.paddle.w = this.paddle.baseW;
-            this.clear('Shield');
+            this.balls.forEach(b => b.sp = Math.max(b.baseSp, b.sp));
+            this.paddle.reset()
+            this.active.clear();
             clearInterval(this.laserTimer);
         }
 
@@ -1216,13 +1379,14 @@
 
         /* ----- EXPLOSION EVENT ----- */
         explode(brick) {
-            ctn.classList.add('shake');
+            gameContainer.classList.add('shake');
             bulletTime();
-            setTimeout(() => ctn.classList.remove('shake'), 250);
+            setTimeout(() => gameContainer.classList.remove('shake'), 250);
 
+            triggerRippleEffect(brick.x, brick.y)
             /* particles */
-            for (let i = 0; i < 25; i++) {
-                this.parts.push(new Particle(brick.x + rand(0, brick.w), brick.y + rand(0, brick.h), '#ff0'));
+            for (let i = 0; i < 100; i++) {
+                this.parts.push(new Particle(brick.x + rand(0, brick.w), brick.y + rand(0, brick.h), 'hsl(50, 100%, 50%)'));
             }
 
             /* splash damage */
@@ -1249,6 +1413,7 @@
             }
             if (this.lives <= 0) {
                 $('#gameover').classList.add('show');
+                document.exitPointerLock();
                 this.stop = true;
             }
             this.syncHUD();
@@ -1275,6 +1440,11 @@
         /* ----- UPDATE STEP ----- */
         update(dt) {
             if (this.lvlUp) return
+
+            ripples = ripples.filter(ripple => {
+                ripple.radius += 200 * dt * timeScale * 0.1;
+                return ripple.radius <= 100;
+            });
 
             this._frameCount++; // increment per frame
 
@@ -1304,7 +1474,11 @@
                         // if close to center, destroy brick with particle
                         if (dist < 10) {
                             b.alive = false;
-                            this.parts.push(new Particle(this.blackHole.x, this.blackHole.y, 'rgba(200,200,200,0.7)'));
+                            /* particles */
+                            for (let i = 0; i < 10; i++) {
+                                this.parts.push(new Particle(b.x + rand(0, b.w), b.y + rand(0, b.h), 'rgba(213,213,213,0.7)'));
+                            }
+
                             this.score += 5;
                         }
                     }
@@ -1363,7 +1537,7 @@
             this.bullets = this.bullets.filter(b => {
                 if (b.owner === 'enemy' && b.y > this.paddle.y && b.x > this.paddle.x && b.x < this.paddle.x + this.paddle.w) {
                     this.paddle.stun = CFG.DUR.stun / 16;
-                    cvs.classList.add('hit');
+                    gameCanvas.classList.add('hit');
                     bulletTime()
                     flash('Stun!', '#ff3131')
                     this.score -= 10
@@ -1374,10 +1548,10 @@
                         this.clear(key);
                     }
 
-                    setTimeout(() => cvs.classList.remove('hit'), 200);
+                    setTimeout(() => gameCanvas.classList.remove('hit'), 200);
                     return false; // remove bullet
                 }
-                return b.y > -20 && b.y < cvs.height + 20;
+                return b.y > -20 && b.y < gameCanvas.height + 20;
             });
 
             /* player laser hit bricks */
@@ -1391,7 +1565,10 @@
                             if (br.type === 'explode') this.explode(br);
                             this.score += 10;
                         }
-                        this.parts.push(new Particle(b.x, b.y, '#ff3131'));
+                        /* particles */
+                        for (let i = 0; i < 10; i++) {
+                            this.parts.push(new Particle(b.x + rand(0, b.w), b.y + rand(0, b.h), '#ff3131'));
+                        }
                         b.y = -9999; // mark bullet for removal
                     }
                 });
@@ -1443,7 +1620,11 @@
                                 this.powers.push(new Power(br.x, br.y, k));
                             }
                         }
-                        this.parts.push(new Particle(ball.x, ball.y, '#fff'));
+
+                        /* particles */
+                        for (let i = 0; i < 5; i++) {
+                            this.parts.push(new Particle(ball.x + rand(0, 6), ball.y + rand(0, 6), '#fff'));
+                        }
                     }
                 });
             });
@@ -1488,47 +1669,47 @@
 
         /* ----- RENDER STEP ----- */
         render() {
-            ctx.clearRect(0, 0, cvs.width, cvs.height);
+            gameCanvasContext.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
 
             if (this.blackHole) {
                 const bh = this.blackHole;
                 // swirling vortex effect
-                const grad = ctx.createRadialGradient(bh.x, bh.y, 0, bh.x, bh.y, bh.r);
+                const grad = gameCanvasContext.createRadialGradient(bh.x, bh.y, 0, bh.x, bh.y, bh.r);
                 grad.addColorStop(0, 'rgba(80,80,80,0.8)');
                 grad.addColorStop(1, 'rgba(20,20,20,0.4)');
-                ctx.save();
-                ctx.translate(bh.x, bh.y);
-                ctx.rotate(this._blackHoleAngle);
-                ctx.translate(-bh.x, -bh.y);
-                ctx.beginPath();
-                ctx.arc(bh.x, bh.y, bh.r, 0, 2 * Math.PI);
-                ctx.fillStyle = grad;
-                ctx.fill();
-                ctx.restore();
+                gameCanvasContext.save();
+                gameCanvasContext.translate(bh.x, bh.y);
+                gameCanvasContext.rotate(this._blackHoleAngle);
+                gameCanvasContext.translate(-bh.x, -bh.y);
+                gameCanvasContext.beginPath();
+                gameCanvasContext.arc(bh.x, bh.y, bh.r, 0, 2 * Math.PI);
+                gameCanvasContext.fillStyle = grad;
+                gameCanvasContext.fill();
+                gameCanvasContext.restore();
                 // inner ring
-                ctx.beginPath();
-                ctx.arc(bh.x, bh.y, bh.r * 0.6, 0, 2 * Math.PI);
-                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-                ctx.lineWidth = 4;
-                ctx.stroke();
+                gameCanvasContext.beginPath();
+                gameCanvasContext.arc(bh.x, bh.y, bh.r * 0.6, 0, 2 * Math.PI);
+                gameCanvasContext.strokeStyle = 'rgba(255,255,255,0.2)';
+                gameCanvasContext.lineWidth = 4;
+                gameCanvasContext.stroke();
             }
 
             if (this.echo) {
                 const count = this.echoSegments.length;
                 const r = 30;
-                ctx.save();
-                ctx.globalAlpha = 0.5;
-                ctx.fillStyle = CFG.COLORS.Echo;
+                gameCanvasContext.save();
+                gameCanvasContext.globalAlpha = 0.5;
+                gameCanvasContext.fillStyle = CFG.COLORS.Echo;
                 this.echoSegments.forEach((alive, i) => {
                     if (!alive) return;
                     const ang = this._frameCount * 0.05 + (2 * Math.PI / count) * i;
                     const rx = this.balls[0].x + Math.cos(ang) * r;
                     const ry = this.balls[0].y + Math.sin(ang) * r;
-                    ctx.beginPath();
-                    ctx.arc(rx, ry, this.balls[0].r / 2, 0, 2 * Math.PI);
-                    ctx.fill();
+                    gameCanvasContext.beginPath();
+                    gameCanvasContext.arc(rx, ry, this.balls[0].r / 2, 0, 2 * Math.PI);
+                    gameCanvasContext.fill();
                 });
-                ctx.restore();
+                gameCanvasContext.restore();
             }
 
             this.bricks.forEach(b => b.draw());
@@ -1540,45 +1721,14 @@
 
             /* shield visual */
             if (this.active.has('Shield')) {
-                ctx.fillStyle = 'rgba(255,255,255,.5)';
-                ctx.fillRect(0, cvs.height - 8, cvs.width, 8);
+                gameCanvasContext.fillStyle = 'rgba(255,255,255,.5)';
+                gameCanvasContext.fillRect(0, gameCanvas.height - 8, gameCanvas.width, 8);
             }
+
+            ripples.forEach(ripple => {
+                drawShockwave(ripple.x, ripple.y, ripple.radius);
+            });
         }
-    }
-
-    /************ INPUT KEYS ************/
-    const keys = {L: false, R: false};
-
-    $('#btn-start').addEventListener('click', () => {
-        $('#start').classList.remove('show')
-
-        /************ INIT GAME ************/
-        game = new Game();
-    });
-
-    let game;
-
-    function getProbability(level, min = 0.1, max = 0.7, rate = 0.1) {
-        const raw = max * Math.exp(-rate * level);
-        return Math.max(min, raw);
-    }
-
-    function getIncreasingProbability(level) {
-        const min = 0.1;
-        const max = 1;
-        const rate = 0.05; // adjust this for faster/slower growth
-
-        const prob = min + (max - min) * (1 - Math.exp(-rate * level));
-        return 1 + Math.min(max, prob);
-    }
-
-    function getDecreasingProbability(level) {
-        const min = 0.01;
-        const max = 1;
-        const rate = 0.3; // adjust this for faster/slower growth
-
-        const prob = max - (max - min) * (1 - Math.exp(-rate * level));
-        return Math.max(min, prob);
     }
 
     const LevelSounds = [
