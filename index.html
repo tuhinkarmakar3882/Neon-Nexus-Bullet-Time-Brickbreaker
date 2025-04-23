@@ -908,7 +908,7 @@
             });
             let paddleX = (gameCanvas.width - this.paddle.w) / 2;
 
-            gameCanvas.addEventListener('click', () => this.balls.forEach(b => b.release()));
+            gameContainer.addEventListener('click', () => this.balls.forEach(b => b.release()));
             window.addEventListener('mousemove', (e) => {
                 paddleX += e.movementX;
 
