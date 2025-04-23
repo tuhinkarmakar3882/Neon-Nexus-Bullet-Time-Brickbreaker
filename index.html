@@ -3,8 +3,26 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Neon Nexus b>Bullet‑Time Brick Breaker</title>
-  <!-- Perlin noise library -->
+  <title>Neon Nexus: Bullet‑Time Brick Breaker</title>
+  <!-- Favicon -->
+  <link rel="icon" href="/favicon.ico" type="image/x-icon"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"/>
+
+  <!-- Web App Manifest -->
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#000000"/>
+
+  <!-- Favicon & Icons -->
+  <link rel="icon" href="./icons/ios/32.png"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="./icons/ios/16.png"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="./icons/ios/32.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/ios/32.png"/>
+  <link rel="shortcut icon" href="./icons/ios/32.png"/>
+
+  <!-- Web App Manifest -->
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#0d47a1"/>
+
   <script src="https://cdn.jsdelivr.net/npm/noisejs@2.1.0/index.min.js"></script>
 
   <!-- =================== THEME & GLOBAL STYLES =================== -->
@@ -25,6 +43,10 @@
           box-sizing: border-box;
           transition: all ease-in-out 250ms;
           line-height: 1.2;
+          font-family: "Major Mono Display", monospace;
+          font-weight: 400;
+          font-style: normal;
+
       }
 
       html, body {
@@ -267,6 +289,10 @@
           }
       }
   </style>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="app">
@@ -311,8 +337,13 @@
     <!-- Overlays -->
     <div id="start" class="overlay show">
       <div class="content">
-        <h1>Neon Nexus <br> Bullet‑Time Brick Breaker</h1>
-        <button id="btn-start" autofocus>Start</button>
+        <section style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 1rem;">
+          <img src="./icons/ios/128.png" alt="Game Logo"
+               style="object-fit: cover; height: 128px; width: 128px; border-radius: 8px; box-shadow: 0 0 4px var(--accent);"
+          >
+          <h1>Neon Nexus <br> Bullet‑Time Brick Breaker</h1>
+        </section>
+        <button id="btn-start" autofocus style="width: 100%; margin-top: 2rem">Start</button>
       </div>
     </div>
 
