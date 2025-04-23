@@ -4,6 +4,8 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Neon Nexus b>Bullet‑Time Brick Breaker</title>
+  <!-- Perlin noise library -->
+  <script src="https://cdn.jsdelivr.net/npm/noisejs@2.1.0/index.min.js"></script>
 
   <!-- =================== THEME & GLOBAL STYLES =================== -->
   <style>
@@ -479,6 +481,7 @@
     const keys = {L: false, R: false};
 
     let game;
+    const noise = new Noise()
 
     let timeScale = 1;
     let isBulletTime = false;
@@ -633,7 +636,6 @@
             this.r = 8;
             this.paddle = paddle;
             this.baseSp = calculateSpeedBasedOnScreenSize(2.7, 6);
-            console.log({baseSp: this.baseSp});
             this.sp = this.baseSp;
             this.vx = 0;
             this.vy = 0;
@@ -704,7 +706,6 @@
                 this.vy += Math.sin(ang) * strength;
             }
         }
-
 
         draw() {
             gameCanvasContext.save();
@@ -858,6 +859,7 @@
         }
     }
 
+
     /************ MAIN GAME CLASS ************/
     class Game {
         constructor() {
@@ -941,17 +943,44 @@
         }
 
         buildLevel() {
-            const layouts = ['mixed', 'procedural', 'emoji', 'tunnel', 'grid'];
+            const layouts = [
+                'procedural',
+                'grid',
+                'circle',
+                'diamond',
+                'tunnel',
+                'emoji',
+                'wave',
+                'perlin'
+            ];
             const levelType = layouts[(Math.random() * 100) % layouts.length];
             this._buildLevel(levelType);
             this._applyLevelSound()
+        }
+
+        _placeBrick(x, y, w, h) {
+            const p = Math.random();
+            let type = 'static';
+            if (p < 0.05) type = 'explode';
+            else if (p < 0.10) type = 'moving';
+            else if (p < 0.15) type = 'cannon';
+            else if (p < 0.20) type = 'boss';
+            this.bricks.push(new Brick(x, y, w, h, type, this.level));
         }
 
         _buildLevel(layout = 'procedural') {
             this.bricks = [];
             if (layout === 'procedural') {
                 const availableZones = this._createZones();
-                const layoutPool = ['grid', 'circle', 'diamond', 'tunnel', 'emoji'];
+                const layoutPool = [
+                    'grid',
+                    'circle',
+                    'diamond',
+                    'tunnel',
+                    'emoji',
+                    'wave',
+                    'perlin'
+                ];
                 const usedLayouts = new Set();
 
                 while (availableZones.length > 0 && layoutPool.length > 0) {
@@ -999,12 +1028,44 @@
                 case 'diamond':
                     this._buildDiamondLayoutInZone(zone);
                     break;
-                case 'emoji':
-                    this._buildEmojiPatternInZone(zone);
-                    break;
                 case 'tunnel':
                     this._buildTunnelLayout(zone);
                     break;
+                case 'emoji':
+                    this._buildEmojiPatternInZone(zone);
+                    break;
+                case 'wave':
+                    this._buildWaveLayout(zone);
+                    break;
+                case 'perlin':
+                    this._buildNoiseLayout(zone);
+                    break;
+            }
+        }
+
+        _buildNoiseLayout(zone) {
+            noise.seed(this.level + (Math.random() * 200));
+            const cols = CFG.COLS
+            const rows = Math.floor(zone.height / 24)
+            const bw = zone.width / cols
+            const bh = 20;
+            for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+                const val = noise.perlin2(c / cols * 3, r / rows * 3);
+                if (val > 0) {
+                    this._placeBrick(zone.x + c * bw, zone.y + r * bh, bw - 4, bh - 4)
+                }
+            }
+        }
+
+        _buildWaveLayout(zone) {
+            const cols = CFG.COLS
+            const rows = Math.floor(zone.height / 24)
+            const bw = zone.width / cols;
+            const bh = 20;
+            for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+                const phase = (c / cols + this.level / 10) * Math.PI * 2;
+                const offset = Math.sin(phase) * bh;
+                this._placeBrick(zone.x + c * bw, zone.y + r * bh + offset, bw - 4, bh - 4);
             }
         }
 
