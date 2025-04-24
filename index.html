@@ -724,7 +724,7 @@
         gameCanvasContext.save();
         gameCanvasContext.shadowBlur = 15;
         gameCanvasContext.shadowColor = CFG.COLORS.defaultColor;
-        gameCanvasContext.fillStyle = this.stun ? '#888' : CFG.PADDLE.defaultColor;
+        gameCanvasContext.fillStyle = this.stun ? '#5a5a5a' : CFG.PADDLE.defaultColor;
         gameCanvasContext.fillRect(this.x, this.y, this.w, this.h);
         gameCanvasContext.restore();
       }
@@ -925,7 +925,6 @@
         this.key = key;
         this.sz = 20;
         this.dead = false;
-        gameCanvasContext.font = '14px monospace';
       }
 
       paddleLeft() {
@@ -965,6 +964,7 @@
         const text = this.key;
         const textWidth = textWidths[text]
 
+        gameCanvasContext.font = '14px monospace';
         gameCanvasContext.fillStyle = CFG.COLORS[this.key];
         this.sz = 20;
 
@@ -1057,6 +1057,8 @@
 
       /* ----- UI BINDINGS ----- */
       bindUI() {
+        if (this.UIBindingCompleted) return;
+
         document.addEventListener('keydown', e => {
           if (e.code === 'ArrowLeft') keys.L = true;
           if (e.code === 'ArrowRight') keys.R = true;
@@ -1096,6 +1098,8 @@
           const r = gameCanvas.getBoundingClientRect();
           this.paddle.update(null, x - r.left - this.paddle.w / 2);
         });
+
+        this.UIBindingCompleted = true
       }
 
       _applyLevelSound() {
@@ -1666,12 +1670,7 @@
 
       loop() {
         if (this.stop) return;
-        this._frameThrottle = this._frameCount % 2;
-
-        //
-        // const now = performance.now();
-        // const dt = (now - last) / 16 * timeScale; // frame‑scaled delta
-        // last = now;
+        this._frameThrottle = 0; // this._frameCount % 2;
 
         const dt = getDt();
         this.update(dt);
@@ -2049,7 +2048,7 @@
         this.parts.forEach(pt => pt.draw());
 
         /* shield visual */
-        if (this.active.has('Shield') && this._frameThrottle === 0) {
+        if (this.active.has('Shield')) {
           gameCanvasContext.fillStyle = 'rgba(255,255,255,.5)';
           gameCanvasContext.fillRect(0, gameCanvas.height - 8, gameCanvas.width, 8);
         }
