@@ -1626,30 +1626,30 @@ class Game {
       this.chargeReady = false
     }
 
-    if (!(this._frameCount & 3)) {         // every 4th frame
-      if (this.parts.length > MAX_PARTICLES) {
-        this.parts.splice(this.parts.length - MAX_PARTICLES, this.parts.length)
-      }
-
-      if (ripples.length > MAX_RIPPLES) {
-        ripples.splice(
-          ripples.length - MAX_RIPPLES,
-          ripples.length
-        )
-      }
-
-      if (this.bullets.length > 200) {
-        this.bullets.splice(this.bullets.length - 200, this.bullets.length)
-      }
-
-      if (this.balls.length > 30) {
-        this.balls.splice(this.balls.length - 30, this.balls.length)
-      }
-
-      if (this.powers.length > 50) {
-        this.powers.splice(this.powers.length - 30, this.powers.length)
-      }
+    // if (this._frameThrottle === 0) {         // every 4th frame
+    if (this.parts.length > MAX_PARTICLES) {
+      this.parts.splice(this.parts.length - MAX_PARTICLES, this.parts.length)
     }
+
+    if (ripples.length > MAX_RIPPLES) {
+      ripples.splice(
+        ripples.length - MAX_RIPPLES,
+        ripples.length
+      )
+    }
+
+    if (this.bullets.length > 200) {
+      this.bullets.splice(this.bullets.length - 200, this.bullets.length)
+    }
+
+    if (this.balls.length > 30) {
+      this.balls.splice(this.balls.length - 30, this.balls.length)
+    }
+
+    if (this.powers.length > 50) {
+      this.powers.splice(this.powers.length - 30, this.powers.length)
+    }
+    // }
 
     /* level clear */
     if (this.bricks.length <= 0) {
