@@ -630,16 +630,16 @@ class Game {
   }
 
   loadStoredPreferences() {
-    this.isSoundEnabled = localStorage.getItem('isSoundEnabled') === 'true' ?? true
+    this.isSoundEnabled = localStorage.getItem('isSoundEnabled') ? localStorage.getItem('isSoundEnabled') === 'true' : true
 
     audioElem.muted = !this.isSoundEnabled;
     soundToggle.checked = this.isSoundEnabled;
 
 
-    this.isBulletTimeEnabled = localStorage.getItem('isBulletTimeEnabled') === 'true' ?? true
+    this.isBulletTimeEnabled = localStorage.getItem('isBulletTimeEnabled') ? localStorage.getItem('isBulletTimeEnabled') === 'true' : true
     bulletTimeToggleInput.checked = this.isBulletTimeEnabled;
 
-    this.isFlashTextEnabled = localStorage.getItem('isFlashTextEnabled') === 'true' ?? true
+    this.isFlashTextEnabled = localStorage.getItem('isFlashTextEnabled') ? localStorage.getItem('isFlashTextEnabled') === 'true' : true
     flashTextToggleInput.checked = this.isFlashTextEnabled;
   }
 
