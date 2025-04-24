@@ -546,7 +546,7 @@
       }
     };
     const POWERS = Object.keys(CFG.COLORS);
-    const MAX_PARTICLES = 200;
+    const MAX_PARTICLES = 150;
     const MAX_RIPPLES = 5;
 
 
@@ -925,6 +925,7 @@
         this.key = key;
         this.sz = 20;
         this.dead = false;
+        gameCanvasContext.font = '14px monospace';
       }
 
       paddleLeft() {
@@ -971,7 +972,6 @@
 
         this.sz = textWidth
         gameCanvasContext.fillStyle = '#000';
-        gameCanvasContext.font = '14px monospace';
         gameCanvasContext.fillText(this.key, this.x + 5, this.y + 15);
       }
     }
@@ -1000,6 +1000,12 @@
       }
     }
 
+    const scoreEl = $('#score'),
+      livesEl = $('#lives'),
+      levelEl = $('#level'),
+      remainEl = $('#remaining-bricks-count');
+    let lastScore, lastLives, lastLevel, lastRemain;
+
 
     /************ MAIN GAME CLASS ************/
     class Game {
@@ -1021,7 +1027,9 @@
         this.parts = [];
         this.bullets = [];
         this._frameCount = 0;  // initialize frame counter
-        this._frameThrottle = false;
+        this._frameThrottle = 0;
+
+        this.buildSidebar()
 
 
         /* build first level */
@@ -1031,6 +1039,20 @@
         /* input handlers */
         this.bindUI();
         this.startLoop();
+      }
+
+      buildSidebar() {
+        const sb = $('.sidebar > .sidebar-powerups');
+
+        sb.innerHTML = '<h3>Power‑Ups</h3>';
+
+        POWERS.forEach(k => {
+          const row = document.createElement('div');
+          row.className = 'power';
+          row.id = `power-ups-${k}-indicator`
+          row.innerHTML = `<span class="color" style="background:${CFG.COLORS[k]}"></span><span>${k}</span>`;
+          sb.appendChild(row);
+        });
       }
 
       /* ----- UI BINDINGS ----- */
@@ -1089,7 +1111,6 @@
           'circle',
           'diamond',
           'tunnel',
-          'emoji',
           'wave',
           'perlin'
         ];
@@ -1117,7 +1138,6 @@
             'circle',
             'diamond',
             'tunnel',
-            'emoji',
             'wave',
             'perlin'
           ];
@@ -1170,9 +1190,6 @@
             break;
           case 'tunnel':
             this._buildTunnelLayout(zone);
-            break;
-          case 'emoji':
-            this._buildEmojiPatternInZone(zone);
             break;
           case 'wave':
             this._buildWaveLayout(zone);
@@ -1266,42 +1283,6 @@
         }
       }
 
-      _buildEmojiPatternInZone({ x, y, width, height }) {
-        const cols = Math.floor(width / (CFG.COLS + 20))
-        const rows = Math.floor(height / 28)
-        const pattern = [];
-
-        for (let r = 0; r < rows; r++) {
-          let row = '';
-          for (let c = 0; c < Math.floor(cols / 2); c++) {
-            row += Math.random() > 0.6 ? 'x' : ' ';
-          }
-          const mirrored = row + (cols % 2 ? 'x' : '') + [...row].reverse().join('');
-          pattern.push(mirrored);
-        }
-
-        for (let r = 0; r < rows; r++) {
-          let line = '';
-          for (let c = 0; c < cols; c++) {
-            line += Math.random() > 0.6 ? 'x' : ' ';
-          }
-          pattern.push(line);
-        }
-
-        const bw = 40, bh = 20;
-        const offsetX = x + (width - cols * bw) / 2;
-        const offsetY = y + (height - rows * bh) / 2;
-
-        for (let r = 0; r < pattern.length; r++) {
-          for (let c = 0; c < pattern[r].length; c++) {
-            if (pattern[r][c] === 'x') {
-              const type = this._randomBrickType();
-              this.bricks.push(new Brick(offsetX + c * bw, offsetY + r * bh, bw - 4, bh - 4, type, this.level));
-            }
-          }
-        }
-      }
-
       _buildTunnelLayout({ x, y, width, height }) {
         const cols = Math.floor(width / (CFG.COLS + 20))
         const rows = Math.floor(height / 28)
@@ -1326,22 +1307,26 @@
       }
 
       syncHUD() {
-        $('#score').textContent = this.score;
-        $('#lives').textContent = this.lives;
-        $('#level').textContent = this.level;
-        $('#remaining-bricks-count').textContent = this.bricks.length;
+        if (this.score !== lastScore) {
+          scoreEl.textContent = lastScore = this.score;
+        }
+        if (this.lives !== lastLives) {
+          livesEl.textContent = lastLives = this.lives;
+        }
+        if (this.level !== lastLevel) {
+          levelEl.textContent = lastLevel = this.level;
+        }
+        const rem = this.bricks.length;
+        if (rem !== lastRemain) {
+          remainEl.textContent = lastRemain = rem;
+        }
       }
 
       syncSidebar() {
-        const sb = $('.sidebar > .sidebar-powerups');
-
-        sb.innerHTML = '<h3>Power‑Ups</h3>';
-
         POWERS.forEach(k => {
-          const row = document.createElement('div');
-          row.className = 'power' + (this.active.has(k) ? ' active' : '');
-          row.innerHTML = `<span class="color" style="background:${CFG.COLORS[k]}"></span><span>${k}</span>`;
-          sb.appendChild(row);
+          const powerUpElem = $(`#power-ups-${k}-indicator`)
+          this.active.has(k) ? powerUpElem.classList.add('active') : powerUpElem.classList.remove(
+            'active')
         });
       }
 
@@ -1604,7 +1589,7 @@
 
         triggerRippleEffect(brick.x, brick.y)
         /* particles */
-        for (let i = 0; i < 100; i++) {
+        for (let i = 0; i < 50; i++) {
           this.parts.push(new Particle(brick.x + rand(0, brick.w), brick.y + rand(0, brick.h), 'hsl(50, 100%, 50%)'));
         }
 
@@ -1681,7 +1666,7 @@
 
       loop() {
         if (this.stop) return;
-        this._frameToggle = !this._frameToggle;
+        this._frameThrottle = this._frameCount % 2;
 
         //
         // const now = performance.now();
@@ -1695,12 +1680,36 @@
         requestAnimationFrame(() => this.loop());
       }
 
+      // 1) Extract your stun routine
+      applyEnemyStun() {
+        this.paddle.stun = CFG.DUR.stun / 16;
+        gameCanvas.classList.add('hit');
+        bulletTime();
+        flash('Stun!', '#ff3131');
+        this.score = Math.max(0, this.score - 10);
+        // clear all active powers
+        for (const key of this.active.keys()) this.clear(key);
+        setTimeout(() => gameCanvas.classList.remove('hit'), 200);
+      }
+
+      // 2) Extract particle burst on brick hit
+      spawnHitParticles(x, y, w, h, count = 5) {
+        for (let i = 0; i < count; i++) {
+          this.parts.push(
+            new Particle(
+              x + rand(0, w),
+              y + rand(0, h),
+              '#ff3131'
+            )
+          );
+        }
+      }
+
       /* ----- UPDATE STEP ----- */
       update(dt) {
         if (this.lvlUp) return
 
-        if (!this._frameToggle) {
-
+        if (this._frameThrottle === 0) {
           ripples = ripples.filter(ripple => {
             ripple.radius += 200 * dt * timeScale * 0.1;
             return ripple.radius <= 100;
@@ -1715,7 +1724,7 @@
         }
 
         // BlackHole gravity & destruction
-        if (this.blackHole && !this._frameToggle) {
+        if (this.blackHole && this._frameThrottle === 0) {
           this._blackHoleAngle += 0.05;
           for (let b of this.bricks) {
             if (!b.alive) continue;
@@ -1739,7 +1748,7 @@
               if (dist < 10) {
                 b.alive = false;
                 /* particles */
-                for (let i = 0; i < 10; i++) {
+                for (let i = 0; i < 5; i++) {
                   this.parts.push(new Particle(b.x + rand(0, b.w), b.y + rand(0, b.h), 'rgba(213,213,213,0.7)'));
                 }
 
@@ -1766,7 +1775,7 @@
         }
 
 
-        if (this.echo && !this._frameToggle) {
+        if (this.echo && this._frameThrottle === 0) {
           const count = this.echoSegments.length;
           const r = 30;
           this.echoSegments.forEach((alive, i) => {
@@ -1789,55 +1798,56 @@
         /* update entities */
         this.paddle.update(keys);
         this.balls.forEach(b => b.update(this));
+
         this.bricks.forEach(b => {
           if (this.freeze) return;
           b.update(dt, this)
         });
-        this.bullets.forEach(b => b.update());
         this.powers.forEach(p => p.update());
-        this.parts.forEach(pt => pt.update());
 
-        /* enemy bullet → paddle stun */
-        this.bullets = this.bullets.filter(b => {
-          if (b.owner === 'enemy' && b.y > this.paddle.y && b.x > this.paddle.x && b.x < this.paddle.x + this.paddle.w) {
-            this.paddle.stun = CFG.DUR.stun / 16;
-            gameCanvas.classList.add('hit');
-            bulletTime()
-            flash('Stun!', '#ff3131')
-            this.score -= 10
-            this.score = Math.max(0, this.score)
+        if (this._frameThrottle === 0) {
+          this.bullets.forEach(b => b.update());
+          this.parts.forEach(pt => pt.update());
 
-            this.powers.forEach(pow => pow.applyStun?.())
-            for (const [key] of this.active) {
-              this.clear(key);
+          const nextBullets = [];
+          for (const b of this.bullets) {
+            // ➤ Enemy bullet hits paddle?
+            if (b.owner === 'enemy'
+              && b.y > this.paddle.y
+              && b.x > this.paddle.x
+              && b.x < this.paddle.x + this.paddle.w) {
+              this.applyEnemyStun();
+              continue; // drop this bullet
             }
 
-            setTimeout(() => gameCanvas.classList.remove('hit'), 200);
-            return false; // remove bullet
+            // ➤ Player laser hits brick?
+            if (b.owner === 'player') {
+              let collided = false;
+              for (const br of this.bricks) {
+                if (!br.alive) continue;
+                if (b.x > br.x && b.x < br.x + br.w
+                  && b.y > br.y && b.y < br.y + br.h) {
+                  br.hp--;
+                  if (br.hp <= 0) {
+                    br.alive = false;
+                    if (br.type === 'explode') this.explode(br);
+                    this.score += 10;
+                  }
+                  this.spawnHitParticles(b.x, b.y, br.w, br.h);
+                  collided = true;
+                  break;
+                }
+              }
+              if (collided) continue; // drop bullet if it hit any brick
+            }
+
+            // ➤ Otherwise keep it only if it’s still on screen
+            if (b.y > -50 && b.y < gameCanvas.height + 50) {
+              nextBullets.push(b);
+            }
           }
-          return b.y > -20 && b.y < gameCanvas.height + 20;
-        });
-
-        /* player laser hit bricks */
-        this.bullets.forEach((b, i) => {
-          if (b.owner !== 'player') return;
-          this.bricks.forEach(br => {
-            if (br.alive && b.x > br.x && b.x < br.x + br.w && b.y > br.y && b.y < br.y + br.h) {
-              br.hp--;
-              if (br.hp <= 0) {
-                br.alive = false;
-                if (br.type === 'explode') this.explode(br);
-                this.score += 10;
-              }
-              /* particles */
-              for (let i = 0; i < 10; i++) {
-                this.parts.push(new Particle(b.x + rand(0, b.w), b.y + rand(0, b.h), '#ff3131'));
-              }
-              b.y = -9999; // mark bullet for removal
-            }
-          });
-        });
-        this.bullets = this.bullets.filter(b => b.y > -50);
+          this.bullets = nextBullets;
+        }
 
         /* ball collisions */
         let hasHitBrick = false
@@ -1901,9 +1911,13 @@
           this.chargeReady = false
         }
         /* clean dead bricks, powers, particles */
-        this.bricks = this.bricks.filter(b => b.alive);
-        this.powers = this.powers.filter(p => !p.dead);
-        this.parts = this.parts.filter(pt => pt.life > 0);
+
+
+        if (this._frameThrottle === 0) {
+          this.bricks = this.bricks.filter(b => b.alive);
+          this.powers = this.powers.filter(p => !p.dead);
+          this.parts = this.parts.filter(pt => pt.life > 0);
+        }
 
         /* level clear */
         if (this.bricks.length <= 0) {
@@ -1944,7 +1958,9 @@
           })
         }
 
-        this.parts = this.parts.filter(p => p.life > 0);
+        if (this._frameThrottle === 0) {
+          this.parts = this.parts.filter(p => p.life > 0);
+        }
 
         while (this.parts.length > MAX_PARTICLES) {
           this.parts.shift()
@@ -1953,20 +1969,20 @@
         this.syncHUD();
       }
 
-      levelCompleted() {
-        this.stop = false;
-
-        this.level++;
-        this.lives++;
-        setTimeout(() => {
-          this.moveToNextLevel()
-          $('#lvlup').classList.remove('show');
-          this.buildLevel();
-          this.lvlUp = false
-        }, 2000);
-
-        this.loop()
-      }
+      // levelCompleted() {
+      //     this.stop = false;
+      //
+      //     this.level++;
+      //     this.lives++;
+      //     setTimeout(() => {
+      //         this.moveToNextLevel()
+      //         $('#lvlup').classList.remove('show');
+      //         this.buildLevel();
+      //         this.lvlUp = false
+      //     }, 2000);
+      //
+      //     this.loop()
+      // }
 
       moveToNextLevel() {
         this.active = new Map(); // key -> expires timestamp
@@ -1984,7 +2000,7 @@
       render() {
         gameCanvasContext.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
 
-        if (this.blackHole && !this._frameThrottle) {
+        if (this.blackHole && this._frameThrottle === 0) {
           const bh = this.blackHole;
           // swirling vortex effect
           const grad = gameCanvasContext.createRadialGradient(bh.x, bh.y, 0, bh.x, bh.y, bh.r);
@@ -2007,7 +2023,7 @@
           gameCanvasContext.stroke();
         }
 
-        if (this.echo && !this._frameThrottle) {
+        if (this.echo && this._frameThrottle === 0) {
           const count = this.echoSegments.length;
           const r = 30;
           gameCanvasContext.save();
@@ -2033,14 +2049,16 @@
         this.parts.forEach(pt => pt.draw());
 
         /* shield visual */
-        if (this.active.has('Shield')) {
+        if (this.active.has('Shield') && this._frameThrottle === 0) {
           gameCanvasContext.fillStyle = 'rgba(255,255,255,.5)';
           gameCanvasContext.fillRect(0, gameCanvas.height - 8, gameCanvas.width, 8);
         }
 
-        ripples.forEach(ripple => {
-          drawShockwave(ripple.x, ripple.y, ripple.radius);
-        });
+        if (this._frameThrottle === 0) {
+          ripples.forEach(ripple => {
+            drawShockwave(ripple.x, ripple.y, ripple.radius);
+          });
+        }
       }
     }
 
@@ -2158,4 +2176,5 @@
     ]
   </script>
 </body>
+
 </html>
