@@ -1,0 +1,402 @@
+.primaryButton,
+.secondaryButton {
+    transition: background 250ms ease-in-out, color 250ms ease-in-out, transform 250ms;
+}
+
+hr {
+    height: 1px;
+    outline: none;
+    border-color: var(--hud-bg);
+}
+
+:root {
+    --bg-start: #0d0f12;
+    --bg-end: #1a1c20;
+    --accent: #00ffc3;
+    --text: #fafafa;
+    --hud-bg: #0008;
+    --font: "Major Mono Display", monospace;
+}
+
+/* ---------- RESET & PAGE LAYOUT ---------- */
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    /*transition-property: transform, height, width, text-shadow, box-shadow;*/
+    transition-duration: 250ms;
+    transition-timing-function: ease-in-out;
+    line-height: 1.2;
+    font-family: var(--font), monospace;
+    font-weight: 400;
+    font-style: normal;
+
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    color: var(--text);
+    background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
+    background-size: 400% 400%;
+    animation: bgShift 18s ease-in-out infinite;
+}
+
+@keyframes bgShift {
+
+    0%,
+    100% {
+        background-position: 0 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+/* ---------- FLEX WRAPPER ---------- */
+#app {
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+/* ---------- SIDEBAR ---------- */
+.sidebar {
+    display: none;
+    width: 250px;
+    background: var(--hud-bg);
+    padding: 12px;
+    overflow-y: auto;
+}
+
+.sidebar .sidebar-powerups h3 {
+    margin-bottom: 10px;
+}
+
+.power {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+    opacity: .35;
+    transition: .3s;
+}
+
+.power.active {
+    opacity: 1;
+    font-weight: 700;
+}
+
+.color {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    margin-right: 6px;
+}
+
+@media screen and (min-width: 768px) {
+    .sidebar {
+        display: block;
+    }
+
+    .canvas-container {
+        margin-top: 0 !important;
+        height: 100% !important;
+        padding-inline: 0 !important;
+    }
+
+    #hud-logo {
+        display: none !important;
+    }
+}
+
+#hud-logo {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    width: 100%;
+    transform: translateX(-50%);
+    background: var(--hud-bg);
+    padding: 6px 14px;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    font-size: 14px;
+    z-index: 2;
+    justify-content: center;
+    align-items: center;
+}
+
+/* ---------- GAME CANVAS ---------- */
+#game-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+#start {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+}
+
+#start>.content {
+    max-width: 768px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+}
+
+.canvas-container {
+    padding-inline: 1rem;
+    margin-top: 4rem;
+    height: calc(100% - 11rem);
+    width: 100%;
+}
+
+canvas {
+    width: 100%;
+    height: 100%;
+    background: #111;
+    border: 2px solid var(--accent);
+    box-shadow: 0 0 14px var(--accent);
+    display: block;
+    border-radius: 4px;
+    padding: 1rem;
+    z-index: 0;
+}
+
+#btn-pause,
+#btn-setting {
+    display: grid;
+    place-items: center;
+    height: clamp(36px, 36px, 36px);
+    width: clamp(36px, 36px, 36px);
+    line-height: 0;
+    border-radius: 50%;
+    margin: 0;
+    padding: 0;
+}
+
+#btn-pause>span {
+    font-size: 28px;
+    margin-top: -2px;
+}
+
+#btn-setting>span {
+    font-size: 32px;
+    margin-top: -6px;
+}
+
+/* ---------- HUD ---------- */
+#hud {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    width: 99%;
+    transform: translateX(-50%);
+    background: var(--hud-bg);
+    padding: 6px 14px;
+    border-radius: 6px;
+    display: grid;
+    grid-auto-flow: column;
+    gap: 8px;
+    font-size: 12px;
+    z-index: 2;
+    justify-content: space-between;
+    align-items: center;
+    height: 53px;
+    box-shadow: 0 2px 4px var(--hud-bg);
+}
+
+/* ---------- FLASH TEXT ---------- */
+#flash {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 52px;
+    font-weight: 700;
+    color: var(--accent);
+    /*text-shadow: 0 0 14px var(--accent);*/
+    opacity: 0;
+    pointer-events: none;
+    transition: .3s;
+    backdrop-filter: blur(4px);
+}
+
+/* ---------- OVERLAYS ---------- */
+.overlay {
+    position: fixed;
+    inset: 0;
+    background: #000D;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    opacity: 0;
+    pointer-events: none;
+    transition: .3s;
+    backdrop-filter: blur(4px);
+    z-index: 5;
+}
+
+.overlay>* {
+    border-radius: 8px;
+}
+
+.overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.overlay h1 {
+    line-height: 1.5;
+    font-size: 2rem;
+    margin-bottom: 16px;
+    text-align: center;
+    text-shadow: 0 0 14px var(--accent);
+    animation: glow 1500ms alternate infinite ease-in-out;
+}
+
+@keyframes glow {
+    0% {
+        text-shadow: 0 0 4px var(--accent);
+    }
+
+    100% {
+        text-shadow: 4px 4px 30px var(--accent);
+    }
+}
+
+.overlay button,
+.primaryButton,
+.secondaryButton {
+    padding: 10px 26px;
+    border: 2px solid var(--accent);
+    border-radius: 6px;
+    background: hsl(170, 100%, 50%);
+    color: black;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.secondaryButton {
+    background: transparent !important;
+    color: hsl(170, 100%, 50%) !important;
+}
+
+
+.overlay button:hover {
+    background: var(--accent);
+    color: #000;
+}
+
+/* ---------- FX ---------- */
+.shake {
+    animation: shake .25s 3;
+}
+
+.hit {
+    animation: hit .2s 1;
+}
+
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translate(0);
+    }
+
+    25% {
+        transform: translate(-6px, 0);
+    }
+
+    75% {
+        transform: translate(6px, 0);
+    }
+}
+
+@keyframes hit {
+    0% {
+        filter: hue-rotate(0deg);
+    }
+
+    50% {
+        filter: hue-rotate(180deg);
+    }
+
+    100% {
+        filter: hue-rotate(0deg);
+    }
+}
+
+
+/* settings overlay tweaks */
+#settings {
+    z-index: 5;
+}
+
+/* each row in settings */
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+/* the toggle switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 24px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #ccc;
+    border-radius: 24px;
+    transition: background 0.4s;
+}
+
+.slider::before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.4s;
+}
+
+/* Checked state */
+.switch input:checked+.slider {
+    background: var(--accent);
+}
+
+.switch input:checked+.slider::before {
+    transform: translateX(16px);
+}
