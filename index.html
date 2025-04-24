@@ -32,6 +32,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&display=swap" rel="stylesheet">
 
   <style>
+    .primaryButton,
+    .secondaryButton {
+      transition: background 250ms ease-in-out, color 250ms ease-in-out, transform 250ms;
+    }
+
     :root {
       --bg-start: #0d0f12;
       --bg-end: #1a1c20;
@@ -48,7 +53,7 @@
       margin: 0;
       padding: 0;
       box-sizing: border-box;
-      transition-property: transform, height, width, text-shadow, box-shadow;
+      /*transition-property: transform, height, width, text-shadow, box-shadow;*/
       transition-duration: 250ms;
       transition-timing-function: ease-in-out;
       line-height: 1.2;
@@ -722,8 +727,8 @@
 
       draw() {
         gameCanvasContext.save();
-        gameCanvasContext.shadowBlur = 15;
-        gameCanvasContext.shadowColor = CFG.COLORS.defaultColor;
+        // gameCanvasContext.shadowBlur = 4;
+        // gameCanvasContext.shadowColor = CFG.COLORS.defaultColor;
         gameCanvasContext.fillStyle = this.stun ? '#5a5a5a' : CFG.PADDLE.defaultColor;
         gameCanvasContext.fillRect(this.x, this.y, this.w, this.h);
         gameCanvasContext.restore();
@@ -847,8 +852,8 @@
 
       draw() {
         gameCanvasContext.save();
-        gameCanvasContext.shadowBlur = 15;
-        gameCanvasContext.shadowColor = this.getBallColor();
+        // gameCanvasContext.shadowBlur = 15;
+        // gameCanvasContext.shadowColor = this.getBallColor();
         gameCanvasContext.fillStyle = this.getBallColor();
         gameCanvasContext.beginPath();
         gameCanvasContext.arc(this.x, this.y, this.r, 0, Math.PI * 2);
@@ -1006,6 +1011,7 @@
       remainEl = $('#remaining-bricks-count');
     let lastScore, lastLives, lastLevel, lastRemain;
 
+    const fireConfetti = confetti.create(gameCanvas, { resize: true });
 
     /************ MAIN GAME CLASS ************/
     class Game {
@@ -1670,7 +1676,7 @@
 
       loop() {
         if (this.stop) return;
-        this._frameThrottle = 0; // this._frameCount % 2;
+        this._frameThrottle = this._frameThrottle ? 1 : 0;
 
         const dt = getDt();
         this.update(dt);
@@ -1722,7 +1728,6 @@
           if (performance.now() > until) this.clear(key);
         }
 
-        // BlackHole gravity & destruction
         if (this.blackHole && this._frameThrottle === 0) {
           this._blackHoleAngle += 0.05;
           for (let b of this.bricks) {
@@ -1773,7 +1778,6 @@
           }
         }
 
-
         if (this.echo && this._frameThrottle === 0) {
           const count = this.echoSegments.length;
           const r = 30;
@@ -1804,49 +1808,47 @@
         });
         this.powers.forEach(p => p.update());
 
-        if (this._frameThrottle === 0) {
-          this.bullets.forEach(b => b.update());
-          this.parts.forEach(pt => pt.update());
+        this.bullets.forEach(b => b.update());
+        this.parts.forEach(pt => pt.update());
 
-          const nextBullets = [];
-          for (const b of this.bullets) {
-            // ➤ Enemy bullet hits paddle?
-            if (b.owner === 'enemy'
-              && b.y > this.paddle.y
-              && b.x > this.paddle.x
-              && b.x < this.paddle.x + this.paddle.w) {
-              this.applyEnemyStun();
-              continue; // drop this bullet
-            }
-
-            // ➤ Player laser hits brick?
-            if (b.owner === 'player') {
-              let collided = false;
-              for (const br of this.bricks) {
-                if (!br.alive) continue;
-                if (b.x > br.x && b.x < br.x + br.w
-                  && b.y > br.y && b.y < br.y + br.h) {
-                  br.hp--;
-                  if (br.hp <= 0) {
-                    br.alive = false;
-                    if (br.type === 'explode') this.explode(br);
-                    this.score += 10;
-                  }
-                  this.spawnHitParticles(b.x, b.y, br.w, br.h);
-                  collided = true;
-                  break;
-                }
-              }
-              if (collided) continue; // drop bullet if it hit any brick
-            }
-
-            // ➤ Otherwise keep it only if it’s still on screen
-            if (b.y > -50 && b.y < gameCanvas.height + 50) {
-              nextBullets.push(b);
-            }
+        const nextBullets = [];
+        for (const b of this.bullets) {
+          // ➤ Enemy bullet hits paddle?
+          if (b.owner === 'enemy'
+            && b.y > this.paddle.y
+            && b.x > this.paddle.x
+            && b.x < this.paddle.x + this.paddle.w) {
+            this.applyEnemyStun();
+            continue; // drop this bullet
           }
-          this.bullets = nextBullets;
+
+          // ➤ Player laser hits brick?
+          if (b.owner === 'player') {
+            let collided = false;
+            for (const br of this.bricks) {
+              if (!br.alive) continue;
+              if (b.x > br.x && b.x < br.x + br.w
+                && b.y > br.y && b.y < br.y + br.h) {
+                br.hp--;
+                if (br.hp <= 0) {
+                  br.alive = false;
+                  if (br.type === 'explode') this.explode(br);
+                  this.score += 10;
+                }
+                this.spawnHitParticles(b.x, b.y, br.w, br.h);
+                collided = true;
+                break;
+              }
+            }
+            if (collided) continue; // drop bullet if it hit any brick
+          }
+
+          // ➤ Otherwise keep it only if it’s still on screen
+          if (b.y > -50 && b.y < gameCanvas.height + 50) {
+            nextBullets.push(b);
+          }
         }
+        this.bullets = nextBullets;
 
         /* ball collisions */
         let hasHitBrick = false
@@ -1909,14 +1911,14 @@
         if (this.chargeReady && hasHitBrick) {
           this.chargeReady = false
         }
-        /* clean dead bricks, powers, particles */
 
-
-        if (this._frameThrottle === 0) {
+        if (!(this._frameCount & 2)) {         // every 4th frame
           this.bricks = this.bricks.filter(b => b.alive);
+          this.bullets = this.bullets.filter(b => b.y > -60 && b.y < gameCanvas.height + 60);
           this.powers = this.powers.filter(p => !p.dead);
           this.parts = this.parts.filter(pt => pt.life > 0);
         }
+
 
         /* level clear */
         if (this.bricks.length <= 0) {
@@ -1933,28 +1935,19 @@
           this.lvlUp = true;
 
           // Celebrate
-          confetti.create(gameCanvas, {
-            resize: true,
-          })({
-            particleCount: 200,
-            spread: 100,
-            origin: { y: 0.5 },
-            scalar: 2
-          }).then(() => {
+          fireConfetti({ particleCount: 200, spread: 100, origin: { y: 0.5 }, scalar: 2 });
 
-            this.level++;
-            this.lives++;
+          this.level++;
+          this.lives++;
 
-            // setTimeout(() => {
+          setTimeout(() => {
             this.moveToNextLevel()
             $('#lvlup').classList.remove('show');
             this.buildLevel();
             this.lvlUp = false
-            // }, 2000);
-
             this.stop = false;
             this.loop()
-          })
+          }, 2500);
         }
 
         if (this._frameThrottle === 0) {
@@ -1966,6 +1959,14 @@
         }
 
         this.syncHUD();
+
+        console.log({
+          bricks: this.bricks.length,
+          bullets: this.bullets.length,
+          powers: this.powers.length,
+          parts: this.parts.length,
+          active: this.active.size,
+        })
       }
 
       // levelCompleted() {
