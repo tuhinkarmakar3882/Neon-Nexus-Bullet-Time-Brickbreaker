@@ -1906,7 +1906,7 @@
         this.parts = this.parts.filter(pt => pt.life > 0);
 
         /* level clear */
-        if (this.bricks.length % 7 !== 3) {
+        if (this.bricks.length <= 0) {
           // stop the game-loop
           this.stop = true;
 
