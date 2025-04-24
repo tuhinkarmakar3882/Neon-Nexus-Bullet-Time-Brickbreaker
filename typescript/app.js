@@ -133,16 +133,19 @@ POWERS.forEach(k => textWidths[k] = gameCanvasContext.measureText(k).width);
 window.addEventListener('resize', resize);
 $('#btn-start').addEventListener('click', () => {
   gameCanvas.requestPointerLock();
-  // $('#app').requestFullscreen();
-
 
   setTimeout(() => {
     $('#start').classList.remove('show')
     game = new Game();
   }, 200)
   /************ INIT GAME ************/
-
 });
+
+gameCanvas.addEventListener('click', () => {
+  document.exitPointerLock();
+  gameCanvas.requestPointerLock();
+})
+
 $('#btn-restart').addEventListener('click', () => {
   game.restartGame()
 });
