@@ -85,11 +85,13 @@ const CFG = {
     blackhole: 4000,
     gravity: 5000,
     missile: 7000,
-    echo: 8000
+    echo: 8000,
+    burst: 5000,
   },
   CANNON: { RATE: 2500, SPD: 5 },
   COLORS: {
     BlackHole: '#be0000',        // Mint green
+    Burst: '#9723e7',        // Mint green
     ChargeShot: '#FFAC33',       // Soft blue
     Chill: '#5BE7C4',
     Echo: '#E0E0E0',         // Emerald green
@@ -666,13 +668,16 @@ class Game {
     document.addEventListener('keydown', e => {
       if (e.code === 'ArrowLeft') keys.L = true;
       if (e.code === 'ArrowRight') keys.R = true;
-      if (e.code === 'Space') this.balls.forEach(b => b.release());
+
+      if (e.code === 'Space' || e.code === 'enter') this.balls.forEach(b => b.release());
     });
+
     document.addEventListener('keyup', e => {
       e.preventDefault()
       if (e.code === 'ArrowLeft') keys.L = false;
       if (e.code === 'ArrowRight') keys.R = false;
-      if (e.code === 'Space') this.balls.forEach(b => b.release());
+
+      if (e.code === 'Space' || e.code === 'enter') this.balls.forEach(b => b.release());
     });
     let paddleX = (gameCanvas.width - this.paddle.w) / 2;
 
