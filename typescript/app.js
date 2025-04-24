@@ -1272,6 +1272,7 @@ class Game {
   /* ----- BALL LOST ----- */
   ballLost(ball) {
     // TODO CHECK FOR OPTIMISATIONS
+    ball.dead = true
     this.balls = this.balls.filter(b => b !== ball);
 
     if (this.balls.length === 0) {
@@ -1480,16 +1481,14 @@ class Game {
       });
     }
 
-    let temp = [];
+
     /* update entities */
     this.paddle.update(keys);
 
     /* ball collisions */
+    let temp = [];
     let hasHitBrick = false
     this.balls.forEach(ball => {
-      if (ball.dead) return
-      temp.push(ball)
-
       if (
         !ball.stuck && ball.vy > 0 &&
         ball.x > this.paddle.x &&
@@ -1550,7 +1549,6 @@ class Game {
 
       ball.update(this)
     });
-    this.balls = temp;
 
     temp = []
     this.bricks.forEach(b => {
