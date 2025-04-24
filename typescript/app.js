@@ -132,10 +132,8 @@ POWERS.forEach(k => textWidths[k] = gameCanvasContext.measureText(k).width);
 
 window.addEventListener('resize', resize);
 $('#btn-start').addEventListener('click', () => {
-  document.exitPointerLock();
-
   gameCanvas.requestPointerLock();
-  $('#app').requestFullscreen();
+  // $('#app').requestFullscreen();
 
 
   setTimeout(() => {
@@ -737,7 +735,7 @@ class Game {
     localStorage.setItem('isFlashTextEnabled', this.isFlashTextEnabled)
     localStorage.setItem('isBulletTimeEnabled', this.isBulletTimeEnabled)
 
-    $('#app').requestFullscreen();
+    // $('#app').requestFullscreen();
     document.exitPointerLock();
     gameCanvas.requestPointerLock();
     this.startLoop();
@@ -750,7 +748,7 @@ class Game {
     pausedContainer.classList.remove('show');
     document.exitPointerLock();
     gameCanvas.requestPointerLock();
-    $('#app').requestFullscreen();
+    // $('#app').requestFullscreen();
 
     this.startLoop();
   }
