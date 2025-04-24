@@ -88,30 +88,30 @@ const CFG = {
     echo: 8000,
     burst: 5000,
   },
-  CANNON: { RATE: 2500, SPD: 5 },
+  CANNON: {RATE: 2500, SPD: 5},
   COLORS: {
-    BlackHole: '#be0000',    // Deep space black
-    Burst: '#FF4ECD',        // Vibrant pink
-    Chill: '#5BE7C4',        // Mint green
-    Expand: '#6699FF',       // Soft blue
-    Flip: '#C084FC',         // Orchid purple
-    Glue: '#00C48C',         // Emerald green
-    Heart: '#FFD6E8',        // Blush pink
+    // BlackHole: '#be0000',    // Deep space black
+    // Burst: '#FF4ECD',        // Vibrant pink
+    // Chill: '#5BE7C4',        // Mint green
+    // Expand: '#6699FF',       // Soft blue
+    // Flip: '#C084FC',         // Orchid purple
+    // Glue: '#00C48C',         // Emerald green
+    // Heart: '#FFD6E8',        // Blush pink
     Laser: '#FF5A5F',        // Bold red
-    Magnet: '#FFD93D',       // Sunflower yellow
-    Reduce: '#9D4EDD',       // Deep violet
-    Shield: '#F5F5F5',       // Soft white
-    Teleport: '#72F2EB',     // Aqua blue
-    Velocity: '#0077FF',     // Deep sky blue
-
-    Joker: '#A3FF12',        // Lively lime
-    Reverse: '#FFB3C1',      // Pastel coral
-    Wrap: '#FFE156',         // Banana yellow
-    Freeze: '#1FB6FF',       // Ice blue
-    ChargeShot: '#FFAC33',   // Orange amber
-    Gravity: '#D88BFF',      // Lavender haze
-    Echo: '#E0E0E0',          // Gentle gray
-    Missile: '#00ff8b',         // Banana yellow
+    // Magnet: '#FFD93D',       // Sunflower yellow
+    // Reduce: '#9D4EDD',       // Deep violet
+    // Shield: '#F5F5F5',       // Soft white
+    // Teleport: '#72F2EB',     // Aqua blue
+    // Velocity: '#0077FF',     // Deep sky blue
+    //
+    // Joker: '#A3FF12',        // Lively lime
+    // Reverse: '#FFB3C1',      // Pastel coral
+    // Wrap: '#FFE156',         // Banana yellow
+    // Freeze: '#1FB6FF',       // Ice blue
+    // ChargeShot: '#FFAC33',   // Orange amber
+    // Gravity: '#D88BFF',      // Lavender haze
+    // Echo: '#E0E0E0',          // Gentle gray
+    // Missile: '#00ff8b',         // Banana yellow
   },
   PADDLE: {
     defaultColor: 'white',
@@ -174,7 +174,7 @@ resize();
 /* ---------- GLOBAL STATE ---------- */
 
 /************ INPUT KEYS ************/
-const keys = { L: false, R: false };
+const keys = {L: false, R: false};
 
 let game;
 const noise = new Noise()
@@ -193,7 +193,7 @@ const scoreEl = $('#score'),
   remainEl = $('#remaining-bricks-count');
 let lastScore, lastLives, lastLevel, lastRemain;
 
-const fireConfetti = confetti.create(gameCanvas, { resize: true });
+const fireConfetti = confetti.create(gameCanvas, {resize: true});
 
 function flash(text, color = '#00ffc3') {
   const box = $('#flash');
@@ -240,7 +240,7 @@ function drawShockwave(x, y, radius) {
 }
 
 function triggerRippleEffect(x, y) {
-  ripples.push({ x, y, radius: 0 });
+  ripples.push({x, y, radius: 0});
 
   if (ripples.length > MAX_RIPPLES) {
     ripples.splice(
@@ -814,7 +814,7 @@ class Game {
       }
     } else {
       // Fallback for single layout type
-      const zone = { x: 0, y: 0, width: gameCanvas.width, height: gameCanvas.height / 2 };
+      const zone = {x: 0, y: 0, width: gameCanvas.width, height: gameCanvas.height / 2};
       this._generateLayoutInZone(zone, layout);
     }
   }
@@ -897,7 +897,7 @@ class Game {
     return 'static';
   }
 
-  _buildGridLayout({ x, y, width, height }) {
+  _buildGridLayout({x, y, width, height}) {
     const cols = Math.floor(width / (CFG.COLS + 20))
     const rows = Math.floor(height / 28)
     const bw = (width - 40) / cols;
@@ -914,7 +914,7 @@ class Game {
     }
   }
 
-  _buildCircleLayoutInZone({ x, y, width, height }) {
+  _buildCircleLayoutInZone({x, y, width, height}) {
     const centerX = x + width / 2;
     const centerY = y + height / 2;
     const radius = Math.min(width, height) / 3;
@@ -929,7 +929,7 @@ class Game {
     }
   }
 
-  _buildDiamondLayoutInZone({ x, y, width, height }) {
+  _buildDiamondLayoutInZone({x, y, width, height}) {
     const cx = x + width / 2;
     const cy = y + height / 2;
     const layers = 4;
@@ -945,7 +945,7 @@ class Game {
     }
   }
 
-  _buildTunnelLayout({ x, y, width, height }) {
+  _buildTunnelLayout({x, y, width, height}) {
     const cols = Math.floor(width / (CFG.COLS + 20))
     const rows = Math.floor(height / 28)
     const bw = (width - 40) / cols;
@@ -1046,7 +1046,14 @@ class Game {
 
         this.laserTimer = setInterval(() => {
           this.spawnBullet(
-            this.paddle.x + this.paddle.w / 2,
+            this.paddle.x + 10,
+            this.paddle.y,
+            -8,
+            'player'
+          );
+
+          this.spawnBullet(
+            this.paddle.x + this.paddle.w  - 10,
             this.paddle.y,
             -8,
             'player'
@@ -1353,7 +1360,7 @@ class Game {
     setTimeout(() => gameCanvas.classList.remove('hit'), 200);
   }
 
-  // 2) Extract particle burst on brick hit
+// 2) Extract particle burst on brick hit
   spawnHitParticles(x, y, w, h, count = 5) {
     for (let i = 0; i < count; i++) {
       this.parts.push(
@@ -1591,7 +1598,7 @@ class Game {
       this.lvlUp = true;
 
       // Celebrate
-      fireConfetti({ particleCount: 200, spread: 100, origin: { y: 0.5 }, scalar: 2 });
+      fireConfetti({particleCount: 200, spread: 100, origin: {y: 0.5}, scalar: 2});
 
       this.level++;
       this.lives++;
