@@ -90,28 +90,28 @@ const CFG = {
   },
   CANNON: {RATE: 2500, SPD: 5},
   COLORS: {
-    // BlackHole: '#be0000',    // Deep space black
-    // Burst: '#FF4ECD',        // Vibrant pink
-    // Chill: '#5BE7C4',        // Mint green
-    // Expand: '#6699FF',       // Soft blue
-    // Flip: '#C084FC',         // Orchid purple
-    // Glue: '#00C48C',         // Emerald green
-    // Heart: '#FFD6E8',        // Blush pink
+    BlackHole: '#be0000',    // Deep space black
+    Burst: '#FF4ECD',        // Vibrant pink
+    Chill: '#5BE7C4',        // Mint green
+    Expand: '#6699FF',       // Soft blue
+    Flip: '#C084FC',         // Orchid purple
+    Glue: '#00C48C',         // Emerald green
+    Heart: '#FFD6E8',        // Blush pink
     Laser: '#FF5A5F',        // Bold red
-    // Magnet: '#FFD93D',       // Sunflower yellow
-    // Reduce: '#9D4EDD',       // Deep violet
-    // Shield: '#F5F5F5',       // Soft white
-    // Teleport: '#72F2EB',     // Aqua blue
-    // Velocity: '#0077FF',     // Deep sky blue
-    //
-    // Joker: '#A3FF12',        // Lively lime
-    // Reverse: '#FFB3C1',      // Pastel coral
-    // Wrap: '#FFE156',         // Banana yellow
-    // Freeze: '#1FB6FF',       // Ice blue
-    // ChargeShot: '#FFAC33',   // Orange amber
-    // Gravity: '#D88BFF',      // Lavender haze
-    // Echo: '#E0E0E0',          // Gentle gray
-    // Missile: '#00ff8b',         // Banana yellow
+    Magnet: '#FFD93D',       // Sunflower yellow
+    Reduce: '#9D4EDD',       // Deep violet
+    Shield: '#F5F5F5',       // Soft white
+    Teleport: '#72F2EB',     // Aqua blue
+    Velocity: '#0077FF',     // Deep sky blue
+
+    Joker: '#A3FF12',        // Lively lime
+    Reverse: '#FFB3C1',      // Pastel coral
+    Wrap: '#FFE156',         // Banana yellow
+    Freeze: '#1FB6FF',       // Ice blue
+    ChargeShot: '#FFAC33',   // Orange amber
+    Gravity: '#D88BFF',      // Lavender haze
+    Echo: '#E0E0E0',          // Gentle gray
+    Missile: '#00ff8b',         // Banana yellow
   },
   PADDLE: {
     defaultColor: 'white',
