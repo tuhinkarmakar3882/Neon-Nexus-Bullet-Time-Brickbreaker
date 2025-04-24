@@ -229,7 +229,7 @@
       font-size: 52px;
       font-weight: 700;
       color: var(--accent);
-      text-shadow: 0 0 14px var(--accent);
+      /*text-shadow: 0 0 14px var(--accent);*/
       opacity: 0;
       pointer-events: none;
       transition: .3s;
@@ -594,14 +594,15 @@
 
     let ripples = []; // Store multiple ripples
 
+    let flashTimer;
     function flash(text, color = '#00ffc3') {
       const box = $('#flash');
       box.textContent = text;
       box.style.opacity = '1';
       box.style.color = color;
-      box.style.textShadow = `0 0 14px ${color}`;
+      box.style.textShadow = `0 0 4px ${color}`;
 
-      setTimeout(() => {
+      flashTimer = setTimeout(() => {
         box.style.opacity = '0';
       }, 800);
     }
@@ -636,23 +637,16 @@
         gameCanvasContext.stroke();
         gameCanvasContext.setLineDash([]);
       }
-
-      if (radius > 100) {
-        gameCanvasContext.beginPath();
-        gameCanvasContext.arc(x, y, radius * 0.3, 0, Math.PI * 2);
-        gameCanvasContext.strokeStyle = `hsla(${hueValue}, 100%, 20%, ${opacity * 0.20})`;
-        gameCanvasContext.lineWidth = 2;
-        gameCanvasContext.setLineDash([15, 20]);
-        gameCanvasContext.stroke();
-        gameCanvasContext.setLineDash([]);
-      }
     }
 
     function triggerRippleEffect(x, y) {
       ripples.push({ x, y, radius: 0 });
 
-      while (ripples.length > MAX_RIPPLES) {
-        ripples.shift()
+      if (ripples.length > MAX_RIPPLES) {
+        ripples.splice(
+          ripples.length - MAX_RIPPLES,
+          ripples.length
+        )
       }
     }
 
@@ -1586,8 +1580,8 @@
       spawnBullet(x, y, vy, owner) {
         this.bullets.push(new Bullet(x, y, vy, owner));
 
-        while (this.bullets.length > 200) {
-          this.bullets.shift()
+        if (this.bullets.length > 200) {
+          this.bullets.splice(this.bullets.length - 200, this.bullets.length)
         }
       }
 
@@ -1954,19 +1948,11 @@
           this.parts = this.parts.filter(p => p.life > 0);
         }
 
-        while (this.parts.length > MAX_PARTICLES) {
-          this.parts.shift()
+        if (this.parts.length > MAX_PARTICLES) {
+          this.parts.splice(this.parts.length - MAX_PARTICLES, this.parts.length)
         }
 
         this.syncHUD();
-
-        console.log({
-          bricks: this.bricks.length,
-          bullets: this.bullets.length,
-          powers: this.powers.length,
-          parts: this.parts.length,
-          active: this.active.size,
-        })
       }
 
       // levelCompleted() {
