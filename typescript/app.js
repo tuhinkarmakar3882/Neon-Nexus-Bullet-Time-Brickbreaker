@@ -64,54 +64,52 @@ const CFG = {
   MAX_SPEED: calculateSpeedBasedOnScreenSize(8, 12),
   MIN_SPEED: calculateSpeedBasedOnScreenSize(3, 4),
   DUR: {
-    expand: 10000,
-    reduce: 10000,
-    chill: 15000,
-    velocity: 10000,
-    glue: 15000,
-    magnet: 9000,
-    laser: 7000,
-    shield: 15000,
-    teleport: 8000,
-    flip: 7000,
-    bullet: 1200,
-    stun: 800,
-
-    joker: 10000,
-    reverse: 5000,
-    wrap: 15000,
-    freeze: 10000,
-    chargeshot: 15000,
     blackhole: 4000,
-    gravity: 5000,
-    missile: 7000,
-    echo: 8000,
+    bullet: 1200,
     burst: 5000,
+    chargeshot: 15000,
+    chill: 15000,
+    echo: 8000,
+    expand: 10000,
+    flip: 7000,
+    freeze: 10000,
+    glue: 15000,
+    gravity: 5000,
+    joker: 10000,
+    laser: 7000,
+    magnet: 9000,
+    missile: 7000,
+    reduce: 10000,
+    reverse: 5000,
+    shield: 15000,
+    stun: 800,
+    teleport: 8000,
+    velocity: 10000,
+    wrap: 15000,
   },
-  CANNON: { RATE: 2500, SPD: 5 },
+  CANNON: {RATE: 2500, SPD: 5},
   COLORS: {
     BlackHole: '#be0000',    // Deep space black
     Burst: '#FF4ECD',        // Vibrant pink
-    Chill: '#5BE7C4',        // Mint green
-    Expand: '#6699FF',       // Soft blue
-    Flip: '#C084FC',         // Orchid purple
-    Glue: '#00C48C',         // Emerald green
-    Heart: '#FFD6E8',        // Blush pink
-    Laser: '#FF5A5F',        // Bold red
-    Magnet: '#FFD93D',       // Sunflower yellow
-    Reduce: '#9D4EDD',       // Deep violet
-    Shield: '#F5F5F5',       // Soft white
-    Teleport: '#72F2EB',     // Aqua blue
-    Velocity: '#0077FF',     // Deep sky blue
-
-    Joker: '#A3FF12',        // Lively lime
-    Reverse: '#FFB3C1',      // Pastel coral
+    ChargeShot: '#FFAC33',        // Mint green
+    Chill: '#5BE7C4',       // Soft blue
+    Echo: '#E0E0E0',         // Orchid purple
+    Expand: '#6699FF',         // Emerald green
+    Flip: '#C084FC',        // Blush pink
+    Freeze: '#1FB6FF',        // Bold red
+    Glue: '#00C48C',       // Sunflower yellow
+    Gravity: '#D88BFF',       // Deep violet
+    Heart: '#FFD6E8',       // Soft white
+    Joker: '#A3FF12',     // Aqua blue
+    Laser: '#FF5A5F',     // Deep sky blue
+    Magnet: '#FFD93D',        // Lively lime
+    Missile: '#00ff8b',      // Pastel coral
+    Reduce: '#9D4EDD',         // Banana yellow
+    Reverse: '#FFB3C1',       // Ice blue
+    Shield: '#F5F5F5',   // Orange amber
+    Teleport: '#72F2EB',      // Lavender haze
+    Velocity: '#0077FF',          // Gentle gray
     Wrap: '#FFE156',         // Banana yellow
-    Freeze: '#1FB6FF',       // Ice blue
-    ChargeShot: '#FFAC33',   // Orange amber
-    Gravity: '#D88BFF',      // Lavender haze
-    Echo: '#E0E0E0',          // Gentle gray
-    Missile: '#00ff8b',         // Banana yellow
   },
   PADDLE: {
     defaultColor: 'white',
@@ -170,7 +168,7 @@ resize();
 /* ---------- GLOBAL STATE ---------- */
 
 /************ INPUT KEYS ************/
-const keys = { L: false, R: false };
+const keys = {L: false, R: false};
 
 let game;
 const noise = new Noise()
@@ -189,7 +187,7 @@ const scoreEl = $('#score'),
   remainEl = $('#remaining-bricks-count');
 let lastScore, lastLives, lastLevel, lastRemain;
 
-const fireConfetti = confetti.create(gameCanvas, { resize: true });
+const fireConfetti = confetti.create(gameCanvas, {resize: true});
 
 function flash(text, color = '#00ffc3') {
   const box = $('#flash');
@@ -236,7 +234,7 @@ function drawShockwave(x, y, radius) {
 }
 
 function triggerRippleEffect(x, y) {
-  ripples.push({ x, y, radius: 0 });
+  ripples.push({x, y, radius: 0});
 
   // if (ripples.length > MAX_RIPPLES) {
   //   ripples.splice(
@@ -503,7 +501,7 @@ class Bullet extends Ent {
     this.owner = owner; // 'player' | 'enemy'
   }
 
-  update() {
+  update(game) {
     this.y += this.vy * timeScale;
   }
 
@@ -664,18 +662,19 @@ class Game {
     if (this.UIBindingCompleted) return;
 
     document.addEventListener('keydown', e => {
+      e.preventDefault()
+
       if (e.code === 'ArrowLeft') keys.L = true;
       if (e.code === 'ArrowRight') keys.R = true;
 
-      if (e.code === 'Space' || e.code === 'enter') this.balls.forEach(b => b.release());
+      if (e.code === 'Space' || e.code === 'Enter') this.balls.forEach(b => b.release());
     });
 
     document.addEventListener('keyup', e => {
-      e.preventDefault()
       if (e.code === 'ArrowLeft') keys.L = false;
       if (e.code === 'ArrowRight') keys.R = false;
 
-      if (e.code === 'Space' || e.code === 'enter') this.balls.forEach(b => b.release());
+      if (e.code === 'Space' || e.code === 'Enter') this.balls.forEach(b => b.release());
     });
     let paddleX = (gameCanvas.width - this.paddle.w) / 2;
 
@@ -814,7 +813,7 @@ class Game {
       }
     } else {
       // Fallback for single layout type
-      const zone = { x: 0, y: 0, width: gameCanvas.width, height: gameCanvas.height / 2 };
+      const zone = {x: 0, y: 0, width: gameCanvas.width, height: gameCanvas.height / 2};
       this._generateLayoutInZone(zone, layout);
     }
   }
@@ -897,7 +896,7 @@ class Game {
     return 'static';
   }
 
-  _buildGridLayout({ x, y, width, height }) {
+  _buildGridLayout({x, y, width, height}) {
     const cols = Math.floor(width / (CFG.COLS + 20))
     const rows = Math.floor(height / 28)
     const bw = (width - 40) / cols;
@@ -914,7 +913,7 @@ class Game {
     }
   }
 
-  _buildCircleLayoutInZone({ x, y, width, height }) {
+  _buildCircleLayoutInZone({x, y, width, height}) {
     const centerX = x + width / 2;
     const centerY = y + height / 2;
     const radius = Math.min(width, height) / 3;
@@ -929,7 +928,7 @@ class Game {
     }
   }
 
-  _buildDiamondLayoutInZone({ x, y, width, height }) {
+  _buildDiamondLayoutInZone({x, y, width, height}) {
     const cx = x + width / 2;
     const cy = y + height / 2;
     const layers = 4;
@@ -945,7 +944,7 @@ class Game {
     }
   }
 
-  _buildTunnelLayout({ x, y, width, height }) {
+  _buildTunnelLayout({x, y, width, height}) {
     const cols = Math.floor(width / (CFG.COLS + 20))
     const rows = Math.floor(height / 28)
     const bw = (width - 40) / cols;
@@ -1383,7 +1382,7 @@ class Game {
     this.lvlUp = true;
 
     // Celebrate
-    fireConfetti({ particleCount: 200, spread: 100, origin: { y: 0.5 }, scalar: 2 });
+    fireConfetti({particleCount: 200, spread: 100, origin: {y: 0.5}, scalar: 2});
 
     this.level++;
     this.lives++;
@@ -1457,9 +1456,16 @@ class Game {
       this.echoSegments.forEach((alive, i) => {
         if (!alive) return;
 
-        this.balls[0].ang = this._frameCount * 0.05 + (2 * Math.PI / count) * i;
-        this.balls[0].rx = this.balls[0].x + Math.cos(this.balls[0].ang) * r;
-        this.balls[0].ry = this.balls[0].y + Math.sin(this.balls[0].ang) * r;
+        this.balls[0].rx = []
+        this.balls[0].ry = []
+        this.balls[0].ang = []
+
+        this.balls[0].ang.push(this._frameCount * 0.05 + (2 * Math.PI / count) * i);
+        this.balls[0].rx.push(this.balls[0].x + Math.cos(this.balls[0].ang[i]) * r);
+        this.balls[0].ry.push(this.balls[0].y + Math.sin(this.balls[0].ang[i]) * r);
+
+        const rx = this.balls[0].rx[i]
+        const ry = this.balls[0].ry[i]
 
         for (let b of this.bricks) {
           if (!b.alive) return
@@ -1474,67 +1480,16 @@ class Game {
       });
     }
 
+    let temp = [];
     /* update entities */
     this.paddle.update(keys);
-    this.balls.forEach(b => b.update(this));
-
-    this.bricks.forEach(b => {
-      if (this.freeze) return;
-      b.update(dt, this)
-    });
-    this.powers.forEach(p => p.update());
-
-    this.bullets.forEach(b => b.update());
-    this.parts.forEach(pt => pt.update());
-
-    const nextBullets = [];
-    for (const b of this.bullets) {
-      // ➤ Enemy bullet hits paddle?
-      if (b.owner === 'enemy'
-        && b.y > this.paddle.y
-        && b.x > this.paddle.x
-        && b.x < this.paddle.x + this.paddle.w) {
-        this.applyEnemyStun();
-        continue; // drop this bullet
-      }
-
-      // ➤ Player laser hits brick?
-      if (b.owner === 'player') {
-        let collided = false;
-
-        for (const br of this.bricks) {
-          if (!br.alive) continue;
-          if (
-            b.x > br.x && b.x < br.x + br.w && b.y > br.y && b.y < br.y + br.h
-          ) {
-            br.hp--;
-
-            if (br.hp <= 0) {
-              br.alive = false;
-              if (br.type === 'explode') this.explode(br);
-              this.score += 10;
-            }
-
-            this.spawnHitParticles(b.x, b.y, br.w, br.h);
-            collided = true;
-            break;
-          }
-        }
-        if (collided) continue; // drop bullet if it hit any brick
-      }
-
-      // ➤ Otherwise keep it only if it’s still on screen
-      if (b.y > -5 && b.y < gameCanvas.height + 5) {
-        nextBullets.push(b);
-      }
-    }
-    this.bullets = nextBullets;
 
     /* ball collisions */
     let hasHitBrick = false
-
     this.balls.forEach(ball => {
-      /* paddle */
+      if (ball.dead) return
+      temp.push(ball)
+
       if (
         !ball.stuck && ball.vy > 0 &&
         ball.x > this.paddle.x &&
@@ -1592,18 +1547,86 @@ class Game {
           }
         }
       });
+
+      ball.update(this)
     });
+    this.balls = temp;
+
+    temp = []
+    this.bricks.forEach(b => {
+      if (!b.alive) return
+
+      temp.push(b)
+      if (this.freeze) return;
+      b.update(dt, this)
+    });
+    this.bricks = temp
+
+    temp = []
+    this.powers.forEach(p => {
+      if (p.dead) return
+      temp.push(p)
+      p.update()
+    });
+    this.powers = temp
+
+    temp = []
+    this.bullets.forEach(b => {
+      if (!(b.y > -5 && b.y < gameCanvas.height + 5)) return;
+
+      // ➤ Enemy bullet hits paddle?
+      if (b.owner === 'enemy'
+        && b.y > this.paddle.y
+        && b.x > this.paddle.x
+        && b.x < this.paddle.x + this.paddle.w) {
+        this.applyEnemyStun();
+        return;
+      }
+
+      // ➤ Player laser hits brick?
+      if (b.owner === 'player') {
+        let collided = false;
+
+        for (const br of this.bricks) {
+          if (!br.alive) continue;
+          if (
+            b.x > br.x && b.x < br.x + br.w && b.y > br.y && b.y < br.y + br.h
+          ) {
+            br.hp--;
+
+            if (br.hp <= 0) {
+              br.alive = false;
+              if (br.type === 'explode') this.explode(br);
+              this.score += 10;
+            }
+
+            this.spawnHitParticles(b.x, b.y, br.w, br.h);
+            collided = true;
+            break;
+          }
+        }
+        if (collided) return; // drop bullet if it hit any brick
+      }
+
+      b.update(this)
+      temp.push(b)
+    });
+    this.bullets = temp
+
+    temp = []
+    this.parts.forEach(pt => {
+      if (pt.life <= 0) return
+
+      temp.push(pt)
+      pt.update()
+    });
+    this.parts = temp
 
     if (this.chargeReady && hasHitBrick) {
       this.chargeReady = false
     }
 
-    if (!(this._frameCount & 2)) {         // every 4th frame
-      this.bricks = this.bricks.filter(b => b.alive);
-      this.bullets = this.bullets.filter(b => b.y > -5 && b.y < gameCanvas.height + 5);
-      this.powers = this.powers.filter(p => !p.dead);
-      this.parts = this.parts.filter(pt => pt.life > 0);
-
+    if (!(this._frameCount & 3)) {         // every 4th frame
       if (this.parts.length > MAX_PARTICLES) {
         this.parts.splice(this.parts.length - MAX_PARTICLES, this.parts.length)
       }
@@ -1677,13 +1700,23 @@ class Game {
 
     if (this.echo && this._frameThrottle === 0) {
       gameCanvasContext.save();
+      const count = this.echoSegments.length;
+      const r = 30;
       gameCanvasContext.globalAlpha = 0.5;
       gameCanvasContext.fillStyle = CFG.COLORS.Echo;
       this.echoSegments.forEach((alive, i) => {
         if (!alive) return;
 
-        const rx = this.balls[0].rx;
-        const ry = this.balls[0].ry;
+        this.balls[0].rx = this.balls[0].rx ?? []
+        this.balls[0].ry = this.balls[0].ry ?? []
+        this.balls[0].ang = this.balls[0].ang ?? []
+
+        this.balls[0].ang.push(this._frameCount * 0.05 + (2 * Math.PI / count) * i);
+        this.balls[0].rx.push(this.balls[0].x + Math.cos(this.balls[0].ang[i]) * r);
+        this.balls[0].ry.push(this.balls[0].y + Math.sin(this.balls[0].ang[i]) * r);
+
+        const rx = this.balls[0].rx[i]
+        const ry = this.balls[0].ry[i]
 
         gameCanvasContext.beginPath();
         gameCanvasContext.arc(rx, ry, this.balls[0].r / 2, 0, 2 * Math.PI);
