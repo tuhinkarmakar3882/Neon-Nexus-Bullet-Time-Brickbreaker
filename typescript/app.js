@@ -88,7 +88,7 @@ const CFG = {
     echo: 8000,
     burst: 5000,
   },
-  CANNON: {RATE: 2500, SPD: 5},
+  CANNON: { RATE: 2500, SPD: 5 },
   COLORS: {
     BlackHole: '#be0000',    // Deep space black
     Burst: '#FF4ECD',        // Vibrant pink
@@ -141,11 +141,6 @@ $('#btn-start').addEventListener('click', () => {
   /************ INIT GAME ************/
 });
 
-gameCanvas.addEventListener('click', () => {
-  document.exitPointerLock();
-  gameCanvas.requestPointerLock();
-})
-
 $('#btn-restart').addEventListener('click', () => {
   game.restartGame()
 });
@@ -175,7 +170,7 @@ resize();
 /* ---------- GLOBAL STATE ---------- */
 
 /************ INPUT KEYS ************/
-const keys = {L: false, R: false};
+const keys = { L: false, R: false };
 
 let game;
 const noise = new Noise()
@@ -194,7 +189,7 @@ const scoreEl = $('#score'),
   remainEl = $('#remaining-bricks-count');
 let lastScore, lastLives, lastLevel, lastRemain;
 
-const fireConfetti = confetti.create(gameCanvas, {resize: true});
+const fireConfetti = confetti.create(gameCanvas, { resize: true });
 
 function flash(text, color = '#00ffc3') {
   const box = $('#flash');
@@ -241,14 +236,14 @@ function drawShockwave(x, y, radius) {
 }
 
 function triggerRippleEffect(x, y) {
-  ripples.push({x, y, radius: 0});
+  ripples.push({ x, y, radius: 0 });
 
-  if (ripples.length > MAX_RIPPLES) {
-    ripples.splice(
-      ripples.length - MAX_RIPPLES,
-      ripples.length
-    )
-  }
+  // if (ripples.length > MAX_RIPPLES) {
+  //   ripples.splice(
+  //     ripples.length - MAX_RIPPLES,
+  //     ripples.length
+  //   )
+  // }
 }
 
 function bulletTime() {
@@ -625,16 +620,15 @@ class Game {
 
     this.buildSidebar()
 
-
     /* build first level */
     this.buildLevel();
-    this.sync();
+    // this.sync();
 
     /* input handlers */
     this.bindUI();
-    this.startLoop();
-
     this.loadStoredPreferences()
+
+    this.startLoop();
   }
 
   loadStoredPreferences() {
@@ -685,7 +679,10 @@ class Game {
     });
     let paddleX = (gameCanvas.width - this.paddle.w) / 2;
 
-    gameContainer.addEventListener('click', () => this.balls.forEach(b => b.release()));
+    gameContainer.addEventListener('click', () => {
+      if (!document.pointerLockElement) gameCanvas.requestPointerLock();
+      this.balls.forEach(b => b.release())
+    });
     window.addEventListener('mousemove', (e) => {
       paddleX += e.movementX;
 
@@ -701,9 +698,10 @@ class Game {
     });
 
     window.addEventListener('touchmove', (e) => {
-      if (document.pointerLockElement) {
-        document.exitPointerLock()
+      if (!document.pointerLockElement) {
+        gameCanvas.requestPointerLock();
       }
+
       const touch = e.touches[0]; // First touch
       const x = touch.clientX; // X coordinate relative to viewport
       const y = touch.clientY; // Y coordinate relative to viewport
@@ -738,20 +736,21 @@ class Game {
     localStorage.setItem('isFlashTextEnabled', this.isFlashTextEnabled)
     localStorage.setItem('isBulletTimeEnabled', this.isBulletTimeEnabled)
 
-    // $('#app').requestFullscreen();
-    document.exitPointerLock();
-    gameCanvas.requestPointerLock();
-    this.startLoop();
+    if (!document.pointerLockElement) {
+      gameCanvas.requestPointerLock();
+    }
 
+    this.startLoop();
     settingsContainer.classList.remove('show');
   }
 
   resumeGameplay() {
     this.paused = false;
     pausedContainer.classList.remove('show');
-    document.exitPointerLock();
-    gameCanvas.requestPointerLock();
-    // $('#app').requestFullscreen();
+
+    if (!document.pointerLockElement) {
+      gameCanvas.requestPointerLock();
+    }
 
     this.startLoop();
   }
@@ -815,7 +814,7 @@ class Game {
       }
     } else {
       // Fallback for single layout type
-      const zone = {x: 0, y: 0, width: gameCanvas.width, height: gameCanvas.height / 2};
+      const zone = { x: 0, y: 0, width: gameCanvas.width, height: gameCanvas.height / 2 };
       this._generateLayoutInZone(zone, layout);
     }
   }
@@ -898,7 +897,7 @@ class Game {
     return 'static';
   }
 
-  _buildGridLayout({x, y, width, height}) {
+  _buildGridLayout({ x, y, width, height }) {
     const cols = Math.floor(width / (CFG.COLS + 20))
     const rows = Math.floor(height / 28)
     const bw = (width - 40) / cols;
@@ -915,7 +914,7 @@ class Game {
     }
   }
 
-  _buildCircleLayoutInZone({x, y, width, height}) {
+  _buildCircleLayoutInZone({ x, y, width, height }) {
     const centerX = x + width / 2;
     const centerY = y + height / 2;
     const radius = Math.min(width, height) / 3;
@@ -930,7 +929,7 @@ class Game {
     }
   }
 
-  _buildDiamondLayoutInZone({x, y, width, height}) {
+  _buildDiamondLayoutInZone({ x, y, width, height }) {
     const cx = x + width / 2;
     const cy = y + height / 2;
     const layers = 4;
@@ -946,7 +945,7 @@ class Game {
     }
   }
 
-  _buildTunnelLayout({x, y, width, height}) {
+  _buildTunnelLayout({ x, y, width, height }) {
     const cols = Math.floor(width / (CFG.COLS + 20))
     const rows = Math.floor(height / 28)
     const bw = (width - 40) / cols;
@@ -985,6 +984,7 @@ class Game {
     }
   }
 
+  // TODO CHECK FOR OPTIMISATIONS
   syncSidebar() {
     POWERS.forEach(k => {
       const powerUpElem = $(`#power-ups-${k}-indicator`)
@@ -996,7 +996,6 @@ class Game {
   /* ----- POWER‑UPS ----- */
   clear(key) {
     this.active.delete(key);
-    this.syncSidebar();
   }
 
   applyPower(key) {
@@ -1054,7 +1053,7 @@ class Game {
           );
 
           this.spawnBullet(
-            this.paddle.x + this.paddle.w  - 10,
+            this.paddle.x + this.paddle.w - 10,
             this.paddle.y,
             -8,
             'player'
@@ -1158,7 +1157,6 @@ class Game {
         clearTimeout(this.freezePowerTimeout)
         this.clear('Freeze');
 
-
         this.freeze = true;
         this.freezePowerTimeout = setTimeout(() => {
           this.freeze = false;
@@ -1192,6 +1190,7 @@ class Game {
       }
       case 'Missile': {
         clearTimeout(this.missilePowerTimeout)
+        clearTimeout(this.gravityPowerTimeout)
 
         this.balls.forEach(b => {
           b.gravity = false
@@ -1206,6 +1205,7 @@ class Game {
       }
       case 'Gravity': {
         clearTimeout(this.gravityPowerTimeout)
+        clearTimeout(this.missilePowerTimeout)
 
         this.balls.forEach(b => {
           b.gravity = true
@@ -1233,7 +1233,7 @@ class Game {
       }
     }
 
-    this.sync();
+    // this.sync();
   }
 
   applyStun() {
@@ -1246,10 +1246,6 @@ class Game {
   /* ----- BULLET SPAWN ----- */
   spawnBullet(x, y, vy, owner) {
     this.bullets.push(new Bullet(x, y, vy, owner));
-
-    if (this.bullets.length > 200) {
-      this.bullets.splice(this.bullets.length - 200, this.bullets.length)
-    }
   }
 
   /* ----- EXPLOSION EVENT ----- */
@@ -1257,11 +1253,14 @@ class Game {
     gameContainer.classList.add('shake');
     this.isBulletTimeEnabled && bulletTime();
 
-    setTimeout(() => gameContainer.classList.remove('shake'), 250);
+    this.explodeBrickTimeout = setTimeout(
+      () => gameContainer.classList.remove('shake'),
+      250
+    );
 
     triggerRippleEffect(brick.x, brick.y)
     /* particles */
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 20; i++) {
       this.parts.push(new Particle(brick.x + rand(0, brick.w), brick.y + rand(0, brick.h), 'hsl(50, 100%, 50%)'));
     }
 
@@ -1273,19 +1272,19 @@ class Game {
 
   /* ----- BALL LOST ----- */
   ballLost(ball) {
+    // TODO CHECK FOR OPTIMISATIONS
     this.balls = this.balls.filter(b => b !== ball);
+
     if (this.balls.length === 0) {
       this.lives--;
       this.paddle.reset();
       this.balls.push(new Ball(this.paddle));
       /* clear temporary powers (except Heart) */
       this.active.clear();
-      this.powers.forEach(pow => {
-        pow.applyStun?.()
-      })
+      this.powers[0]?.applyStun?.()
       this.powers = []
-      this.sync();
     }
+
     if (this.lives <= 0) {
       $('#gameover').classList.add('show');
 
@@ -1299,10 +1298,10 @@ class Game {
       $('#game-over-text').textContent = GameOverTauntMessages[messageIdx]
 
       document.exitPointerLock();
-
       this.stop = true;
     }
-    this.syncHUD();
+
+    // this.sync();
   }
 
   continueGame() {
@@ -1315,14 +1314,14 @@ class Game {
     this.parts = [];
     this._frameCount = 0;  // initialize frame counter
 
-    // add hook to show ads!
     this.lives = 3
+    // this.sync();
     this.stop = false
 
-    this.sync();
-    gameCanvas.requestPointerLock();
-
     $('#gameover').classList.remove('show');
+    if (!document.pointerLockElement) {
+      gameCanvas.requestPointerLock();
+    }
 
     this.loop();
   }
@@ -1347,7 +1346,6 @@ class Game {
     requestAnimationFrame(() => this.loop());
   }
 
-  // 1) Extract your stun routine
   applyEnemyStun() {
     this.paddle.stun = CFG.DUR.stun / 16;
     gameCanvas.classList.add('hit');
@@ -1356,22 +1354,48 @@ class Game {
     this.isFlashTextEnabled && flash('Stun!', '#ff3131');
 
     this.score = Math.max(0, this.score - 10);
-    // clear all active powers
-    for (const key of this.active.keys()) this.clear(key);
-    setTimeout(() => gameCanvas.classList.remove('hit'), 200);
+
+    this.active.clear();
+    this.powers[0]?.applyStun?.();
+
+    this.applyEnemyStunTimer = setTimeout(() => gameCanvas.classList.remove('hit'), 200);
   }
 
-// 2) Extract particle burst on brick hit
   spawnHitParticles(x, y, w, h, count = 5) {
     for (let i = 0; i < count; i++) {
       this.parts.push(
-        new Particle(
-          x + rand(0, w),
-          y + rand(0, h),
-          '#ff3131'
-        )
+        new Particle(x + rand(0, w), y + rand(0, h), '#ff3131')
       );
     }
+  }
+
+  launchNextLevelSequence() {
+    // stop the game-loop
+    this.stop = true;
+
+    // bring that overlay
+    $('#lvl-text').textContent = `Level ${this.level}`;
+
+    const messageIdx = Math.floor(rand(0, LevelClearedMessages.length - 1) % LevelClearedMessages.length);
+    $('#lvlup-text').textContent = LevelClearedMessages[messageIdx]
+
+    $('#lvlup').classList.add('show');
+    this.lvlUp = true;
+
+    // Celebrate
+    fireConfetti({ particleCount: 200, spread: 100, origin: { y: 0.5 }, scalar: 2 });
+
+    this.level++;
+    this.lives++;
+
+    setTimeout(() => {
+      this.moveToNextLevel()
+      $('#lvlup').classList.remove('show');
+      this.buildLevel();
+      this.lvlUp = false
+      this.stop = false;
+      this.loop()
+    }, 2000);
   }
 
   /* ----- UPDATE STEP ----- */
@@ -1394,51 +1418,36 @@ class Game {
 
     if (this.blackHole && this._frameThrottle === 0) {
       this._blackHoleAngle += 0.05;
+
       for (let b of this.bricks) {
         if (!b.alive) continue;
+
         const dx = this.blackHole.x - (b.x + b.w / 2);
         const dy = this.blackHole.y - (b.y + b.h / 2);
-        // const dist = Math.hypot(dx, dy);
-        const distSq = dx * dx + dy * dy;
-        if (distSq < this.blackHole.r * this.blackHole.r) {
-          const dist = Math.sqrt(distSq);
-          // if (dist < this.blackHole.r) {
-          // spiral inwards
-          const pull = (this.blackHole.r - dist) / this.blackHole.r * 4 * timeScale;
-          b.x += (dx / dist) * pull;
-          b.y += (dy / dist) * pull;
-          // rotate around center
-          const ang = Math.atan2(b.y - this.blackHole.y, b.x - this.blackHole.x) + 0.02;
-          const dist2 = Math.hypot(b.x - this.blackHole.x, b.y - this.blackHole.y);
-          b.x = this.blackHole.x + Math.cos(ang) * dist2;
-          b.y = this.blackHole.y + Math.sin(ang) * dist2;
-          // if close to center, destroy brick with particle
-          if (dist < 10) {
-            b.alive = false;
-            /* particles */
-            for (let i = 0; i < 5; i++) {
-              this.parts.push(new Particle(b.x + rand(0, b.w), b.y + rand(0, b.h), 'rgba(213,213,213,0.7)'));
-            }
+        const dist = Math.hypot(dx, dy);
 
-            this.score += 5;
-          }
-        }
-      }
-      // cleanup destroyed bricks
-      this.bricks = this.bricks.filter(b => b.alive);
-      if (!this.bricks.length) {
-        this.level++;
-        this.lives++;
+        if (dist >= this.blackHole.r) continue
 
-        $('#lvl-text').textContent = `Level ${this.level}`;
-        $('#lvlup').classList.add('show');
-        this.lvlUp = true
+        // spiral inwards
+        const pull = (this.blackHole.r - dist) / this.blackHole.r * 4 * timeScale;
+        b.x += (dx / dist) * pull;
+        b.y += (dy / dist) * pull;
+        // rotate around center
+        const ang = Math.atan2(b.y - this.blackHole.y, b.x - this.blackHole.x) + 0.02;
+        const dist2 = Math.hypot(b.x - this.blackHole.x, b.y - this.blackHole.y);
+        b.x = this.blackHole.x + Math.cos(ang) * dist2;
+        b.y = this.blackHole.y + Math.sin(ang) * dist2;
 
-        setTimeout(() => {
-          $('#lvlup').classList.remove('show');
-          this.buildLevel();
-          this.lvlUp = false
-        }, 1200);
+        // if close to center, destroy brick with particle
+        if (dist > 10) continue
+
+        b.alive = false;
+        /* particles */
+        this.parts.push(
+          new Particle(b.x + rand(0, b.w), b.y + rand(0, b.h), 'rgba(213,213,213,0.7)')
+        );
+
+        this.score += 5;
       }
     }
 
@@ -1447,11 +1456,15 @@ class Game {
       const r = 30;
       this.echoSegments.forEach((alive, i) => {
         if (!alive) return;
-        const ang = this._frameCount * 0.05 + (2 * Math.PI / count) * i;
-        const rx = this.balls[0].x + Math.cos(ang) * r;
-        const ry = this.balls[0].y + Math.sin(ang) * r;
+
+        this.balls[0].ang = this._frameCount * 0.05 + (2 * Math.PI / count) * i;
+        this.balls[0].rx = this.balls[0].x + Math.cos(this.balls[0].ang) * r;
+        this.balls[0].ry = this.balls[0].y + Math.sin(this.balls[0].ang) * r;
+
         for (let b of this.bricks) {
-          if (b.alive && rx > b.x && rx < b.x + b.w && ry > b.y && ry < b.y + b.h) {
+          if (!b.alive) return
+
+          if (rx > b.x && rx < b.x + b.w && ry > b.y && ry < b.y + b.h) {
             b.alive = false;
             this.score += 10;
             this.echoSegments[i] = false;
@@ -1459,7 +1472,6 @@ class Game {
           }
         }
       });
-      this.bricks = this.bricks.filter(b => b.alive);
     }
 
     /* update entities */
@@ -1489,16 +1501,20 @@ class Game {
       // ➤ Player laser hits brick?
       if (b.owner === 'player') {
         let collided = false;
+
         for (const br of this.bricks) {
           if (!br.alive) continue;
-          if (b.x > br.x && b.x < br.x + br.w
-            && b.y > br.y && b.y < br.y + br.h) {
+          if (
+            b.x > br.x && b.x < br.x + br.w && b.y > br.y && b.y < br.y + br.h
+          ) {
             br.hp--;
+
             if (br.hp <= 0) {
               br.alive = false;
               if (br.type === 'explode') this.explode(br);
               this.score += 10;
             }
+
             this.spawnHitParticles(b.x, b.y, br.w, br.h);
             collided = true;
             break;
@@ -1508,7 +1524,7 @@ class Game {
       }
 
       // ➤ Otherwise keep it only if it’s still on screen
-      if (b.y > -50 && b.y < gameCanvas.height + 50) {
+      if (b.y > -5 && b.y < gameCanvas.height + 5) {
         nextBullets.push(b);
       }
     }
@@ -1516,15 +1532,20 @@ class Game {
 
     /* ball collisions */
     let hasHitBrick = false
+
     this.balls.forEach(ball => {
       /* paddle */
-      if (!ball.stuck && ball.vy > 0 &&
-        ball.x > this.paddle.x && ball.x < this.paddle.x + this.paddle.w &&
-        ball.y + ball.r > this.paddle.y) {
+      if (
+        !ball.stuck && ball.vy > 0 &&
+        ball.x > this.paddle.x &&
+        ball.x < this.paddle.x + this.paddle.w &&
+        ball.y + ball.r > this.paddle.y
+      ) {
         const rel = (ball.x - (this.paddle.x + this.paddle.w / 2)) / (this.paddle.w / 2);
         const ang = rel * (Math.PI / 3);
         ball.vx = ball.sp * Math.sin(ang);
         ball.vy = -Math.abs(ball.sp * Math.cos(ang));
+
         if (this.paddle.sticky) {
           ball.stuck = true;
           // record exactly where on the paddle the ball landed:
@@ -1532,14 +1553,14 @@ class Game {
         }
       }
 
-
       /* bricks */
       this.bricks.forEach(br => {
         if (!br.alive) return;
         if (ball.x + ball.r > br.x && ball.x - ball.r < br.x + br.w && ball.y + ball.r > br.y && ball.y - ball.r < br.y + br.h) {
           hasHitBrick = true;
+
+          /* bounce logic: choose axis of least overlap */
           if (!this.active.has('Teleport')) {
-            /* bounce logic: choose axis of least overlap */
             const oX = Math.min(ball.x + ball.r - br.x, br.x + br.w - (ball.x - ball.r));
             const oY = Math.min(ball.y + ball.r - br.y, br.y + br.h - (ball.y - ball.r));
             if (oX < oY) ball.vx *= -1; else ball.vy *= -1;
@@ -1558,6 +1579,7 @@ class Game {
             /* 30% drop chance */
             const randomPercentage = Math.random()
             const powerDropChance = getProbability(this.level);
+
             if (randomPercentage < powerDropChance) {
               const k = POWERS[Math.floor(Math.random() * POWERS.length)];
               this.powers.push(new Power(br.x, br.y, k));
@@ -1578,67 +1600,41 @@ class Game {
 
     if (!(this._frameCount & 2)) {         // every 4th frame
       this.bricks = this.bricks.filter(b => b.alive);
-      this.bullets = this.bullets.filter(b => b.y > -60 && b.y < gameCanvas.height + 60);
+      this.bullets = this.bullets.filter(b => b.y > -5 && b.y < gameCanvas.height + 5);
       this.powers = this.powers.filter(p => !p.dead);
       this.parts = this.parts.filter(pt => pt.life > 0);
-    }
 
+      if (this.parts.length > MAX_PARTICLES) {
+        this.parts.splice(this.parts.length - MAX_PARTICLES, this.parts.length)
+      }
+
+      if (ripples.length > MAX_RIPPLES) {
+        ripples.splice(
+          ripples.length - MAX_RIPPLES,
+          ripples.length
+        )
+      }
+
+      if (this.bullets.length > 200) {
+        this.bullets.splice(this.bullets.length - 200, this.bullets.length)
+      }
+
+      if (this.balls.length > 30) {
+        this.balls.splice(this.balls.length - 30, this.balls.length)
+      }
+
+      if (this.powers.length > 50) {
+        this.powers.splice(this.powers.length - 30, this.powers.length)
+      }
+    }
 
     /* level clear */
     if (this.bricks.length <= 0) {
-      // stop the game-loop
-      this.stop = true;
-
-      // bring that overlay
-      $('#lvl-text').textContent = `Level ${this.level}`;
-
-      const messageIdx = Math.floor(rand(0, LevelClearedMessages.length - 1) % LevelClearedMessages.length);
-      $('#lvlup-text').textContent = LevelClearedMessages[messageIdx]
-
-      $('#lvlup').classList.add('show');
-      this.lvlUp = true;
-
-      // Celebrate
-      fireConfetti({particleCount: 200, spread: 100, origin: {y: 0.5}, scalar: 2});
-
-      this.level++;
-      this.lives++;
-
-      setTimeout(() => {
-        this.moveToNextLevel()
-        $('#lvlup').classList.remove('show');
-        this.buildLevel();
-        this.lvlUp = false
-        this.stop = false;
-        this.loop()
-      }, 2500);
+      this.launchNextLevelSequence()
     }
 
-    if (this._frameThrottle === 0) {
-      this.parts = this.parts.filter(p => p.life > 0);
-    }
-
-    if (this.parts.length > MAX_PARTICLES) {
-      this.parts.splice(this.parts.length - MAX_PARTICLES, this.parts.length)
-    }
-
-    this.syncHUD();
+    this.sync();
   }
-
-  // levelCompleted() {
-  //     this.stop = false;
-  //
-  //     this.level++;
-  //     this.lives++;
-  //     setTimeout(() => {
-  //         this.moveToNextLevel()
-  //         $('#lvlup').classList.remove('show');
-  //         this.buildLevel();
-  //         this.lvlUp = false
-  //     }, 2000);
-  //
-  //     this.loop()
-  // }
 
   moveToNextLevel() {
     this.active = new Map(); // key -> expires timestamp
@@ -1649,7 +1645,7 @@ class Game {
     this.parts = [];
     this.bullets = [];
     this._frameCount = 0;  // initialize frame counter
-    this.sync();
+    // this.sync();
   }
 
   /* ----- RENDER STEP ----- */
@@ -1680,16 +1676,15 @@ class Game {
     }
 
     if (this.echo && this._frameThrottle === 0) {
-      const count = this.echoSegments.length;
-      const r = 30;
       gameCanvasContext.save();
       gameCanvasContext.globalAlpha = 0.5;
       gameCanvasContext.fillStyle = CFG.COLORS.Echo;
       this.echoSegments.forEach((alive, i) => {
         if (!alive) return;
-        const ang = this._frameCount * 0.05 + (2 * Math.PI / count) * i;
-        const rx = this.balls[0].x + Math.cos(ang) * r;
-        const ry = this.balls[0].y + Math.sin(ang) * r;
+
+        const rx = this.balls[0].rx;
+        const ry = this.balls[0].ry;
+
         gameCanvasContext.beginPath();
         gameCanvasContext.arc(rx, ry, this.balls[0].r / 2, 0, 2 * Math.PI);
         gameCanvasContext.fill();
@@ -1697,8 +1692,8 @@ class Game {
       gameCanvasContext.restore();
     }
 
-    this.bricks.forEach(b => b.draw());
     this.paddle.draw();
+    this.bricks.forEach(b => b.draw());
     this.balls.forEach(b => b.draw());
     this.bullets.forEach(b => b.draw());
     this.powers.forEach(p => p.draw());
