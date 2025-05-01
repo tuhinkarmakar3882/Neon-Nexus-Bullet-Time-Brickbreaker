@@ -2,29 +2,29 @@
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport"
-    content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+        content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
   <title>Neon Nexus: Bullet‑Time Brick Breaker</title>
   <meta name="author" content="Tuhin Karmakar">
   <!-- Favicon -->
-  <link rel="icon" href="./icons/ios/32.png" type="image/x-icon" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/ios/180.png" />
+  <link rel="icon" href="./icons/ios/32.png" type="image/x-icon"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/ios/180.png"/>
 
   <!-- Web App Manifest -->
-  <link rel="manifest" href="/manifest.json" />
-  <meta name="theme-color" content="#000000" />
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#000000"/>
 
   <!-- Favicon & Icons -->
-  <link rel="icon" href="./icons/ios/32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./icons/ios/16.png" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./icons/ios/32.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/ios/32.png" />
-  <link rel="shortcut icon" href="./icons/ios/32.png" />
+  <link rel="icon" href="./icons/ios/32.png"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="./icons/ios/16.png"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="./icons/ios/32.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/ios/32.png"/>
+  <link rel="shortcut icon" href="./icons/ios/32.png"/>
 
   <!-- Web App Manifest -->
-  <link rel="manifest" href="./manifest.json" />
-  <meta name="theme-color" content="#0d47a1" />
+  <link rel="manifest" href="./manifest.json"/>
+  <meta name="theme-color" content="#0d47a1"/>
 
   <!-- =================== THEME & GLOBAL STYLES =================== -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -34,177 +34,172 @@
 </head>
 
 <body>
-  <div id="app">
-    <!-- ===== SIDEBAR ===== -->
-    <aside class="sidebar">
-      <header>
-        <h2>Neon Nexus Bullet‑Time Brick Breaker</h2>
-        <p style="margin-top: 0.5rem; font-size: 14px">v0.9.1-beta</p>
-      </header>
+<div id="app">
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar">
+    <header>
+      <h2>Neon Nexus Bullet‑Time Brick Breaker</h2>
+      <p style="margin-top: 0.5rem; font-size: 14px">v0.9.1-beta</p>
+    </header>
 
-      <hr style="margin-block: 1rem;" />
+    <hr style="margin-block: 1rem;"/>
 
-      <main class="sidebar-powerups"></main>
+    <main class="sidebar-powerups"></main>
 
-      <hr style="margin-block: 1rem;" />
+    <hr style="margin-block: 1rem;"/>
 
-      <footer>
-        <h3>Like the game?</h3>
-        <a href="https://linkedin.com/in/tuhinkarmakar3882" target="_blank">
-          <button class="primaryButton" style="margin-top: 1rem; font-size: 1rem">
-            Connect on LinkedIn
-          </button>
-        </a>
-      </footer>
-    </aside>
-
-    <!-- ===== GAME SECTION ===== -->
-    <section id="game-container">
-      <div class="canvas-container">
-        <canvas id="game"></canvas>
-      </div>
-
-      <!-- HUD -->
-      <div id="hud">
-        <button id="btn-pause" class="secondaryButton">
-          <span>
-            <img src="./images/pause-icon.svg" alt="pause-icon" height="28" width="28" decoding="async"
-              loading="lazy" />
-          </span>︎
+    <footer>
+      <h3>Like the game?</h3>
+      <a href="https://linkedin.com/in/tuhinkarmakar3882" target="_blank">
+        <button class="primaryButton" style="margin-top: 1rem; font-size: 1rem">
+          Connect on LinkedIn
         </button>
-        <p class="icon-text">
-          <img src="./images/score-icon.svg" alt="score-icon" height="12" width="12" decoding="async" loading="lazy" />
-          <span id="score">0</span>
+      </a>
+    </footer>
+  </aside>
+
+  <!-- ===== GAME SECTION ===== -->
+  <section id="game-container">
+    <div class="canvas-container">
+      <canvas id="game"></canvas>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud">
+      <button id="btn-pause" class="secondaryButton">
+        <span>
+          <img src="./images/pause-icon.svg" alt="pause-icon" height="28" width="28" decoding="async" loading="lazy"/>
+        </span>︎
+      </button>
+      <p class="icon-text">
+        <img src="./images/score-icon.svg" alt="score-icon" height="12" width="12" decoding="async" loading="lazy"/>
+        <span id="score">0</span>
+      </p>
+      <p>|</p>
+      <p class="icon-text">
+        <img src="./images/heart-icon.svg" alt="health-icon" height="12" width="12" decoding="async" loading="lazy"/>
+        <span id="lives">3</span>
+      </p>
+      <p>|</p>
+      <p class="icon-text">
+        <img src="./images/levels-icon.svg" alt="level-icon" height="12" width="12" decoding="async" loading="lazy"/>
+        <span id="level">1</span>
+      </p>
+      <p>|</p>
+      <p class="icon-text">
+        <img src="./images/walls-icon.svg" alt="remaining-bricks-count" height="12" width="12" decoding="async" loading="lazy"/>
+        <span id="remaining-bricks-count">1</span>
         </p>
-        <p>|</p>
-        <p class="icon-text">
-          <img src="./images/heart-icon.svg" alt="health-icon" height="12" width="12" decoding="async" loading="lazy" />
-          <span id="lives">3</span>
-        </p>
-        <p>|</p>
-        <p class="icon-text">
-          <img src="./images/levels-icon.svg" alt="level-icon" height="12" width="12" decoding="async" loading="lazy" />
-          <span id="level">1</span>
-        </p>
-        <p>|</p>
-        <p class="icon-text">
-          <img src="./images/walls-icon.svg" alt="remaining-bricks-count" height="12" width="12" decoding="async"
-            loading="lazy" />
-          <span id="remaining-bricks-count">1</span>
-        </p>
-        <button id="btn-setting" class="secondaryButton">
-          <span>
-            <img src="./images/settings-icon.svg" alt="settings-icon" height="26" width="26" decoding="async"
-              loading="lazy" />
-          </span>
-        </button>
+      <button id="btn-setting" class="secondaryButton">
+        <span>
+          <img src="./images/settings-icon.svg" alt="settings-icon" height="26" width="26" decoding="async"
+               loading="lazy"/>
+        </span>
+      </button>
+    </div>
+
+    <div id="hud-logo">
+      <p style="text-align: center; margin-top: 2rem;">Neon Nexus: Bullet‑Time Brick Breaker</p>
+      <blockquote style="text-align: center; margin-top: 1rem;"><q>Made With ❤️</q> <cite>- Tuhin</cite></blockquote>
+    </div>
+
+    <!-- Flash text -->
+    <div id="flash"></div>
+
+    <!-- Overlays -->
+    <div id="start" class="overlay show">
+      <div class="content">
+        <section style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 1rem;">
+          <img src="./icons/ios/128.png" alt="Game Logo"
+               style="object-fit: cover; height: 128px; width: 128px; border-radius: 8px; box-shadow: 0 0 4px var(--accent);">
+          <h1>Neon Nexus <br> Bullet‑Time Brick Breaker</h1>
+        </section>
+        <button id="btn-start" autofocus style="width: 50%; margin-top: 2rem"><b>Start</b></button>
       </div>
+    </div>
 
-      <div id="hud-logo">
-        <p style="text-align: center; margin-top: 2rem;">Neon Nexus: Bullet‑Time Brick Breaker</p>
-        <blockquote style="text-align: center; margin-top: 1rem;"><q>Made With ❤️</q> <cite>- Tuhin</cite></blockquote>
+    <div id="paused" class="overlay">
+      <div class="content"
+           style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 1rem;"
+      >
+        <h1 style=" font-weight: bold; text-align: center">Game Paused</h1>
+        <button id="btn-resume" autofocus style="width: 50%; margin-top: 2rem"><b>Resume</b></button>
       </div>
+    </div>
 
-      <!-- Flash text -->
-      <div id="flash"></div>
-
-      <!-- Overlays -->
-      <div id="start" class="overlay show">
-        <div class="content">
-          <section style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 1rem;">
-            <img src="./icons/ios/128.png" alt="Game Logo"
-              style="object-fit: cover; height: 128px; width: 128px; border-radius: 8px; box-shadow: 0 0 4px var(--accent);">
-            <h1>Neon Nexus <br> Bullet‑Time Brick Breaker</h1>
-          </section>
-          <button id="btn-start" autofocus style="width: 50%; margin-top: 2rem"><b>Start</b></button>
-        </div>
+    <div id="lvlup" class="overlay">
+      <div class="content">
+        <h1 id="lvl-text" style="font-weight: bold; text-align: center">Level 2</h1>
+        <p id="lvlup-text" style="font-weight: bold; text-align: center">...</p>
       </div>
+    </div>
 
-      <div id="paused" class="overlay">
-        <div class="content"
-          style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 1rem;">
-          <h1 style=" font-weight: bold; text-align: center">Game Paused</h1>
-          <button id="btn-resume" autofocus style="width: 50%; margin-top: 2rem"><b>Resume</b></button>
-        </div>
-      </div>
-
-      <div id="lvlup" class="overlay">
-        <div class="content">
-          <h1 id="lvl-text" style="font-weight: bold; text-align: center">Level 2</h1>
-          <p id="lvlup-text" style="font-weight: bold; text-align: center">...</p>
-        </div>
-      </div>
-
-      <div id="settings-container" class="overlay">
-        <div class="content" style="
+    <div id="settings-container" class="overlay">
+      <div class="content" style="
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     gap: 1rem;
 ">
-          <h1 style="line-height: 1">Game Settings</h1>
+        <h1 style="line-height: 1">Game Settings</h1>
 
-          <div class="setting-item">
-            <label class="icon-labels" for="sound-toggle">
-              <img src="./images/speaker-icon.svg" alt="sound-icon" height="16" width="16" decoding="async"
-                loading="lazy" />
-              Sound
-            </label>
-            <label class="switch">
-              <input type="checkbox" id="sound-toggle" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-item">
-            <label class="icon-labels" for="bullet-time-toggle">
-              <img src="./images/bullet-time-icon.svg" alt="sound-icon" height="16" width="16" decoding="async"
-                loading="lazy" />
-              Bullet Time
-            </label>
-            <label class="switch">
-              <input type="checkbox" id="bullet-time-toggle" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-item">
-            <label class="icon-labels" for="flash-text-toggle">
-              <img src="./images/flash-text-icon.svg" alt="sound-icon" height="16" width="16" decoding="async"
-                loading="lazy" />
-              Flash PowerUps
-            </label>
-            <label class="switch">
-              <input type="checkbox" id="flash-text-toggle" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <button id="btn-setting-save" class="primaryButton" style="margin-top: 1rem;">Save & Close</button>
+        <div class="setting-item">
+          <label class="icon-labels" for="sound-toggle">
+            <img src="./images/speaker-icon.svg" alt="sound-icon" height="16" width="16" decoding="async" loading="lazy"/>
+            Sound
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="sound-toggle" checked>
+            <span class="slider"></span>
+          </label>
         </div>
+
+        <div class="setting-item">
+          <label class="icon-labels" for="bullet-time-toggle">
+            <img src="./images/bullet-time-icon.svg" alt="sound-icon" height="16" width="16" decoding="async" loading="lazy"/>
+            Bullet Time
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="bullet-time-toggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <label class="icon-labels" for="flash-text-toggle">
+            <img src="./images/flash-text-icon.svg" alt="sound-icon" height="16" width="16" decoding="async" loading="lazy"/>
+            Flash PowerUps
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="flash-text-toggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <button id="btn-setting-save" class="primaryButton" style="margin-top: 1rem;">Save & Close</button>
       </div>
+    </div>
 
-      <div id="gameover" class="overlay" style="padding: 1rem">
-        <h1>Game Over</h1>
-        <p id="game-over-text" style="text-align: center">Come on you can do better than this!</p>
+    <div id="gameover" class="overlay" style="padding: 1rem">
+      <h1>Game Over</h1>
+      <p id="game-over-text" style="text-align: center">Come on you can do better than this!</p>
 
-        <section
+      <section
           style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 1.5rem;">
-          <button class="primaryButton" id="btn-continue"><b id="btn-continue-text">Continue</b></button>
-          <button class="secondaryButton" id="btn-restart"><b>Restart</b></button>
-        </section>
-      </div>
-    </section>
+        <button class="primaryButton" id="btn-continue"><b id="btn-continue-text">Continue</b></button>
+        <button class="secondaryButton" id="btn-restart"><b>Restart</b></button>
+      </section>
+    </div>
+  </section>
 
-    <audio id="audio-elem" autoplay loop src=""></audio>
-  </div>
+  <audio id="audio-elem" autoplay loop></audio>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/noisejs@2.1.0/index.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/noisejs@2.1.0/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
 
-  <!-- =================== GAME SCRIPT =================== -->
-  <script defer src="./typescript/app.js"></script>
+<!-- =================== GAME SCRIPT =================== -->
+<script defer src="./typescript/app-worker-based.js"></script>
 </body>
-
 </html>

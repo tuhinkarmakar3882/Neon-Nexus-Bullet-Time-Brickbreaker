@@ -1,22 +1,119 @@
-const $ = q => document.querySelector(q);
+self.importScripts('../vendor/noise.js')
+const GAME_EVENTS = {
+  INIT: 'INIT',
+  READY: 'INIT',
+
+  /* Render Requests to DOM */
+  BUILD_SIDE_BAR: 'BUILD_SIDE_BAR',
+
+  /* Setting Menu */
+  SHOW_SETTINGS_MENU: 'SHOW_SETTINGS_MENU',
+  UPDATE_SOUND_PREFERENCES: 'UPDATE_SOUND_PREFERENCES',
+  SET_GAME_BACKGROUND_MUSIC: 'SET_GAME_BACKGROUND_MUSIC',
+  UPDATE_SLOW_MO_PREFERENCES: 'UPDATE_SLOW_MO_PREFERENCES',
+  UPDATE_FLASH_TEXT_PREFERENCES: 'UPDATE_FLASH_TEXT_PREFERENCES',
+  HIDE_SETTINGS_MENU: 'HIDE_SETTINGS_MENU',
+
+  /* Level Complete Screen Controls */
+  SHOW_LEVEL_COMPLETE_MODAL: 'SHOW_LEVEL_COMPLETE_MODAL',
+  HIDE_LEVEL_COMPLETE_MODAL: 'HIDE_LEVEL_COMPLETE_MODAL',
+
+  /* GameOver Screen Controls */
+  SHOW_GAME_OVER_MENU: 'SHOW_GAME_OVER_MENU',
+  HIDE_GAME_OVER_MENU: 'HIDE_GAME_OVER_MENU',
+
+  /* Pause Screen Controls */
+  SHOW_PAUSE_MENU: 'SHOW_PAUSE_MENU',
+  HIDE_PAUSE_MENU: 'HIDE_PAUSE_MENU',
+
+  SET_POINTER_LOCK: 'SET_POINTER_LOCK',
+  RESET_POINTER_LOCK: 'RESET_POINTER_LOCK',
+
+  RESTART_GAME_FROM_BEGINNING: 'RESTART_GAME_FROM_BEGINNING',
+
+  SYNC_HUD: 'SYNC_HUD',
+  SYNC_SIDE_BAR: 'SYNC_SIDE_BAR',
+
+  SET_SHAKE: 'SET_SHAKE',
+  REMOVE_SHAKE: 'REMOVE_SHAKE',
+
+  SET_HIT: 'SET_HIT',
+  REMOVE_HIT: 'REMOVE_HIT',
+
+  SHOW_FLASH_TEXT: 'SHOW_FLASH_TEXT',
+  HIDE_FLASH_TEXT: 'HIDE_FLASH_TEXT',
+
+  MOUSE_MOVE: 'MOUSE_MOVE',
+  CLICK_ON_CANVAS: 'CLICK_ON_CANVAS',
+  FLIP_POWER_UP: 'FLIP_POWER_UP',
+
+  TOUCH_MOVE: 'TOUCH_MOVE',
+
+}
+
 const rand = (a, b) => Math.random() * (b - a) + a;
 const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
 
-/* ---------- CANVAS SETUP ---------- */
-const gameCanvas = $('#game');
-const gameCanvasContext = gameCanvas.getContext('2d');
-const gameContainer = $('#game-container');
-const canvasContainer = $('div.canvas-container');
-``
-const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+let gameCanvas, gameCanvasContext, game, isMobile, screenHeight;
+
+onmessage = ({data}) => {
+  switch (data.type) {
+    case GAME_EVENTS.INIT: {
+      flash('Loading...')
+
+      isMobile = data.payload.isMobile;
+
+      gameCanvas = data.payload.canvas;
+      gameCanvas.width = data.payload.width;
+      gameCanvas.height = data.payload.height;
+
+      screenHeight = data.payload.screenHeight;
+
+      CFG.MAX_SPEED = calculateSpeedBasedOnScreenSize(6, 8)
+      CFG.MIN_SPEED = calculateSpeedBasedOnScreenSize(1, 2.5)
+
+      gameCanvasContext = gameCanvas.getContext('2d');
+
+      gameCanvasContext.font = '14px monospace';
+      POWERS.forEach(k => textWidths[k] = gameCanvasContext.measureText(k).width);
+
+      game = new Game(gameCanvasContext, data.payload.width, data.payload.height);
+      postMessage({
+        type: GAME_EVENTS.READY,
+      })
+      game.loadStoredPreferences(data.payload.config);
+      game.startLoop();
+      break;
+    }
+
+    case GAME_EVENTS.MOUSE_MOVE: {
+      if (!game) return
+      game.updatePaddlePosition(data.payload)
+
+      break;
+    }
+
+
+    case GAME_EVENTS.TOUCH_MOVE: {
+      if (!game) return
+      game.updatePaddlePositionForTouchSystems(data.payload)
+
+      break;
+    }
+
+    case GAME_EVENTS.CLICK_ON_CANVAS: {
+      game.releaseBalls(data.payload)
+      break;
+    }
+  }
+}
+
 
 /* ---------- Utilities ---------- */
 
 function calculateSpeedBasedOnScreenSize(minSpeed, maxSpeed) {
   const minHeight = 400;
   const maxHeight = 1080;
-
-  const screenHeight = canvasContainer.offsetHeight || window.innerHeight;
 
   // Clamp the height
   const clampedHeight = Math.max(minHeight, Math.min(maxHeight, screenHeight));
@@ -62,8 +159,8 @@ const MAX_BOUNCE_ANGLE = Math.PI / 3; // 60°
 const CFG = {
   COLS: 14,
   MAX_ROWS: 8,
-  MAX_SPEED: calculateSpeedBasedOnScreenSize(8, 12),
-  MIN_SPEED: calculateSpeedBasedOnScreenSize(3, 4),
+  MAX_SPEED: undefined,
+  MIN_SPEED: undefined,
   DUR: {
     blackhole: 4000,
     bullet: 1200,
@@ -126,53 +223,10 @@ const MAX_PARTICLES = 150;
 const MAX_RIPPLES = 5;
 
 
-gameCanvasContext.font = '14px monospace';
-POWERS.forEach(k => textWidths[k] = gameCanvasContext.measureText(k).width);
-
-window.addEventListener('resize', resize);
-$('#btn-start').addEventListener('click', () => {
-  !isMobile && gameCanvas.requestPointerLock();
-
-  setTimeout(() => {
-    $('#start').classList.remove('show')
-    game = new Game();
-  }, 200)
-  /************ INIT GAME ************/
-});
-
-$('#btn-restart').addEventListener('click', () => {
-  game.restartGame()
-});
-// cache DOM elements
-const btnContinue = $('#btn-continue');
-btnContinue.addEventListener('click', () => {
-  game.continueGame()
-})
-
-const audioElem = $('#audio-elem');
-
-
-const btnResume = $('#btn-resume');
-const btnPause = $('#btn-pause');
-const pausedContainer = $('#paused');
-
-const btnSetting = $('#btn-setting');
-const btnSettingSave = $('#btn-setting-save');
-const settingsContainer = $('#settings-container');
-
-const soundToggle = $('input#sound-toggle');
-const bulletTimeToggleInput = $('input#bullet-time-toggle')
-const flashTextToggleInput = $('input#flash-text-toggle')
-
-resize();
-
-/* ---------- GLOBAL STATE ---------- */
-
-/************ INPUT KEYS ************/
 const keys = {L: false, R: false};
 
-let game;
 const noise = new Noise()
+
 
 let timeScale = 1;
 let isBulletTime = false;
@@ -182,23 +236,26 @@ let ripples = []; // Store multiple ripples
 
 let flashTimer;
 
-const scoreEl = $('#score'),
-  livesEl = $('#lives'),
-  levelEl = $('#level'),
-  remainEl = $('#remaining-bricks-count');
 let lastScore, lastLives, lastLevel, lastRemain;
 
-const fireConfetti = confetti.create(gameCanvas, {resize: true});
+// const fireConfetti = confetti.create(gameCanvas, {resize: true});
 
 function flash(text, color = '#00ffc3') {
-  const box = $('#flash');
-  box.textContent = text;
-  box.style.opacity = '1';
-  box.style.color = color;
-  box.style.textShadow = `0 0 4px ${color}`;
+  postMessage({
+    type: GAME_EVENTS.SHOW_FLASH_TEXT,
+    payload: {
+      textContent: text,
+      color,
+      textShadow: `0 0 4px ${color}`,
+      opacity: 1,
+    }
+  })
 
   flashTimer = setTimeout(() => {
-    box.style.opacity = '0';
+    postMessage({
+      type: GAME_EVENTS.HIDE_FLASH_TEXT,
+      payload: {}
+    })
   }, 800);
 }
 
@@ -236,13 +293,6 @@ function drawShockwave(x, y, radius) {
 
 function triggerRippleEffect(x, y) {
   ripples.push({x, y, radius: 0});
-
-  // if (ripples.length > MAX_RIPPLES) {
-  //   ripples.splice(
-  //     ripples.length - MAX_RIPPLES,
-  //     ripples.length
-  //   )
-  // }
 }
 
 function bulletTime() {
@@ -330,7 +380,7 @@ class Ball extends Ent {
     super();
     this.r = 8;
     this.paddle = paddle;
-    this.baseSp = calculateSpeedBasedOnScreenSize(1, 3.7);
+    this.baseSp = CFG.MIN_SPEED;
     this.sp = this.baseSp;
     this.vx = 0;
     this.vy = 0;
@@ -596,17 +646,19 @@ class Particle extends Ent {
 
 /************ MAIN GAME CLASS ************/
 class Game {
-  constructor() {
+  constructor(gameCanvasContext, width, height) {
+    this.canvas = gameCanvasContext;
+    this.width = width;
+    this.height = height;
+
     /* basic state */
     this.score = 0;
     this.lives = 3;
     this.canContinue = 3;
     this.level = 1;
 
-    /* active power‑ups */
     this.active = new Map(); // key -> expires timestamp
 
-    /* entity collections */
     this.paddle = new Paddle();
     this.balls = [new Ball(this.paddle)];
     this.bricks = [];
@@ -618,111 +670,57 @@ class Game {
     this.paused = false
 
     this.buildSidebar()
-
-    /* build first level */
     this.buildLevel();
-    // this.sync();
-
-    /* input handlers */
-    this.bindUI();
-    this.loadStoredPreferences()
 
     this.startLoop();
+
+    this.paddleX = (gameCanvas.width - this.paddle.w) / 2;
   }
 
-  loadStoredPreferences() {
-    this.isSoundEnabled = localStorage.getItem('isSoundEnabled') ? localStorage.getItem('isSoundEnabled') === 'true' : true
+  releaseBalls() {
+    this.balls.forEach(b => b.release())
+  }
 
-    audioElem.muted = !this.isSoundEnabled;
-    soundToggle.checked = this.isSoundEnabled;
+  updatePaddlePosition({x, y}) {
+    this.paddleX += x;
 
+    // Clamp within canvas bounds
+    if (this.paddleX < 0) {
+      this.paddleX = 0;
+    }
+    if (this.paddleX > gameCanvas.width - this.paddle.w) {
+      this.paddleX = gameCanvas.width - this.paddle.w;
+    }
+    // const r = cvs.getBoundingClientRect();
+    this.paddle.update(null, this.paddleX || 0);
+  }
 
-    this.isBulletTimeEnabled = localStorage.getItem('isBulletTimeEnabled') ? localStorage.getItem('isBulletTimeEnabled') === 'true' : true
-    bulletTimeToggleInput.checked = this.isBulletTimeEnabled;
+  updatePaddlePositionForTouchSystems({x}) {
+    this.paddle.update(null, (x - this.paddle.w / 2) || 0);
+  }
 
-    this.isFlashTextEnabled = localStorage.getItem('isFlashTextEnabled') ? localStorage.getItem('isFlashTextEnabled') === 'true' : true
-    flashTextToggleInput.checked = this.isFlashTextEnabled;
+  loadStoredPreferences(config) {
+    this.isSoundEnabled = config.isSoundEnabled;
+    this.isBulletTimeEnabled = config.isBulletTimeEnabled;
+    this.isFlashTextEnabled = config.isFlashTextEnabled;
   }
 
   buildSidebar() {
-    const sb = $('.sidebar > .sidebar-powerups');
-
-    sb.innerHTML = '<h3>Power‑Ups</h3>';
-
-    POWERS.forEach(k => {
-      const row = document.createElement('div');
-      row.className = 'power';
-      row.id = `power-ups-${k}-indicator`
-      row.innerHTML = `<span class="color" style="background:${CFG.COLORS[k]}"></span><span>${k}</span>`;
-      sb.appendChild(row);
-    });
-  }
-
-  /* ----- UI BINDINGS ----- */
-  bindUI() {
-    if (this.UIBindingCompleted) return;
-
-    document.addEventListener('keydown', e => {
-      e.preventDefault()
-
-      if (e.code === 'ArrowLeft') keys.L = true;
-      if (e.code === 'ArrowRight') keys.R = true;
-
-      if (e.code === 'Space' || e.code === 'Enter') this.balls.forEach(b => b.release());
-    });
-
-    document.addEventListener('keyup', e => {
-      if (e.code === 'ArrowLeft') keys.L = false;
-      if (e.code === 'ArrowRight') keys.R = false;
-
-      if (e.code === 'Space' || e.code === 'Enter') this.balls.forEach(b => b.release());
-    });
-    let paddleX = (gameCanvas.width - this.paddle.w) / 2;
-
-    gameContainer.addEventListener('click', () => {
-      if (!document.pointerLockElement && !isMobile) gameCanvas.requestPointerLock();
-      this.balls.forEach(b => b.release())
-    });
-
-    window.addEventListener('mousemove', (e) => {
-      paddleX += e.movementX;
-
-      // Clamp within canvas bounds
-      if (paddleX < 0) {
-        paddleX = 0;
+    postMessage({
+      type: GAME_EVENTS.BUILD_SIDE_BAR,
+      payload: {
+        powers: POWERS,
+        config: CFG,
       }
-      if (paddleX > gameCanvas.width - this.paddle.w) {
-        paddleX = gameCanvas.width - this.paddle.w;
-      }
-      // const r = cvs.getBoundingClientRect();
-      this.paddle.update(null, paddleX || 0);
-    });
-
-    window.addEventListener('touchmove', (e) => {
-      if (document.pointerLockElement) {
-        document.exitPointerLock()
-      }
-
-      const touch = e.touches[0]; // First touch
-      const x = touch.clientX; // X coordinate relative to viewport
-      // const y = touch.clientY; // Y coordinate relative to viewport
-
-      const r = gameCanvas.getBoundingClientRect();
-      this.paddle.update(null, x - r.left - this.paddle.w / 2);
-    });
-
-    // bind pause/resume
-    btnResume.addEventListener('click', () => this.resumeGameplay());
-    btnPause.addEventListener('click', () => this.pauseGameplay());
-
-    btnSetting.addEventListener('click', () => this.showSettingsMenu())
-    btnSettingSave.addEventListener('click', () => this.hideSettingsMenu())
-
-    this.UIBindingCompleted = true
+    })
   }
 
   showSettingsMenu() {
     this.paused = true;
+    postMessage({
+      type: GAME_EVENTS.SHOW_SETTINGS_MENU,
+      payload: {}
+    })
     settingsContainer.classList.add('show')
   }
 
@@ -737,9 +735,6 @@ class Game {
     localStorage.setItem('isFlashTextEnabled', this.isFlashTextEnabled)
     localStorage.setItem('isBulletTimeEnabled', this.isBulletTimeEnabled)
 
-    if (!document.pointerLockElement && !isMobile) {
-      gameCanvas.requestPointerLock();
-    }
 
     this.startLoop();
     settingsContainer.classList.remove('show');
@@ -749,9 +744,6 @@ class Game {
     this.paused = false;
     pausedContainer.classList.remove('show');
 
-    if (!document.pointerLockElement && !isMobile) {
-      gameCanvas.requestPointerLock();
-    }
 
     this.startLoop();
   }
@@ -762,9 +754,12 @@ class Game {
   }
 
   _applyLevelSound() {
-    audioElem.src = LevelSounds.sort(
-      () => Math.random() > 0.5 ? -1 : 1
-    )[this.level % LevelSounds.length]
+    postMessage({
+      type: GAME_EVENTS.SET_GAME_BACKGROUND_MUSIC,
+      payload: {
+        src: LevelSounds.sort(() => Math.random() > 0.5 ? -1 : 1)[this.level % LevelSounds.length]
+      }
+    })
   }
 
   buildLevel() {
@@ -971,27 +966,41 @@ class Game {
 
   syncHUD() {
     if (this.score !== lastScore) {
-      scoreEl.textContent = lastScore = this.score;
+      lastScore = this.score;
     }
+
     if (this.lives !== lastLives) {
-      livesEl.textContent = lastLives = this.lives;
+      lastLives = this.lives;
     }
+
     if (this.level !== lastLevel) {
-      levelEl.textContent = lastLevel = this.level;
+      lastLevel = this.level;
     }
-    const rem = this.bricks.length;
-    if (rem !== lastRemain) {
-      remainEl.textContent = lastRemain = rem;
+
+    if (this.bricks.length !== lastRemain) {
+      lastRemain = this.bricks.length;
     }
+
+    postMessage({
+      type: GAME_EVENTS.SYNC_HUD,
+      payload: {
+        score: this.score,
+        live: this.lives,
+        level: this.level,
+        left: lastRemain,
+      }
+    })
   }
 
   // TODO CHECK FOR OPTIMISATIONS
   syncSidebar() {
-    POWERS.forEach(k => {
-      const powerUpElem = $(`#power-ups-${k}-indicator`)
-      this.active.has(k) ? powerUpElem.classList.add('active') : powerUpElem.classList.remove(
-        'active')
-    });
+    postMessage({
+      type: GAME_EVENTS.SYNC_SIDE_BAR,
+      payload: {
+        powers: POWERS,
+        activePowers: this.active,
+      }
+    })
   }
 
   /* ----- POWER‑UPS ----- */
@@ -1076,27 +1085,40 @@ class Game {
       case 'Flip': {
         clearTimeout(this.flipPowerTimeout)
 
-        gameCanvas.style.transform = 'rotateX(180deg)';
+        postMessage({
+          type: GAME_EVENTS.FLIP_POWER_UP,
+          payload: {
+            transformStyle: 'rotateX(180deg)'
+          }
+        })
+
         this.flipPowerTimeout = setTimeout(() => {
-          gameCanvas.style.transform = '';
+          postMessage({
+            type: GAME_EVENTS.FLIP_POWER_UP,
+            payload: {
+              transformStyle: ''
+            }
+          })
           this.clear(key);
         }, dur);
         break;
       }
       case 'Velocity': {
         this.balls.forEach(b => {
-          b.sp = Math.min(CFG.MAX_SPEED, b.sp + 2);
+          b.sp = Math.min(CFG.MAX_SPEED, b.sp * 1.2);
+          console.log(b.sp)
           const ang = Math.atan2(b.vy, b.vx);
           b.vx = Math.cos(ang) * b.sp;
           b.vy = Math.sin(ang) * b.sp;
         });
+
         break;
       }
       case 'Chill': {
         clearTimeout(this.chillPowerTimeout)
 
         this.balls.forEach(b => {
-          b.sp = Math.max(4, b.sp - 2);
+          b.sp = Math.max(4, b.sp * 0.7);
           const ang = Math.atan2(b.vy, b.vx);
           b.vx = Math.cos(ang) * b.sp;
           b.vy = Math.sin(ang) * b.sp;
@@ -1233,8 +1255,6 @@ class Game {
         break;
       }
     }
-
-    // this.sync();
   }
 
   applyStun() {
@@ -1251,18 +1271,27 @@ class Game {
 
   /* ----- EXPLOSION EVENT ----- */
   explode(brick) {
-    gameContainer.classList.add('shake');
+    postMessage({
+      type: GAME_EVENTS.SET_SHAKE,
+      payload: {}
+    })
+
     this.isBulletTimeEnabled && bulletTime();
 
     this.explodeBrickTimeout = setTimeout(
-      () => gameContainer.classList.remove('shake'),
+      () => postMessage({
+        type: GAME_EVENTS.REMOVE_SHAKE,
+        payload: {}
+      }),
       250
     );
 
     triggerRippleEffect(brick.x, brick.y)
     /* particles */
     for (let i = 0; i < 20; i++) {
-      this.parts.push(new Particle(brick.x + rand(0, brick.w), brick.y + rand(0, brick.h), 'hsl(50, 100%, 50%)'));
+      this.parts.push(
+        new Particle(brick.x + rand(0, brick.w), brick.y + rand(0, brick.h), 'hsl(50, 100%, 50%)')
+      );
     }
 
     /* splash damage */
@@ -1273,8 +1302,6 @@ class Game {
 
   /* ----- BALL LOST ----- */
   ballLost(ball) {
-    // TODO CHECK FOR OPTIMISATIONS
-    ball.dead = true
     this.balls = this.balls.filter(b => b !== ball);
     this.powers[0]?.applyStun?.()
 
@@ -1282,28 +1309,29 @@ class Game {
       this.lives--;
       this.paddle.reset();
       this.balls.push(new Ball(this.paddle));
-      /* clear temporary powers (except Heart) */
       this.active.clear();
       this.powers = []
     }
 
     if (this.lives <= 0) {
-      $('#gameover').classList.add('show');
-
-      if (!this.canContinue) {
-        btnContinue.style.display = 'none'
-      }
-
-      $('#btn-continue-text').textContent = `Continue (${this.canContinue})`
-
       const messageIdx = Math.floor(rand(0, GameOverTauntMessages.length - 1) % GameOverTauntMessages.length);
-      $('#game-over-text').textContent = GameOverTauntMessages[messageIdx]
 
-      document.exitPointerLock();
+      postMessage({
+        type: GAME_EVENTS.SHOW_GAME_OVER_MENU,
+        payload: {
+          canContinue: this.canContinue,
+          buttonText: `Continue (${this.canContinue})`,
+          gameOverMessage: GameOverTauntMessages[messageIdx],
+        }
+      })
+
+      postMessage({
+        type: GAME_EVENTS.RESET_POINTER_LOCK,
+        payload: {}
+      })
+
       this.stop = true;
     }
-
-    // this.sync();
   }
 
   continueGame() {
@@ -1314,21 +1342,24 @@ class Game {
     this.paddle = new Paddle();
     this.balls = [new Ball(this.paddle)];
     this.parts = [];
-    this._frameCount = 0;  // initialize frame counter
+    this._frameCount = 0;
 
     this.lives = 3
-    // this.sync();
     this.stop = false
 
-    $('#gameover').classList.remove('show');
-    if (!document.pointerLockElement && !isMobile) {
-      gameCanvas.requestPointerLock();
-    }
+    postMessage({
+      type: GAME_EVENTS.HIDE_GAME_OVER_MENU,
+      payload: {}
+    })
 
     this.loop();
   }
 
   restartGame() {
+    postMessage({
+      type: GAME_EVENTS.RESTART_GAME_FROM_BEGINNING,
+      payload: {}
+    })
     location.reload()
   }
 
@@ -1350,7 +1381,11 @@ class Game {
 
   applyEnemyStun() {
     this.paddle.stun = CFG.DUR.stun / 16;
-    gameCanvas.classList.add('hit');
+
+    postMessage({
+      type: GAME_EVENTS.SET_HIT,
+      payload: {}
+    })
 
     this.isBulletTimeEnabled && bulletTime();
     this.isFlashTextEnabled && flash('Stun!', '#ff3131');
@@ -1360,7 +1395,10 @@ class Game {
     this.active.clear();
     this.powers[0]?.applyStun?.();
 
-    this.applyEnemyStunTimer = setTimeout(() => gameCanvas.classList.remove('hit'), 200);
+    this.applyEnemyStunTimer = setTimeout(() => postMessage({
+      type: GAME_EVENTS.REMOVE_HIT,
+      payload: {}
+    }), 200);
   }
 
   spawnHitParticles(x, y, w, h, count = 5) {
@@ -1375,17 +1413,29 @@ class Game {
     // stop the game-loop
     this.stop = true;
 
+
+    postMessage({
+      type: GAME_EVENTS.SHOW_LEVEL_COMPLETE_MODAL,
+      payload: {
+        lvlText: text,
+        color,
+        textShadow: `0 0 4px ${color}`,
+        opacity: 1,
+      }
+    })
     // bring that overlay
     $('#lvl-text').textContent = `Level ${this.level}`;
 
-    const messageIdx = Math.floor(rand(0, LevelClearedMessages.length - 1) % LevelClearedMessages.length);
+    const messageIdx = Math.floor(
+      rand(0, LevelClearedMessages.length - 1) % LevelClearedMessages.length)
+    ;
     $('#lvlup-text').textContent = LevelClearedMessages[messageIdx]
 
     $('#lvlup').classList.add('show');
     this.lvlUp = true;
 
     // Celebrate
-    fireConfetti({particleCount: 200, spread: 100, origin: {y: 0.5}, scalar: 2});
+    //fireConfetti({particleCount: 200, spread: 100, origin: {y: 0.5}, scalar: 2});
 
     this.level++;
     this.lives++;

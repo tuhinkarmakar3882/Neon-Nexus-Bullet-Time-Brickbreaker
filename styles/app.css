@@ -1,5 +1,4 @@
-.primaryButton,
-.secondaryButton {
+.primaryButton, .secondaryButton {
     transition: background 250ms ease-in-out, color 250ms ease-in-out, transform 250ms;
 }
 
@@ -145,7 +144,7 @@ body {
     place-items: center;
 }
 
-#start>.content {
+#start > .content {
     max-width: 768px;
     padding: 1rem;
     display: flex;
@@ -174,8 +173,7 @@ canvas {
     z-index: 0;
 }
 
-#btn-pause,
-#btn-setting {
+#btn-pause, #btn-setting {
     display: grid;
     place-items: center;
     height: clamp(36px, 36px, 36px);
@@ -186,11 +184,11 @@ canvas {
     padding: 0;
 }
 
-#btn-pause>span {
+#btn-pause > span {
     margin-top: 2px;
 }
 
-#btn-setting>span {
+#btn-setting > span {
     margin-top: 3px;
 }
 
@@ -256,7 +254,7 @@ canvas {
     z-index: 5;
 }
 
-.overlay>* {
+.overlay > * {
     border-radius: 8px;
 }
 
@@ -399,11 +397,11 @@ canvas {
 }
 
 /* Checked state */
-.switch input:checked+.slider {
+.switch input:checked + .slider {
     background: var(--accent);
 }
 
-.switch input:checked+.slider::before {
+.switch input:checked + .slider::before {
     transform: translateX(16px);
 }
 
