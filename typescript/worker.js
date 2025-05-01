@@ -1,4 +1,5 @@
 self.importScripts('../vendor/noise.js')
+
 const GAME_EVENTS = {
   INIT: 'INIT',
   READY: 'INIT',
@@ -21,6 +22,7 @@ const GAME_EVENTS = {
   /* GameOver Screen Controls */
   SHOW_GAME_OVER_MENU: 'SHOW_GAME_OVER_MENU',
   HIDE_GAME_OVER_MENU: 'HIDE_GAME_OVER_MENU',
+  CONTINUE_GAME: 'CONTINUE_GAME',
 
   /* Pause Screen Controls */
   SHOW_PAUSE_MENU: 'SHOW_PAUSE_MENU',
@@ -48,6 +50,7 @@ const GAME_EVENTS = {
   FLIP_POWER_UP: 'FLIP_POWER_UP',
 
   TOUCH_MOVE: 'TOUCH_MOVE',
+  SHOW_LEVEL_COMPLETE_MODAL: 'SHOW_LEVEL_COMPLETE_MODAL'
 
 }
 
@@ -82,6 +85,7 @@ onmessage = ({data}) => {
         type: GAME_EVENTS.READY,
       })
       game.loadStoredPreferences(data.payload.config);
+
       game.startLoop();
       break;
     }
@@ -93,7 +97,6 @@ onmessage = ({data}) => {
       break;
     }
 
-
     case GAME_EVENTS.TOUCH_MOVE: {
       if (!game) return
       game.updatePaddlePositionForTouchSystems(data.payload)
@@ -104,6 +107,55 @@ onmessage = ({data}) => {
     case GAME_EVENTS.CLICK_ON_CANVAS: {
       game.releaseBalls(data.payload)
       break;
+    }
+
+    case GAME_EVENTS.HIDE_SETTINGS_MENU: {
+      if (!game) return;
+
+      game.hideSettingsMenu(data.payload)
+      break
+    }
+
+    case GAME_EVENTS.SHOW_SETTINGS_MENU: {
+      if (!game) return;
+
+      game.showSettingsMenu()
+      break
+    }
+
+    case GAME_EVENTS.HIDE_PAUSE_MENU: {
+      if (!game) return;
+
+      game.resumeGameplay()
+      break
+    }
+
+    case GAME_EVENTS.SHOW_PAUSE_MENU: {
+      if (!game) return;
+
+      game.pauseGameplay()
+      break
+    }
+
+    case GAME_EVENTS.CONTINUE_GAME: {
+      if (!game) return;
+
+      game.continueGame()
+      break
+    }
+
+    case GAME_EVENTS.RESTART_GAME_FROM_BEGINNING: {
+      if (!game) return;
+
+      game.restartGame()
+      break
+    }
+
+    case GAME_EVENTS.RESIZE: {
+      resize({
+        height: data.payload.height,
+        width: data.payload.width,
+      })
     }
   }
 }
@@ -125,9 +177,9 @@ function calculateSpeedBasedOnScreenSize(minSpeed, maxSpeed) {
   return minSpeed * Math.pow((maxSpeed / minSpeed), ratio);
 }
 
-function resize() {
-  gameCanvas.width = canvasContainer.clientWidth;
-  gameCanvas.height = canvasContainer.clientHeight;
+function resize({height, width}) {
+  gameCanvas.width = width;
+  gameCanvas.height = height;
 }
 
 function getProbability(level, min = 0.1, max = 0.7, rate = 0.1) {
@@ -236,7 +288,7 @@ let ripples = []; // Store multiple ripples
 
 let flashTimer;
 
-let lastScore, lastLives, lastLevel, lastRemain;
+let lastScore, lastLives, lastLevel, lastRemain, lastActivePowersMap;
 
 // const fireConfetti = confetti.create(gameCanvas, {resize: true});
 
@@ -717,33 +769,21 @@ class Game {
 
   showSettingsMenu() {
     this.paused = true;
-    postMessage({
-      type: GAME_EVENTS.SHOW_SETTINGS_MENU,
-      payload: {}
-    })
-    settingsContainer.classList.add('show')
   }
 
-  hideSettingsMenu() {
+  hideSettingsMenu(config) {
     this.paused = false;
-    audioElem.muted = !soundToggle.checked
 
-    this.isBulletTimeEnabled = bulletTimeToggleInput.checked
-    this.isFlashTextEnabled = flashTextToggleInput.checked
-
-    localStorage.setItem('isSoundEnabled', soundToggle.checked)
-    localStorage.setItem('isFlashTextEnabled', this.isFlashTextEnabled)
-    localStorage.setItem('isBulletTimeEnabled', this.isBulletTimeEnabled)
-
+    this.isAudioMuted = !config.isSoundEnabled
+    this.isBulletTimeEnabled = config.isBulletTimeEnabled
+    this.isFlashTextEnabled = config.isFlashTextEnabled
 
     this.startLoop();
-    settingsContainer.classList.remove('show');
+
   }
 
   resumeGameplay() {
     this.paused = false;
-    pausedContainer.classList.remove('show');
-
 
     this.startLoop();
   }
@@ -810,18 +850,18 @@ class Game {
       }
     } else {
       // Fallback for single layout type
-      const zone = {x: 0, y: 0, width: gameCanvas.width, height: gameCanvas.height / 2};
+      const zone = {x: 0, y: 0, width: gameCanvas.width * 0.8, height: (gameCanvas.height * 0.7) / 2};
       this._generateLayoutInZone(zone, layout);
     }
   }
 
   _createZones() {
     const zoneCount = Math.floor(rand(2, 4));
-    const zoneHeight = (gameCanvas.height * .8) / zoneCount;
+    const zoneHeight = (gameCanvas.height * .7) / zoneCount;
     const zones = [];
     for (let i = 0; i < zoneCount; i++) {
       zones.push({
-        x: 0,
+        x: 10,
         y: i * zoneHeight,
         width: gameCanvas.width,
         height: zoneHeight
@@ -965,27 +1005,38 @@ class Game {
   }
 
   syncHUD() {
+    let hasChange = false
+
     if (this.score !== lastScore) {
       lastScore = this.score;
+      hasChange = true
     }
 
     if (this.lives !== lastLives) {
       lastLives = this.lives;
+      hasChange = true
+
     }
 
     if (this.level !== lastLevel) {
       lastLevel = this.level;
+      hasChange = true
+
     }
 
     if (this.bricks.length !== lastRemain) {
       lastRemain = this.bricks.length;
+      hasChange = true
+
     }
+
+    if (!hasChange) return
 
     postMessage({
       type: GAME_EVENTS.SYNC_HUD,
       payload: {
         score: this.score,
-        live: this.lives,
+        lives: this.lives,
         level: this.level,
         left: lastRemain,
       }
@@ -994,6 +1045,29 @@ class Game {
 
   // TODO CHECK FOR OPTIMISATIONS
   syncSidebar() {
+
+    function compareMaps(map1, map2) {
+      let testVal;
+      if (map1?.size !== map2?.size) {
+        return false;
+      }
+      for (let [key, val] of map1) {
+        testVal = map2.get(key);
+        // in cases of an undefined value, make sure the key
+        // actually exists on the object so there are no false positives
+        if (testVal !== val || (testVal === undefined && !map2.has(key))) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+
+    const isSame = compareMaps(this.active, lastActivePowersMap)
+    lastActivePowersMap = new Map(this.active)
+
+    if (isSame) return
+
     postMessage({
       type: GAME_EVENTS.SYNC_SIDE_BAR,
       payload: {
@@ -1335,6 +1409,7 @@ class Game {
   }
 
   continueGame() {
+    console.log('Continuing...')
     if (this.canContinue <= 0) this.restartGame();
 
     this.canContinue--;
@@ -1352,6 +1427,11 @@ class Game {
       payload: {}
     })
 
+    postMessage({
+      type: GAME_EVENTS.SET_POINTER_LOCK,
+      payload: {}
+    })
+
     this.loop();
   }
 
@@ -1360,7 +1440,6 @@ class Game {
       type: GAME_EVENTS.RESTART_GAME_FROM_BEGINNING,
       payload: {}
     })
-    location.reload()
   }
 
   /* ----- MAIN LOOP ----- */
@@ -1413,41 +1492,40 @@ class Game {
     // stop the game-loop
     this.stop = true;
 
+    const messageIdx = Math.floor(
+      rand(0, LevelClearedMessages.length - 1) % LevelClearedMessages.length)
+    ;
+    this.lvlUp = true;
 
     postMessage({
       type: GAME_EVENTS.SHOW_LEVEL_COMPLETE_MODAL,
       payload: {
-        lvlText: text,
-        color,
-        textShadow: `0 0 4px ${color}`,
+        lvlText: `Level ${this.level}`,
+        lvlUpText: LevelClearedMessages[messageIdx],
         opacity: 1,
       }
     })
-    // bring that overlay
-    $('#lvl-text').textContent = `Level ${this.level}`;
-
-    const messageIdx = Math.floor(
-      rand(0, LevelClearedMessages.length - 1) % LevelClearedMessages.length)
-    ;
-    $('#lvlup-text').textContent = LevelClearedMessages[messageIdx]
-
-    $('#lvlup').classList.add('show');
-    this.lvlUp = true;
-
-    // Celebrate
-    //fireConfetti({particleCount: 200, spread: 100, origin: {y: 0.5}, scalar: 2});
 
     this.level++;
     this.lives++;
 
     setTimeout(() => {
       this.moveToNextLevel()
-      $('#lvlup').classList.remove('show');
+
       this.buildLevel();
       this.lvlUp = false
       this.stop = false;
       this.loop()
-    }, 2000);
+
+      postMessage({
+        type: GAME_EVENTS.HIDE_LEVEL_COMPLETE_MODAL,
+        payload: {
+          lvlText: `Level ${this.level}`,
+          lvlUpText: LevelClearedMessages[messageIdx],
+          opacity: 1,
+        }
+      })
+    }, 3000);
   }
 
   /* ----- UPDATE STEP ----- */
