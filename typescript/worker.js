@@ -157,6 +157,30 @@ onmessage = ({data}) => {
         width: data.payload.width,
       })
     }
+
+    case 'keydown': {
+      if (!game) return;
+
+      if (data.payload.code === 'ArrowLeft') keys.L = true;
+      if (data.payload.code === 'ArrowRight') keys.R = true;
+
+      if (data.payload.code === 'Space' || data.payload.code === 'Enter') game.balls.forEach(b => b.release());
+      break;
+    }
+
+    case 'keyup': {
+      if (!game) return;
+
+      console.log(data.payload.code)
+
+      if (data.payload.code === 'ArrowLeft') keys.L = false;
+      if (data.payload.code === 'ArrowRight') keys.R = false;
+
+      if (data.payload.code === 'KeyP') game.pauseGameplay()
+
+      if (data.payload.code === 'Space' || data.payload.code === 'Enter') game.balls.forEach(b => b.release());
+      break;
+    }
   }
 }
 
@@ -792,7 +816,9 @@ class Game {
 
   pauseGameplay() {
     this.paused = true;
-    pausedContainer.classList.add('show');
+    postMessage({
+      type: GAME_EVENTS.SHOW_PAUSE_MENU
+    })
   }
 
   _applyLevelSound() {
@@ -815,7 +841,7 @@ class Game {
       'perlin'
     ];
     const levelType = layouts[(Math.random() * 100) % layouts.length];
-    this._buildLevel(levelType);
+    this._buildLevel(/*levelType*/);
     this._applyLevelSound()
   }
 
@@ -852,7 +878,7 @@ class Game {
       }
     } else {
       // Fallback for single layout type
-      const zone = {x: 0, y: 0, width: gameCanvas.width * 0.8, height: (gameCanvas.height * 0.7) / 2};
+      const zone = {x: 100, y: 10, width: gameCanvas.width * 0.8, height: (gameCanvas.height * 0.7) / 2};
       this._generateLayoutInZone(zone, layout);
     }
   }
@@ -864,7 +890,7 @@ class Game {
     for (let i = 0; i < zoneCount; i++) {
       zones.push({
         x: 10,
-        y: i * zoneHeight,
+        y: (i + 0.1) * zoneHeight,
         width: gameCanvas.width,
         height: zoneHeight
       });
@@ -915,6 +941,7 @@ class Game {
   }
 
   _buildWaveLayout(zone) {
+    console.log(zone)
     const cols = Math.floor(zone.width / (CFG.COLS + 20))
     const rows = Math.floor(zone.height / 28)
     const bw = zone.width / cols;

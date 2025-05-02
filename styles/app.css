@@ -111,6 +111,14 @@ body {
     #hud-logo {
         display: none !important;
     }
+
+    #hud {
+        font-size: 16px !important;
+    }
+    #hud img {
+        width: 16px !important;
+        height: 16px !important;
+    }
 }
 
 #hud-logo {

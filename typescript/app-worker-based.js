@@ -89,8 +89,15 @@ btnSettingSave.addEventListener('click', (e) => {
 let offscreen = null;
 
 // keyboard
-window.addEventListener('keydown', e => {
-  worker.postMessage({type: 'keydown', code: e.code});
+document.addEventListener('keydown', e => {
+  // e.preventDefault();
+  worker.postMessage(
+    {
+    type: 'keydown',
+    payload: {
+      code: e.code
+    }
+  });
 });
 window.addEventListener('resize', e => {
   worker.postMessage({
@@ -100,8 +107,13 @@ window.addEventListener('resize', e => {
     }
   });
 });
-window.addEventListener('keyup', e => {
-  worker.postMessage({type: 'keyup', code: e.code});
+document.addEventListener('keyup', e => {
+
+  worker.postMessage({
+    type: 'keyup', payload: {
+      code: e.code
+    }
+  });
 });
 
 // mouse (for paddle movement)
@@ -374,6 +386,11 @@ worker.onmessage = ({data}) => {
 
       break
     }
+
+    case GAME_EVENTS.SHOW_PAUSE_MENU: {
+      pausedContainer.classList.add('show');
+      document.exitPointerLock()
+      break;
+    }
   }
 }
-
