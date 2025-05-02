@@ -433,7 +433,7 @@ class Ball extends Ent {
     this.r = 8;
     this.paddle = paddle;
     this.baseSp = CFG.MIN_SPEED;
-    this.sp = this.baseSp;
+    this.sp = this.baseSp * 1.2;
     this.vx = 0;
     this.vy = 0;
     this.stuck = true;
@@ -1222,6 +1222,7 @@ class Game {
       case 'Heart': {
         this.lives++;
         this.clear(key);
+
         break;
       }
       case 'Joker': {
@@ -1449,7 +1450,7 @@ class Game {
 
   loop() {
     if (this.stop || this.paused) return;
-    this._frameThrottle = this._frameThrottle ? 1 : 0;
+    this._frameThrottle = 0 //this._frameThrottle ? 1 : 0;
 
     const dt = getDt();
     this.update(dt);
@@ -1586,22 +1587,11 @@ class Game {
       const r = 30;
       this.echoSegments.forEach((alive, i) => {
         if (!alive) return;
-
-        this.balls[0].rx = []
-        this.balls[0].ry = []
-        this.balls[0].ang = []
-
-        this.balls[0].ang.push(this._frameCount * 0.05 + (2 * Math.PI / count) * i);
-        this.balls[0].rx.push(this.balls[0].x + Math.cos(this.balls[0].ang[i]) * r);
-        this.balls[0].ry.push(this.balls[0].y + Math.sin(this.balls[0].ang[i]) * r);
-
-        const rx = this.balls[0].rx[i]
-        const ry = this.balls[0].ry[i]
-
+        const ang = this._frameCount * 0.05 + (2 * Math.PI / count) * i;
+        const rx = this.balls[0].x + Math.cos(ang) * r;
+        const ry = this.balls[0].y + Math.sin(ang) * r;
         for (let b of this.bricks) {
-          if (!b.alive) return
-
-          if (rx > b.x && rx < b.x + b.w && ry > b.y && ry < b.y + b.h) {
+          if (b.alive && rx > b.x && rx < b.x + b.w && ry > b.y && ry < b.y + b.h) {
             b.alive = false;
             this.score += 10;
             this.echoSegments[i] = false;
@@ -1609,6 +1599,7 @@ class Game {
           }
         }
       });
+      this.bricks = this.bricks.filter(b => b.alive);
     }
 
 
@@ -1827,25 +1818,16 @@ class Game {
     }
 
     if (this.echo && this._frameThrottle === 0) {
-      gameCanvasContext.save();
       const count = this.echoSegments.length;
       const r = 30;
+      gameCanvasContext.save();
       gameCanvasContext.globalAlpha = 0.5;
       gameCanvasContext.fillStyle = CFG.COLORS.Echo;
       this.echoSegments.forEach((alive, i) => {
         if (!alive) return;
-
-        this.balls[0].rx = this.balls[0].rx ?? []
-        this.balls[0].ry = this.balls[0].ry ?? []
-        this.balls[0].ang = this.balls[0].ang ?? []
-
-        this.balls[0].ang.push(this._frameCount * 0.05 + (2 * Math.PI / count) * i);
-        this.balls[0].rx.push(this.balls[0].x + Math.cos(this.balls[0].ang[i]) * r);
-        this.balls[0].ry.push(this.balls[0].y + Math.sin(this.balls[0].ang[i]) * r);
-
-        const rx = this.balls[0].rx[i]
-        const ry = this.balls[0].ry[i]
-
+        const ang = this._frameCount * 0.05 + (2 * Math.PI / count) * i;
+        const rx = this.balls[0].x + Math.cos(ang) * r;
+        const ry = this.balls[0].y + Math.sin(ang) * r;
         gameCanvasContext.beginPath();
         gameCanvasContext.arc(rx, ry, this.balls[0].r / 2, 0, 2 * Math.PI);
         gameCanvasContext.fill();
