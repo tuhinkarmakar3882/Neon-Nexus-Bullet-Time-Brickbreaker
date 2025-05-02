@@ -1220,7 +1220,7 @@ class Game {
         clearTimeout(this.chillPowerTimeout)
 
         this.balls.forEach(b => {
-          b.sp = Math.max(4, b.sp * 0.7);
+          b.sp = Math.max(CFG.MIN_SPEED, b.sp * 0.7);
           const ang = Math.atan2(b.vy, b.vx);
           b.vx = Math.cos(ang) * b.sp;
           b.vy = Math.sin(ang) * b.sp;
