@@ -290,8 +290,6 @@ let flashTimer;
 
 let lastScore, lastLives, lastLevel, lastRemain, lastActivePowersMap;
 
-// const fireConfetti = confetti.create(gameCanvas, {resize: true});
-
 function flash(text, color = '#00ffc3') {
   postMessage({
     type: GAME_EVENTS.SHOW_FLASH_TEXT,
@@ -418,8 +416,8 @@ class Paddle extends Ent {
 
   draw() {
     gameCanvasContext.save();
-    // gameCanvasContext.shadowBlur = 4;
-    // gameCanvasContext.shadowColor = CFG.COLORS.defaultColor;
+    gameCanvasContext.shadowBlur = 4;
+    gameCanvasContext.shadowColor = CFG.COLORS.defaultColor;
     gameCanvasContext.fillStyle = this.stun ? '#5a5a5a' : CFG.PADDLE.defaultColor;
     gameCanvasContext.fillRect(this.x, this.y, this.w, this.h);
     gameCanvasContext.restore();
@@ -543,8 +541,8 @@ class Ball extends Ent {
 
   draw() {
     gameCanvasContext.save();
-    // gameCanvasContext.shadowBlur = 15;
-    // gameCanvasContext.shadowColor = this.getBallColor();
+    gameCanvasContext.shadowBlur = 15;
+    gameCanvasContext.shadowColor = this.getBallColor();
     gameCanvasContext.fillStyle = this.getBallColor();
     gameCanvasContext.beginPath();
     gameCanvasContext.arc(this.x, this.y, this.r, 0, Math.PI * 2);
