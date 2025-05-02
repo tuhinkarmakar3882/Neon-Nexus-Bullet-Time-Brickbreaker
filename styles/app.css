@@ -103,8 +103,8 @@ body {
     }
 
     .canvas-container {
-        margin-top: 0 !important;
-        height: 100% !important;
+        /*margin-top: 0 !important;*/
+        height: calc(100% - 4.2rem) !important;
         padding-inline: 0 !important;
     }
 
