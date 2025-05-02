@@ -1303,10 +1303,11 @@ class Game {
       }
       case 'BlackHole': {
         clearTimeout(this.blackHolePowerTimeout)
+        const randomBrick = Math.floor(rand(0, this.bricks.length - 1) % this.bricks.length);
 
         this.blackHole = {
-          x: rand(100, gameCanvas.width * 0.7),
-          y: rand(100, gameCanvas.height * 0.7),
+          x: this.bricks[randomBrick].x,
+          y: this.bricks[randomBrick].y,
           r: 100 * getDecreasingProbability(this.level)
         };
         this.blackHolePowerTimeout = setTimeout(() => {
