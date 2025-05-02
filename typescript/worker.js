@@ -240,63 +240,30 @@ const CFG = {
     shuffle: 5000,
   },
   CANNON: {RATE: 2500, SPD: 5},
-// Neon-themed color palette for all power-ups
-//   COLORS :{
-//     BlackHole:   '#D50000', // intense neon red
-//     Burst:       '#FF00FF', // vibrant magenta
-//     ChargeShot:  '#FFD700', // electric gold
-//     Chill:       '#00FFFF', // bright cyan
-//     Echo:        '#F8F8FF', // cool neon white
-//     Expand:      '#40C4FF', // luminous sky blue
-//     Flip:        '#D500F9', // neon purple
-//     Freeze:      '#18FFFF', // icy neon teal
-//     Glue:        '#00E676', // vivid mint green
-//     Gravity:     '#AA00FF', // deep violet
-//     Heart:       '#FF80AB', // soft neon pink
-//     Joker:       '#69F0AE', // neon spring green
-//     Laser:       '#FF1744', // hot neon red
-//     Magnet:      '#FFD600', // bright neon yellow
-//     Missile:     '#FF6D00', // blazing neon orange
-//     Reduce:      '#7C4DFF', // rich neon indigo
-//     Reverse:     '#FF4081', // punchy neon rose
-//     Shield:      '#FFFFFF', // pure neon white
-//     Teleport:    '#84FFFF', // glowing aqua
-//     Velocity:    '#2979FF', // royal neon blue
-//     Wrap:        '#FFFF33', // neon lemon
-//     Squeeze:     '#F50057', // bold neon fuchsia
-//     Shuffle:     '#00B8D4'  // electric neon cerulean
-//   },
 
   COLORS: {
-    // ─────── Offensive ───────
     BlackHole: '#FF0000', // Intense Neon Red
     Burst: '#FF00FF', // Electric Neon Fuchsia
     ChargeShot: '#FFC300', // Bold Neon Yellow
-    Missile: '#FF5733', // Vivid Neon Orange
-    Laser: '#FF0066', // Hot Neon Pink
-
-    // ─────── Defensive ───────
-    Shield: '#DDDDFF', // Soft Neon Lavender
-    Freeze: '#00FFFF', // Bright Neon Cyan
-    Reverse: '#FF0055', // Vivid Neon Rose
-    Flip: '#FF007F', // Neon Magenta
-
-    // ─────── Utility ───────
+    Chill: '#00FFAA', // Vivid Neon Orange
+    Echo: '#E0E0FF', // Hot Neon Pink
+    Expand: '#0099FF', // Soft Neon Lavender
+    Flip: '#FF007F', // Bright Neon Cyan
+    Freeze: '#00FFFF', // Vivid Neon Rose
+    Glue: '#FFD700', // Neon Magenta
     Gravity: '#AA00FF',      // Electric Violet
-    Magnet: '#FFFF00',      // Pure Neon Yellow
-    Chill: '#00FFAA',      // Mint Neon Green
-    Echo: '#E0E0FF',      // Light Neon Lavender
-    Expand: '#0099FF',      // Bright Electric Blue
-    Glue: '#FFD700',      // Neon Gold
-    Teleport: '#00FFF0',      // Neon Aqua
-    Velocity: '#007FFF',      // Electric Neon Blue
-    Wrap: '#FFFF33',      // Neon Lemon
-    Reduce: '#FF00AA',      // Punchy Neon Magenta
-    Squeeze: '#FF4500',      // Neon Orange-Red
-
-    // ─── Support & Special ───
-    Heart: '#55FF55',      // Neon Spring Green
-    Joker: '#00FF00'       // Electric Neon Green
+    Heart: '#55FF55',      // Pure Neon Yellow
+    Joker: '#00FF00',      // Mint Neon Green
+    Laser: '#FF0066',      // Light Neon Lavender
+    Magnet: '#FFFF00',      // Bright Electric Blue
+    Missile: '#FF5733',      // Neon Gold
+    Reduce: '#FF00AA',      // Neon Aqua
+    Reverse: '#FF0055',      // Electric Neon Blue
+    Shield: '#DDDDFF',      // Neon Lemon
+    Squeeze: '#FF4500',      // Punchy Neon Magenta
+    Teleport: '#00FFF0',      // Neon Orange-Red
+    Velocity: '#007FFF',      // Neon Spring Green
+    Wrap: '#FFFF33'       // Electric Neon Green
   },
   PADDLE: {
     defaultColor: 'white',
@@ -1310,8 +1277,8 @@ class Game {
         clearTimeout(this.blackHolePowerTimeout)
 
         this.blackHole = {
-          x: rand(0, gameCanvas.width),
-          y: rand(0, gameCanvas.width),
+          x: rand(100, gameCanvas.width * 0.7),
+          y: rand(100, gameCanvas.height * 0.7),
           r: 100 * getDecreasingProbability(this.level)
         };
         this.blackHolePowerTimeout = setTimeout(() => {
