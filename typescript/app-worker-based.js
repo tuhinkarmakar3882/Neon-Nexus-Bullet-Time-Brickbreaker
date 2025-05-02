@@ -354,6 +354,26 @@ worker.onmessage = ({data}) => {
 
       break;
     }
+
+    case GAME_EVENTS.SET_HIT: {
+      gameCanvas.classList.add('hit');
+      break
+    }
+    case GAME_EVENTS.REMOVE_HIT: {
+      gameCanvas.classList.remove('hit');
+      break
+    }
+
+    case GAME_EVENTS.SET_SHAKE: {
+      gameContainer.classList.add('shake');
+
+      break
+    }
+    case GAME_EVENTS.REMOVE_SHAKE: {
+      gameContainer.classList.remove('shake');
+
+      break
+    }
   }
 }
 

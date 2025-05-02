@@ -236,30 +236,67 @@ const CFG = {
     teleport: 8000,
     velocity: 10000,
     wrap: 15000,
+    squeeze: 5000,
+    shuffle: 5000,
   },
   CANNON: {RATE: 2500, SPD: 5},
+// Neon-themed color palette for all power-ups
+//   COLORS :{
+//     BlackHole:   '#D50000', // intense neon red
+//     Burst:       '#FF00FF', // vibrant magenta
+//     ChargeShot:  '#FFD700', // electric gold
+//     Chill:       '#00FFFF', // bright cyan
+//     Echo:        '#F8F8FF', // cool neon white
+//     Expand:      '#40C4FF', // luminous sky blue
+//     Flip:        '#D500F9', // neon purple
+//     Freeze:      '#18FFFF', // icy neon teal
+//     Glue:        '#00E676', // vivid mint green
+//     Gravity:     '#AA00FF', // deep violet
+//     Heart:       '#FF80AB', // soft neon pink
+//     Joker:       '#69F0AE', // neon spring green
+//     Laser:       '#FF1744', // hot neon red
+//     Magnet:      '#FFD600', // bright neon yellow
+//     Missile:     '#FF6D00', // blazing neon orange
+//     Reduce:      '#7C4DFF', // rich neon indigo
+//     Reverse:     '#FF4081', // punchy neon rose
+//     Shield:      '#FFFFFF', // pure neon white
+//     Teleport:    '#84FFFF', // glowing aqua
+//     Velocity:    '#2979FF', // royal neon blue
+//     Wrap:        '#FFFF33', // neon lemon
+//     Squeeze:     '#F50057', // bold neon fuchsia
+//     Shuffle:     '#00B8D4'  // electric neon cerulean
+//   },
+
   COLORS: {
-    BlackHole: '#be0000',    // Deep space black
-    Burst: '#FF4ECD',        // Vibrant pink
-    ChargeShot: '#FFAC33',        // Mint green
-    Chill: '#5BE7C4',       // Soft blue
-    Echo: '#E0E0E0',         // Orchid purple
-    Expand: '#6699FF',         // Emerald green
-    Flip: '#C084FC',        // Blush pink
-    Freeze: '#1FB6FF',        // Bold red
-    Glue: '#00C48C',       // Sunflower yellow
-    Gravity: '#D88BFF',       // Deep violet
-    Heart: '#FFD6E8',       // Soft white
-    Joker: '#A3FF12',     // Aqua blue
-    Laser: '#FF5A5F',     // Deep sky blue
-    Magnet: '#FFD93D',        // Lively lime
-    Missile: '#00ff8b',      // Pastel coral
-    Reduce: '#9D4EDD',         // Banana yellow
-    Reverse: '#FFB3C1',       // Ice blue
-    Shield: '#F5F5F5',   // Orange amber
-    Teleport: '#72F2EB',      // Lavender haze
-    Velocity: '#0077FF',          // Gentle gray
-    Wrap: '#FFE156',         // Banana yellow
+    // ─────── Offensive ───────
+    BlackHole: '#FF0000', // Intense Neon Red
+    Burst: '#FF00FF', // Electric Neon Fuchsia
+    ChargeShot: '#FFC300', // Bold Neon Yellow
+    Missile: '#FF5733', // Vivid Neon Orange
+    Laser: '#FF0066', // Hot Neon Pink
+
+    // ─────── Defensive ───────
+    Shield: '#DDDDFF', // Soft Neon Lavender
+    Freeze: '#00FFFF', // Bright Neon Cyan
+    Reverse: '#FF0055', // Vivid Neon Rose
+    Flip: '#FF007F', // Neon Magenta
+
+    // ─────── Utility ───────
+    Gravity: '#AA00FF',      // Electric Violet
+    Magnet: '#FFFF00',      // Pure Neon Yellow
+    Chill: '#00FFAA',      // Mint Neon Green
+    Echo: '#E0E0FF',      // Light Neon Lavender
+    Expand: '#0099FF',      // Bright Electric Blue
+    Glue: '#FFD700',      // Neon Gold
+    Teleport: '#00FFF0',      // Neon Aqua
+    Velocity: '#007FFF',      // Electric Neon Blue
+    Wrap: '#FFFF33',      // Neon Lemon
+    Reduce: '#FF00AA',      // Punchy Neon Magenta
+    Squeeze: '#FF4500',      // Neon Orange-Red
+
+    // ─── Support & Special ───
+    Heart: '#55FF55',      // Neon Spring Green
+    Joker: '#00FF00'       // Electric Neon Green
   },
   PADDLE: {
     defaultColor: 'white',
@@ -1178,7 +1215,6 @@ class Game {
       case 'Velocity': {
         this.balls.forEach(b => {
           b.sp = Math.min(CFG.MAX_SPEED, b.sp * 1.2);
-          console.log(b.sp)
           const ang = Math.atan2(b.vy, b.vx);
           b.vx = Math.cos(ang) * b.sp;
           b.vy = Math.sin(ang) * b.sp;
@@ -1326,6 +1362,27 @@ class Game {
           this.clear(key);
         }, dur);
         break;
+      }
+
+      case 'Squeeze': {
+        this.bricks.forEach(br => {
+          br.w *= 0.7;
+          br.h *= 0.7;
+        });
+        setTimeout(() => {
+          game.bricks.forEach(br => {
+            br.w /= 0.7;
+            br.h /= 0.7;
+          });
+        }, CFG.DUR.squeeze);
+        break
+      }
+
+      case 'Shuffle': {
+        this.bricks.forEach(brick => {
+          brick.type = this._randomBrickType();
+        });
+        break
       }
     }
   }
@@ -1582,7 +1639,7 @@ class Game {
 
     if (this.echo && this._frameThrottle === 0) {
       const count = this.echoSegments.length;
-      const r = 30;
+      const r = 100;
       this.echoSegments.forEach((alive, i) => {
         if (!alive) return;
         const ang = this._frameCount * 0.05 + (2 * Math.PI / count) * i;
@@ -1817,7 +1874,7 @@ class Game {
 
     if (this.echo && this._frameThrottle === 0) {
       const count = this.echoSegments.length;
-      const r = 30;
+      const r = 50;
       gameCanvasContext.save();
       gameCanvasContext.globalAlpha = 0.5;
       gameCanvasContext.fillStyle = CFG.COLORS.Echo;
