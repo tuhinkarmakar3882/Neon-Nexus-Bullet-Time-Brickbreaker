@@ -394,3 +394,4 @@ worker.onmessage = ({data}) => {
     }
   }
 }
+

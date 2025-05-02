@@ -318,7 +318,8 @@ let flashTimer;
 
 let lastScore, lastLives, lastLevel, lastRemain, lastActivePowersMap;
 
-function flash(text, color = '#00ffc3') {
+function flash(text, color = '#00ffc3', timer = 800) {
+  clearTimeout(flashTimer);
   postMessage({
     type: GAME_EVENTS.SHOW_FLASH_TEXT,
     payload: {
@@ -334,7 +335,7 @@ function flash(text, color = '#00ffc3') {
       type: GAME_EVENTS.HIDE_FLASH_TEXT,
       payload: {}
     })
-  }, 800);
+  }, timer);
 }
 
 function drawShockwave(x, y, radius) {
@@ -1426,8 +1427,11 @@ class Game {
 
   /* ----- BALL LOST ----- */
   ballLost(ball) {
+    const messageIdx = Math.floor(rand(0, GameOverTauntMessages.length - 1) % GameOverTauntMessages.length);
+    flash(GameOverTauntMessages[messageIdx], '#ff3131', 1500);
+
     this.balls = this.balls.filter(b => b !== ball);
-    this.powers[0]?.applyStun?.()
+    this.applyStun()
 
     if (this.balls.length === 0) {
       this.lives--;
@@ -1438,8 +1442,6 @@ class Game {
     }
 
     if (this.lives <= 0) {
-      const messageIdx = Math.floor(rand(0, GameOverTauntMessages.length - 1) % GameOverTauntMessages.length);
-
       postMessage({
         type: GAME_EVENTS.SHOW_GAME_OVER_MENU,
         payload: {

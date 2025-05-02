@@ -119,6 +119,10 @@ body {
         width: 16px !important;
         height: 16px !important;
     }
+
+    #flash {
+        font-size: 3rem !important;
+    }
 }
 
 #hud-logo {
@@ -235,7 +239,7 @@ canvas {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 52px;
+    font-size: 2rem;
     font-weight: 700;
     color: var(--accent);
     /*text-shadow: 0 0 14px var(--accent);*/
