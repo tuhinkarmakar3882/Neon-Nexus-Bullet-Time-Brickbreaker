@@ -249,6 +249,24 @@ canvas {
     backdrop-filter: blur(4px);
 }
 
+.pulse {
+    animation: pulse-it 450ms ease-in-out infinite alternate;
+}
+
+@keyframes pulse-it {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.3);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
 /* ---------- OVERLAYS ---------- */
 .overlay {
     position: fixed;

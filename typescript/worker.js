@@ -50,7 +50,8 @@ const GAME_EVENTS = {
   FLIP_POWER_UP: 'FLIP_POWER_UP',
 
   TOUCH_MOVE: 'TOUCH_MOVE',
-  SHOW_LEVEL_COMPLETE_MODAL: 'SHOW_LEVEL_COMPLETE_MODAL'
+  SHOW_LEVEL_COMPLETE_MODAL: 'SHOW_LEVEL_COMPLETE_MODAL',
+  LIFE_UPDATE: 'LIFE_UPDATE',
 
 }
 
@@ -171,8 +172,6 @@ onmessage = ({data}) => {
     case 'keyup': {
       if (!game) return;
 
-      console.log(data.payload.code)
-
       if (data.payload.code === 'ArrowLeft') keys.L = false;
       if (data.payload.code === 'ArrowRight') keys.R = false;
 
@@ -211,9 +210,7 @@ function getProbability(level, min = 0.1, max = 0.7, rate = 0.1) {
   return Math.max(min, raw);
 }
 
-function getDecreasingProbability(level) {
-  const min = 0.01;
-  const max = 1;
+function getDecreasingProbability(level, min = 0.01, max = 1) {
   const rate = 0.3; // adjust this for faster/slower growth
 
   const prob = max - (max - min) * (1 - Math.exp(-rate * level));
@@ -415,9 +412,12 @@ class Paddle extends Ent {
     this.reset();
   }
 
-  reset() {
+  reset(resetPaddlePosition = false) {
     this.w = this.baseW;
-    this.x = (gameCanvas.width - this.w) / 2;
+
+    if(resetPaddlePosition) {
+      this.x = (gameCanvas.width - this.w) / 2;
+    }
     this.y = gameCanvas.height - 34;
     this.sticky = false;
     this.magnet = false;
@@ -443,11 +443,26 @@ class Paddle extends Ent {
     this.x = clamp(this.x, 0, gameCanvas.width - this.w);
   }
 
+  getFillStyle() {
+    if (this.stun) return '#5a5a5a'
+
+    // if(this.isLaserActive) return CFG.COLORS.Laser;
+
+    // if(this.magnet) return CFG.COLORS.Magnet
+
+    if(this.sticky) return CFG.COLORS.Glue
+
+    if(this.isReversed) return CFG.COLORS.Reverse
+
+    return CFG.PADDLE.defaultColor;
+  }
+
   draw() {
     gameCanvasContext.save();
     gameCanvasContext.shadowBlur = 4;
     gameCanvasContext.shadowColor = CFG.COLORS.defaultColor;
-    gameCanvasContext.fillStyle = this.stun ? '#5a5a5a' : CFG.PADDLE.defaultColor;
+    gameCanvasContext.fillStyle = this.getFillStyle()
+
     gameCanvasContext.fillRect(this.x, this.y, this.w, this.h);
     gameCanvasContext.restore();
   }
@@ -564,19 +579,28 @@ class Ball extends Ent {
   getBallColor() {
     if (this.chargeReady) return CFG.BALL.chargedColor
     if (this.isTeleportAvailable) return CFG.BALL.teleportColor
+    if (this.missile) return CFG.COLORS.Missile
 
     return CFG.BALL.defaultColor
   }
 
   draw() {
     gameCanvasContext.save();
-    gameCanvasContext.shadowBlur = 15;
+    gameCanvasContext.shadowBlur = 10;
     gameCanvasContext.shadowColor = this.getBallColor();
     gameCanvasContext.fillStyle = this.getBallColor();
     gameCanvasContext.beginPath();
     gameCanvasContext.arc(this.x, this.y, this.r, 0, Math.PI * 2);
     gameCanvasContext.fill();
     gameCanvasContext.restore();
+  }
+
+  reset () {
+    this.sp = Math.max(this.baseSp, this.sp)
+    this.chargeReady = false
+    this.isTeleportAvailable = false
+    this.missile = false
+    this.gravity = false
   }
 }
 
@@ -1158,6 +1182,7 @@ class Game {
         clearInterval(this.laserTimer);
         this.clear(key);
 
+        this.paddle.isLaserActive = true
         this.laserTimer = setInterval(() => {
           this.spawnBullet(
             this.paddle.x + 10,
@@ -1176,6 +1201,7 @@ class Game {
 
         this.laserPowerTimeout = setTimeout(() => {
           clearInterval(this.laserTimer);
+          this.paddle.isLaserActive = false
           this.clear(key);
         }, dur);
         break;
@@ -1252,6 +1278,10 @@ class Game {
         this.lives++;
         this.clear(key);
 
+        postMessage({
+          type: GAME_EVENTS.LIFE_UPDATE
+        })
+
         break;
       }
       case 'Joker': {
@@ -1308,7 +1338,7 @@ class Game {
         this.blackHole = {
           x: this.bricks[randomBrick].x,
           y: this.bricks[randomBrick].y,
-          r: 100 * getDecreasingProbability(this.level)
+          r: 100 * getDecreasingProbability(this.level, 0.5, 1.2)
         };
         this.blackHolePowerTimeout = setTimeout(() => {
           this.blackHole = null;
@@ -1320,6 +1350,9 @@ class Game {
         clearTimeout(this.missilePowerTimeout)
         clearTimeout(this.gravityPowerTimeout)
 
+        this.paddle.isGravityActive = false
+        this.paddle.isMissileActive = true
+
         this.balls.forEach(b => {
           b.gravity = false
           b.missile = true
@@ -1327,6 +1360,8 @@ class Game {
 
         this.missilePowerTimeout = setTimeout(() => {
           this.balls.forEach(b => b.missile = false);
+          this.paddle.isGravityActive = false
+          this.paddle.isMissileActive = false
           this.clear(key);
         }, dur);
         break;
@@ -1335,6 +1370,9 @@ class Game {
         clearTimeout(this.gravityPowerTimeout)
         clearTimeout(this.missilePowerTimeout)
 
+        this.paddle.isGravityActive = true
+        this.paddle.isMissileActive = false
+
         this.balls.forEach(b => {
           b.gravity = true
           b.missile = false
@@ -1342,6 +1380,8 @@ class Game {
 
         this.gravityPowerTimeout = setTimeout(() => {
           this.balls.forEach(b => b.gravity = false);
+          this.paddle.isGravityActive = false
+          this.paddle.isMissileActive = false
           this.clear(key);
         }, dur);
         break;
@@ -1383,10 +1423,13 @@ class Game {
     }
   }
 
-  applyStun() {
-    this.balls.forEach(b => b.sp = Math.max(b.baseSp, b.sp));
-    this.paddle.reset()
+  applyStun(resetPaddlePosition = false) {
+    this.balls.forEach(b => {
+      b.reset()
+    });
+    this.paddle.reset(resetPaddlePosition)
     this.active.clear();
+    this.powers = []
     clearInterval(this.laserTimer);
   }
 
@@ -1430,17 +1473,13 @@ class Game {
   ballLost(ball) {
     const messageIdx = Math.floor(rand(0, GameOverTauntMessages.length - 1) % GameOverTauntMessages.length);
 
-
     this.balls = this.balls.filter(b => b !== ball);
-    this.applyStun()
 
     if (this.balls.length === 0) {
+      this.applyStun(true)
       flash(GameOverTauntMessages[messageIdx], '#ff3131', 1500);
       this.lives--;
-      this.paddle.reset();
       this.balls.push(new Ball(this.paddle));
-      this.active.clear();
-      this.powers = []
     }
 
     if (this.lives <= 0) {
@@ -1526,7 +1565,7 @@ class Game {
     this.score = Math.max(0, this.score - 10);
 
     this.active.clear();
-    this.powers[0]?.applyStun?.();
+    this.applyStun();
 
     this.applyEnemyStunTimer = setTimeout(() => postMessage({
       type: GAME_EVENTS.REMOVE_HIT,
@@ -1726,7 +1765,9 @@ class Game {
 
     temp = []
     this.bricks.forEach(b => {
+      // if (b.x < gameCanvas.width || b.x > gameCanvas.width || b.y > gameCanvas.height || b.y < gameCanvas.height) return;
       if (!b.alive) return
+
 
       temp.push(b)
       if (this.freeze) return;

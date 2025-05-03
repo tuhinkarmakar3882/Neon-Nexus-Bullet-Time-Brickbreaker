@@ -237,8 +237,9 @@ const GAME_EVENTS = {
   FLIP_POWER_UP: 'FLIP_POWER_UP',
 
   TOUCH_MOVE: 'TOUCH_MOVE',
-  SHOW_LEVEL_COMPLETE_MODAL: 'SHOW_LEVEL_COMPLETE_MODAL'
+  SHOW_LEVEL_COMPLETE_MODAL: 'SHOW_LEVEL_COMPLETE_MODAL',
 
+  LIFE_UPDATE: 'LIFE_UPDATE',
 }
 
 const flashBox = $('#flash');
@@ -390,6 +391,15 @@ worker.onmessage = ({data}) => {
     case GAME_EVENTS.SHOW_PAUSE_MENU: {
       pausedContainer.classList.add('show');
       document.exitPointerLock()
+      break;
+    }
+
+    case GAME_EVENTS.LIFE_UPDATE: {
+      $('#available-lives').classList.add('pulse');
+
+      setTimeout(() => {
+        $('#available-lives').classList.remove('pulse');
+      }, 500)
       break;
     }
   }
