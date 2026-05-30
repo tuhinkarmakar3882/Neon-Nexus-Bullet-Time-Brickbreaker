@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.vite/
+.idea/
+.vscode/
+
+# Capacitor native platforms (generated)
+/android
+/ios
+.capacitor/
