@@ -1,16 +1,11 @@
 export class Bullet {
-  constructor(scene, x, y, vy, owner) {
+  constructor(scene, x, y, vy) {
     this.scene = scene;
-    this.x = x;
-    this.y = y;
-    this.vy = vy;
-    this.owner = owner; // 'player' | 'enemy'
+    this.x = x; this.y = y; this.vy = vy;
     this.dead = false;
-
-    const color = owner === 'player' ? 0xff3131 : 0xffa600;
-    this.gfx = scene.add.rectangle(x, y, 6, 18, color).setDepth(18);
-    this.glow = scene.add.image(x, y, 'soft')
-      .setDisplaySize(26, 26).setTint(color).setAlpha(0.6).setDepth(17).setBlendMode('ADD');
+    this.gfx = scene.add.rectangle(x, y, 5, 20, 0xff5566).setDepth(18);
+    this.glow = scene.add.image(x, y, 'soft').setDisplaySize(22, 30)
+      .setTint(0xff5566).setAlpha(0.7).setDepth(17).setBlendMode('ADD');
   }
 
   update(dtSec, timeScale) {
@@ -23,7 +18,6 @@ export class Bullet {
   }
 
   destroy() {
-    this.gfx.destroy();
-    this.glow.destroy();
+    this.gfx.destroy(); this.glow.destroy();
   }
 }
