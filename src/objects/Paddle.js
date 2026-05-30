@@ -1,8 +1,8 @@
 import { GAME } from '../config/Constants.js';
 import { POWERS } from '../config/PowerUps.js';
-import { clamp } from '../utils/Helpers.js';
+import { clamp, lerpColor } from '../utils/Helpers.js';
 
-const COLOR_DEFAULT = 0xffffff;
+const COLOR_DEFAULT = 0x00ffc3;
 const COLOR_STUN = 0x5a5a5a;
 
 export class Paddle {
@@ -11,16 +11,18 @@ export class Paddle {
     this.baseW = GAME.PADDLE_BASE_WIDTH;
     this.w = this.baseW;
     this.h = GAME.PADDLE_HEIGHT;
-    this.x = GAME.WIDTH / 2; // center x
+    this.x = GAME.WIDTH / 2;
     this.y = GAME.HEIGHT - GAME.PADDLE_Y_OFFSET;
 
     this.sticky = false;
     this.magnet = false;
     this.reversed = false;
     this.stunUntil = 0;
+    this._sig = '';
 
-    this.gfx = scene.add.graphics();
-    this.gfx.setDepth(20);
+    this.glow = scene.add.image(this.x, this.y, 'soft').setDepth(19)
+      .setAlpha(0.5).setBlendMode('ADD');
+    this.gfx = scene.add.graphics().setDepth(20);
     this.redraw();
   }
 
@@ -31,7 +33,6 @@ export class Paddle {
 
   setWidth(w) {
     this.w = clamp(w, this.baseW * 0.4, Math.min(GAME.WIDTH * 0.55, this.baseW * 2.6));
-    this.redraw();
   }
 
   color() {
@@ -46,12 +47,19 @@ export class Paddle {
     const g = this.gfx;
     const w = this.w, h = this.h;
     const c = this.color();
+    const bright = lerpColor(c, 0xffffff, 0.6);
+    const dark = lerpColor(c, 0x000000, 0.25);
     g.clear();
-    g.fillStyle(c, 1);
+    g.fillStyle(dark, 1);
     g.fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
-    // Bright core highlight for a glossy neon bar.
-    g.fillStyle(0xffffff, 0.5);
-    g.fillRoundedRect(-w / 2 + 6, -h / 2 + 3, w - 12, h * 0.32, h * 0.16);
+    g.fillStyle(c, 1);
+    g.fillRoundedRect(-w / 2 + 2, -h / 2 + 2, w - 4, h - 4, h / 2);
+    g.fillStyle(bright, 0.85);
+    g.fillRoundedRect(-w / 2 + 8, -h / 2 + 3, w - 16, h * 0.34, h * 0.17);
+    g.fillStyle(0xffffff, 0.9);
+    g.fillCircle(-w / 2 + h / 2, 0, h * 0.18);
+    g.fillCircle(w / 2 - h / 2, 0, h * 0.18);
+    this.glow.setTint(c).setDisplaySize(w * 1.25, h * 4);
   }
 
   setCenter(x) {
@@ -64,7 +72,6 @@ export class Paddle {
     this.setCenter(this.x + d * GAME.PADDLE_SPEED * dtSec * timeScale);
   }
 
-  // Absolute pointer position (already in world coords), honoring reverse.
   setPointer(worldX) {
     if (this.stunned) return;
     const target = this.reversed ? GAME.WIDTH - worldX : worldX;
@@ -82,15 +89,19 @@ export class Paddle {
     this.reversed = false;
     this.stunUntil = 0;
     this.x = GAME.WIDTH / 2;
-    this.redraw();
   }
 
   sync() {
+    // Redraw only when shape/state changed (cheap + always current).
+    const sig = `${Math.round(this.w)}_${this.color()}`;
+    if (sig !== this._sig) { this._sig = sig; this.redraw(); }
     this.gfx.x = this.x;
     this.gfx.y = this.y;
+    this.glow.setPosition(this.x, this.y);
   }
 
   destroy() {
     this.gfx.destroy();
+    this.glow.destroy();
   }
 }
