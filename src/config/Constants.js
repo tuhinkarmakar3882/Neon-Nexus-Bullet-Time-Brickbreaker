@@ -1,73 +1,67 @@
-// Global, tunable game constants.
-//
-// Layout values are RESPONSIVE: `computeLayout(winW, winH)` is called once at
-// boot to size the design canvas to the device's aspect ratio (landscape on
-// desktop, portrait on phones) so the game fills the screen instead of rendering
-// as a letterboxed strip. Everything else is derived proportionally.
+// Global, tunable game constants with a RESPONSIVE design canvas.
+// computeLayout() sizes everything to the device aspect ratio at boot so the
+// game fills the screen (landscape desktop / portrait mobile).
 
 const clampN = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 export const GAME = {
   WIDTH: 1280,
   HEIGHT: 800,
-  BG_TOP: 0x05060a,
-  BG_BOTTOM: 0x0c1230,
 
   STARTING_LIVES: 3,
-  CONTINUES: 3,
+  CONTINUES: 2,
 
-  BALL_MIN_SPEED: 540,
-  BALL_MAX_SPEED: 1180,
+  WALL_X: 30,
+  WALL_TOP: 180,
+
+  BALL_MIN_SPEED: 560,
+  BALL_MAX_SPEED: 1220,
   BALL_RADIUS: 12,
-  BALL_MIN_VERTICAL_RATIO: 0.30,
+  BALL_MIN_VERTICAL_RATIO: 0.34,
   MAX_BOUNCE_ANGLE: Math.PI / 3,
 
   PADDLE_BASE_WIDTH: 220,
-  PADDLE_HEIGHT: 24,
-  PADDLE_SPEED: 1400,
-  PADDLE_Y_OFFSET: 70,
+  PADDLE_HEIGHT: 28,
+  PADDLE_SPEED: 1500,
+  PADDLE_Y_OFFSET: 78,
 
-  BULLET_TIME_SCALE: 0.3,
-  BULLET_TIME_MS: 1000,
+  BULLET_TIME_SCALE: 0.32,
+  BULLET_TIME_MS: 900,
 
-  CANNON_RATE_MS: 2600,
-  CANNON_BULLET_SPEED: 420,
-  LASER_BULLET_SPEED: 950,
-  LASER_FIRE_MS: 200,
+  LASER_BULLET_SPEED: 980,
+  LASER_FIRE_MS: 230,
+  POT_SPEED: 360,
 
-  MAX_BALLS: 30,
-  MAX_BULLETS: 200,
-  MAX_POWERS: 40,
+  MAX_BALLS: 24,
+  MAX_BULLETS: 160,
+  MAX_POWERS: 24,
 
-  SCORE_BRICK: 10,
-  SCORE_BLACKHOLE: 5,
-  SCORE_ECHO: 10,
-  SCORE_STUN_PENALTY: 10,
+  SCORE_BRICK: 50,
+  SCORE_SILVER: 90,
+  SCORE_EXPLODE_CHAIN: 30,
+  SCORE_JARDINAIN: 250,
+  SCORE_STUN_PENALTY: 60,
+  SCORE_LEVEL_CLEAR: 1000,
 
-  EXPLODE_RADIUS: 170,
+  EXPLODE_RADIUS: 150,
+  BOSS_EVERY: 5,
 };
 
 export const BRICK = {
-  WIDTH: 92,
-  HEIGHT: 34,
+  WIDTH: 96,
+  HEIGHT: 38,
   GAP: 10,
-  TOP_MARGIN: 150,
-  WEIGHTS: {
-    explode: 0.06,
-    moving: 0.06,
-    cannon: 0.05,
-    boss: 0.04,
-  },
-  COLORS: {
-    static: 0x7c4dff,
-    moving: 0xff9a3d,
-    explode: 0xffe23d,
-    cannon: 0xff4dd2,
-    boss: [0xff5a5a, 0xffa83d, 0xffe9c8],
-  },
+  HP: { normal: 1, silver: 2, gold: Infinity, explosive: 1, nest: 1 },
 };
 
-// Recompute the design resolution + all derived sizes from the real viewport.
+export const JARDINAIN = {
+  THROW_MIN_MS: 2600,
+  THROW_MAX_MS: 5200,
+  WALK_SPEED: 60,
+  SIZE: 26,
+  MAX_ALIVE: 6,
+};
+
 export function computeLayout(winW, winH) {
   const aspect = (winW || 1280) / (winH || 800);
   const H = 1280;
@@ -76,23 +70,25 @@ export function computeLayout(winW, winH) {
   GAME.WIDTH = W;
   GAME.HEIGHT = H;
 
-  GAME.PADDLE_BASE_WIDTH = Math.round(W * 0.17);
-  GAME.PADDLE_HEIGHT = Math.round(clampN(H * 0.02, 18, 28));
-  GAME.PADDLE_Y_OFFSET = Math.round(H * 0.055);
-  GAME.PADDLE_SPEED = Math.round(W * 1.15);
+  GAME.WALL_X = Math.round(clampN(W * 0.022, 14, 44));
+  GAME.WALL_TOP = Math.round(H * 0.14);
 
-  GAME.BALL_RADIUS = Math.round(clampN(H * 0.0095, 9, 15));
-  GAME.BALL_MIN_SPEED = Math.round(H * 0.42);
-  GAME.BALL_MAX_SPEED = Math.round(H * 0.92);
+  GAME.PADDLE_BASE_WIDTH = Math.round(W * 0.16);
+  GAME.PADDLE_HEIGHT = Math.round(clampN(H * 0.022, 20, 30));
+  GAME.PADDLE_Y_OFFSET = Math.round(H * 0.05);
+  GAME.PADDLE_SPEED = Math.round(W * 1.2);
 
-  GAME.CANNON_BULLET_SPEED = Math.round(H * 0.34);
-  GAME.LASER_BULLET_SPEED = Math.round(H * 0.74);
-  GAME.EXPLODE_RADIUS = Math.round(H * 0.135);
+  GAME.BALL_RADIUS = Math.round(clampN(H * 0.0098, 9, 16));
+  GAME.BALL_MIN_SPEED = Math.round(H * 0.44);
+  GAME.BALL_MAX_SPEED = Math.round(H * 0.95);
 
-  BRICK.WIDTH = Math.round(H * 0.066);
-  BRICK.HEIGHT = Math.round(H * 0.028);
-  BRICK.GAP = Math.round(H * 0.0075);
-  BRICK.TOP_MARGIN = Math.round(H * 0.12);
+  GAME.LASER_BULLET_SPEED = Math.round(H * 0.76);
+  GAME.POT_SPEED = Math.round(H * 0.28);
+  GAME.EXPLODE_RADIUS = Math.round(H * 0.12);
+
+  BRICK.WIDTH = Math.round(H * 0.07);
+  BRICK.HEIGHT = Math.round(H * 0.03);
+  BRICK.GAP = Math.round(H * 0.008);
 
   return { W, H };
 }

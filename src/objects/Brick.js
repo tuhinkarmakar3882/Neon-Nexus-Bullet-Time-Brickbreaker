@@ -1,104 +1,101 @@
 import { BRICK, GAME } from '../config/Constants.js';
-import { rand, levelScale, lerpColor } from '../utils/Helpers.js';
+import { PAL } from '../config/Palette.js';
+import { PANEL_SLICE } from '../utils/Textures.js';
+import { lerpColor } from '../utils/Helpers.js';
 
 export class Brick {
-  constructor(scene, x, y, w, h, type, level) {
+  constructor(scene, x, y, w, h, type, color, level) {
     this.scene = scene;
-    this.x = x;
-    this.y = y;
-    this.w = w;
-    this.h = h;
-    this.baseX = x;
-    this.baseW = w;
-    this.baseH = h;
+    this.x = x; this.y = y; this.w = w; this.h = h;
     this.type = type;
-    this.hp = type === 'boss' ? 3 : 1;
-    this.alive = true;
+    this.color = color;
     this.level = level;
-    this.phase = rand(0, Math.PI * 2);
-    this.fireTimer = rand(0, GAME.CANNON_RATE_MS * levelScale(level));
+    this.alive = true;
+    this.indestructible = type === 'gold';
 
-    this.gfx = scene.add.graphics().setDepth(10);
-    this.redraw();
+    let hp = BRICK.HP[type] ?? 1;
+    if (type === 'silver') hp = Math.min(5, 2 + Math.floor(level / 4));
+    this.maxHp = hp;
+    this.hp = hp;
+
+    this.panel = scene.add.nineslice(this.cx, this.cy, 'panel', undefined, w, h, PANEL_SLICE, PANEL_SLICE, PANEL_SLICE, PANEL_SLICE)
+      .setDepth(10).setTint(color);
+    this.fx = scene.add.graphics().setDepth(11);
+    this.drawFx();
   }
 
   get cx() { return this.x + this.w / 2; }
   get cy() { return this.y + this.h / 2; }
 
-  fillColor() {
-    const C = BRICK.COLORS;
-    if (this.type === 'boss') return C.boss[Math.max(0, this.hp - 1)] ?? C.boss[0];
-    return C[this.type] ?? C.static;
-  }
-
-  redraw() {
-    const g = this.gfx;
-    const w = this.w, h = this.h, r = Math.min(9, h * 0.3);
-    const c = this.fillColor();
-    const bright = lerpColor(c, 0xffffff, 0.45);
-    const dark = lerpColor(c, 0x000000, 0.35);
+  drawFx() {
+    const g = this.fx;
     g.clear();
-    // body
-    g.fillStyle(dark, 0.95);
-    g.fillRoundedRect(0, 0, w, h, r);
-    // top gloss band
-    g.fillStyle(bright, 0.55);
-    g.fillRoundedRect(2, 2, w - 4, h * 0.42, r * 0.7);
-    // mid color
-    g.fillStyle(c, 0.85);
-    g.fillRoundedRect(2, h * 0.42, w - 4, h * 0.5, r * 0.6);
-    // neon edge
-    g.lineStyle(2, bright, 0.9);
-    g.strokeRoundedRect(1, 1, w - 2, h - 2, r);
+    g.x = this.x; g.y = this.y;
+    const w = this.w, h = this.h;
 
-    // boss HP pips
-    if (this.type === 'boss') {
-      for (let i = 0; i < this.hp; i++) {
-        g.fillStyle(0xffffff, 0.9);
-        g.fillCircle(8 + i * 12, h - 7, 3);
+    if (this.type === 'gold') {
+      // metallic bolts + diagonal shine
+      g.fillStyle(0xffffff, 0.5);
+      g.fillCircle(8, 8, 2.5); g.fillCircle(w - 8, 8, 2.5);
+      g.fillCircle(8, h - 8, 2.5); g.fillCircle(w - 8, h - 8, 2.5);
+      g.lineStyle(3, 0xffffff, 0.25);
+      g.lineBetween(w * 0.2, h * 0.8, w * 0.55, h * 0.2);
+    } else if (this.type === 'silver') {
+      const dmg = this.maxHp - this.hp;
+      g.lineStyle(2, 0x05060c, 0.5);
+      for (let i = 0; i < dmg; i++) {
+        const yy = 6 + i * 5;
+        g.lineBetween(w * 0.25, yy, w * 0.75, yy + 3);
       }
+      // hp pips
+      g.fillStyle(0xffffff, 0.8);
+      for (let i = 0; i < this.hp; i++) g.fillCircle(8 + i * 9, h - 6, 2.2);
+    } else if (this.type === 'explosive') {
+      g.fillStyle(0x2a0d05, 0.85);
+      g.fillCircle(w / 2, h / 2, h * 0.22);
+      g.lineStyle(2, 0xfff0c0, 0.9);
+      g.lineBetween(w / 2, h * 0.18, w / 2 + 5, h * 0.06);
+      g.fillStyle(0xffd23d, 1);
+      g.fillCircle(w / 2 + 5, h * 0.06, 2);
+    } else if (this.type === 'nest') {
+      // little arched doorway
+      g.fillStyle(0x10142a, 0.7);
+      g.fillRoundedRect(w / 2 - 9, h - 16, 18, 14, { tl: 8, tr: 8, bl: 0, br: 0 });
     }
-    // cannon muzzle hint
-    if (this.type === 'cannon') {
-      g.fillStyle(0x05060a, 0.8);
-      g.fillRect(w / 2 - 4, h - 6, 8, 5);
-    }
-  }
-
-  update(dtMs, frozen) {
-    if (!this.alive || frozen) return false;
-    if (this.type === 'moving') {
-      this.x = this.baseX + Math.sin(this.scene.time.now / 600 + this.phase) * (this.w * 0.6 + 30);
-    }
-    if (this.type === 'cannon') {
-      this.fireTimer -= dtMs;
-      if (this.fireTimer <= 0) {
-        this.fireTimer = GAME.CANNON_RATE_MS * levelScale(this.level);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  setScale(s) {
-    this.w = this.baseW * s;
-    this.h = this.baseH * s;
-    this.redraw();
   }
 
   hit(damage = 1) {
+    if (this.indestructible) { this.clang(); return false; }
     this.hp -= damage;
-    if (this.type === 'boss' && this.hp > 0) this.redraw();
-    if (this.hp <= 0) this.alive = false;
-    return this.hp <= 0;
+    this.flash();
+    if (this.type === 'silver' && this.hp > 0) this.drawFx();
+    if (this.hp <= 0) { this.alive = false; return true; }
+    return false;
+  }
+
+  flash() {
+    this.scene.tweens.killTweensOf(this.panel);
+    this.panel.setTint(lerpColor(this.color, 0xffffff, 0.7));
+    this.scene.time.delayedCall(60, () => this.panel.active && this.panel.setTint(this.color));
+    this.scene.tweens.add({ targets: this.panel, scaleX: 1.08, scaleY: 1.12, duration: 70, yoyo: true });
+  }
+
+  clang() {
+    this.scene.tweens.add({ targets: this.panel, scaleX: 0.94, duration: 60, yoyo: true });
+  }
+
+  setScale(s) {
+    this.w = this.baseW ? this.baseW * s : this.w;
   }
 
   sync() {
-    this.gfx.x = this.x;
-    this.gfx.y = this.y;
+    this.panel.setPosition(this.cx, this.cy);
+    this.fx.x = this.x; this.fx.y = this.y;
   }
 
   destroy() {
-    this.gfx.destroy();
+    this.scene.tweens.killTweensOf(this.panel);
+    this.panel.destroy();
+    this.fx.destroy();
   }
 }

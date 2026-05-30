@@ -1,156 +1,113 @@
-import { GAME, BRICK } from '../config/Constants.js';
-import { rand, randInt, pick } from '../utils/Helpers.js';
+import { GAME, BRICK, JARDINAIN } from '../config/Constants.js';
+import { PAL } from '../config/Palette.js';
+import { themeFor } from '../config/Themes.js';
+import { clamp } from '../utils/Helpers.js';
 
-// Generates brick layout data: [{ x, y, w, h, type }]. Pure data — the scene
-// turns these into Brick game objects. Zone-aware and never produces an empty
-// field. Scales with the responsive design resolution.
+// Tactical, Arkanoid-flavoured layouts with PER-LEVEL THEMES so every level is
+// visually distinct. Layout pattern and theme advance on different cycles, so
+// the theme×pattern combination doesn't repeat for ~60 levels.
 
-const LAYOUTS = ['grid', 'circle', 'diamond', 'tunnel', 'wave', 'perlin'];
-
-export function randomBrickType() {
-  const r = Math.random();
-  const w = BRICK.WEIGHTS;
-  let acc = 0;
-  if (r < (acc += w.explode)) return 'explode';
-  if (r < (acc += w.moving)) return 'moving';
-  if (r < (acc += w.cannon)) return 'cannon';
-  if (r < (acc += w.boss)) return 'boss';
-  return 'static';
-}
+const PATTERNS = ['rows', 'pyramid', 'diamond', 'columns', 'checker', 'arch',
+  'zigzag', 'spiral', 'frame', 'towers', 'scatter', 'staircase'];
 
 export function buildLevel(level) {
-  const fieldTop = BRICK.TOP_MARGIN;
-  const fieldHeight = GAME.HEIGHT * 0.5;
-  const fieldLeft = Math.round(GAME.WIDTH * 0.04);
-  const fieldWidth = GAME.WIDTH - fieldLeft * 2;
+  const theme = themeFor(level);
+  const isBoss = level % GAME.BOSS_EVERY === 0;
+  const pattern = isBoss ? 'fortress' : PATTERNS[(level * 5) % PATTERNS.length];
 
-  const zoneCount = randInt(2, 3);
-  const zoneHeight = fieldHeight / zoneCount;
-  const pool = [...LAYOUTS];
+  const arenaLeft = GAME.WALL_X + BRICK.GAP;
+  const arenaRight = GAME.WIDTH - GAME.WALL_X - BRICK.GAP;
+  const arenaW = arenaRight - arenaLeft;
+  const top = GAME.WALL_TOP + BRICK.GAP * 2;
+
+  const cols = Math.max(6, Math.floor((arenaW + BRICK.GAP) / (BRICK.WIDTH + BRICK.GAP)));
+  const bw = (arenaW - (cols - 1) * BRICK.GAP) / cols;
+  const bh = BRICK.HEIGHT;
+  const rows = isBoss ? 8 : clamp(4 + ((level + 1) % 5), 4, 8);
+
+  const silverChance = clamp(0.05 + level * 0.025, 0, 0.34);
+  const explodeChance = 0.055;
+  let nestBudget = Math.min(JARDINAIN.MAX_ALIVE, 1 + Math.floor(level / 2));
+
+  const seed = level * 97.13;
   const bricks = [];
-
-  for (let i = 0; i < zoneCount; i++) {
-    const zone = {
-      x: fieldLeft,
-      y: fieldTop + i * zoneHeight,
-      width: fieldWidth,
-      height: zoneHeight - BRICK.GAP,
-    };
-    const idx = (Math.random() * pool.length) | 0;
-    const layout = pool.length ? pool.splice(idx, 1)[0] : pick(LAYOUTS);
-    generateZone(bricks, zone, layout, level);
-  }
-
-  if (bricks.length === 0) {
-    generateZone(bricks, { x: fieldLeft, y: fieldTop, width: fieldWidth, height: zoneHeight }, 'grid', level);
-  }
-  return bricks;
-}
-
-function place(bricks, x, y, w, h) {
-  bricks.push({ x, y, w, h, type: randomBrickType() });
-}
-
-function generateZone(bricks, zone, layout, level) {
-  switch (layout) {
-    case 'grid': return gridLayout(bricks, zone);
-    case 'circle': return circleLayout(bricks, zone);
-    case 'diamond': return diamondLayout(bricks, zone);
-    case 'tunnel': return tunnelLayout(bricks, zone);
-    case 'wave': return waveLayout(bricks, zone, level);
-    case 'perlin': return perlinLayout(bricks, zone, level);
-    default: return gridLayout(bricks, zone);
-  }
-}
-
-function colsRows(zone) {
-  const cols = Math.max(4, Math.floor(zone.width / (BRICK.WIDTH + BRICK.GAP)));
-  const rows = Math.max(1, Math.floor(zone.height / (BRICK.HEIGHT + BRICK.GAP)));
-  const bw = (zone.width - (cols - 1) * BRICK.GAP) / cols;
-  return { cols, rows, bw, bh: BRICK.HEIGHT };
-}
-
-function gridLayout(bricks, zone) {
-  const { cols, rows, bw, bh } = colsRows(zone);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      if (Math.random() < 0.1) continue;
-      place(bricks, zone.x + c * (bw + BRICK.GAP), zone.y + r * (bh + BRICK.GAP), bw, bh);
-    }
-  }
-}
+      if (!exists(pattern, r, c, rows, cols, seed)) continue;
 
-function tunnelLayout(bricks, zone) {
-  const { cols, rows, bw, bh } = colsRows(zone);
-  const gapStart = Math.floor(cols * 0.42);
-  const gapEnd = Math.ceil(cols * 0.58);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (c >= gapStart && c < gapEnd) continue;
-      place(bricks, zone.x + c * (bw + BRICK.GAP), zone.y + r * (bh + BRICK.GAP), bw, bh);
-    }
-  }
-}
+      let type = 'normal';
+      let color = theme.bricks[r % theme.bricks.length];
 
-function waveLayout(bricks, zone, level) {
-  const { cols, rows, bw, bh } = colsRows(zone);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const phase = (c / cols + level / 10) * Math.PI * 2;
-      const offset = Math.sin(phase) * (bh * 0.5);
-      place(bricks, zone.x + c * (bw + BRICK.GAP), zone.y + r * (bh + BRICK.GAP) + offset, bw, bh);
-    }
-  }
-}
-
-function circleLayout(bricks, zone) {
-  const cx = zone.x + zone.width / 2;
-  const cy = zone.y + zone.height / 2;
-  const radius = Math.min(zone.width, zone.height) / 2.3;
-  const total = Math.max(12, Math.round(radius / (BRICK.WIDTH * 0.6)));
-  for (let i = 0; i < total; i++) {
-    const a = (Math.PI * 2 * i) / total;
-    place(bricks, cx + Math.cos(a) * radius - BRICK.WIDTH / 2, cy + Math.sin(a) * radius - BRICK.HEIGHT / 2, BRICK.WIDTH, BRICK.HEIGHT);
-  }
-}
-
-function diamondLayout(bricks, zone) {
-  const cx = zone.x + zone.width / 2;
-  const cy = zone.y + zone.height / 2;
-  const layers = 4;
-  const stepX = BRICK.WIDTH + BRICK.GAP;
-  const stepY = BRICK.HEIGHT + BRICK.GAP;
-  for (let i = -layers; i <= layers; i++) {
-    const count = layers - Math.abs(i) + 1;
-    for (let j = 0; j < count; j++) {
-      place(bricks, cx + (j - (count - 1) / 2) * stepX - BRICK.WIDTH / 2, cy + i * stepY - BRICK.HEIGHT / 2, BRICK.WIDTH, BRICK.HEIGHT);
-    }
-  }
-}
-
-function perlinLayout(bricks, zone, level) {
-  const { cols, rows, bw, bh } = colsRows(zone);
-  const seed = level * 13.37 + rand(0, 100);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (valueNoise(c * 0.6 + seed, r * 0.6) > 0.52) {
-        place(bricks, zone.x + c * (bw + BRICK.GAP), zone.y + r * (bh + BRICK.GAP), bw, bh);
+      if (isGold(pattern, r, c, rows, cols, level)) { type = 'gold'; color = PAL.gold; }
+      else {
+        const roll = Math.random();
+        if (roll < explodeChance) { type = 'explosive'; color = PAL.explosive; }
+        else if (roll < explodeChance + silverChance) { type = 'silver'; color = PAL.silver; }
+        else if (nestBudget > 0 && Math.random() < 0.12) { type = 'nest'; color = theme.bricks[(r + 3) % theme.bricks.length]; nestBudget--; }
       }
+
+      bricks.push({ x: arenaLeft + c * (bw + BRICK.GAP), y: top + r * (bh + BRICK.GAP), w: bw, h: bh, type, color });
     }
   }
+
+  if (!bricks.some((b) => b.type !== 'gold')) {
+    bricks.forEach((b) => { if (Math.random() < 0.4) { b.type = 'normal'; b.color = theme.bricks[0]; } });
+  }
+  return { bricks, isBoss, theme };
 }
 
-function hash(x, y) {
-  const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+function hash(a, b) {
+  const n = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
   return n - Math.floor(n);
 }
-function smooth(t) { return t * t * (3 - 2 * t); }
-function valueNoise(x, y) {
-  const x0 = Math.floor(x), y0 = Math.floor(y);
-  const tx = smooth(x - x0), ty = smooth(y - y0);
-  const v00 = hash(x0, y0), v10 = hash(x0 + 1, y0);
-  const v01 = hash(x0, y0 + 1), v11 = hash(x0 + 1, y0 + 1);
-  const a = v00 + (v10 - v00) * tx;
-  const b = v01 + (v11 - v01) * tx;
-  return a + (b - a) * ty;
+
+function exists(pattern, r, c, rows, cols, seed) {
+  const midC = (cols - 1) / 2;
+  const midR = (rows - 1) / 2;
+  switch (pattern) {
+    case 'rows':
+    case 'fortress':
+      return true;
+    case 'pyramid':
+      return Math.abs(c - midC) <= (rows - 1 - r) + 0.5;
+    case 'diamond':
+      return Math.abs(c - midC) / midC + Math.abs(r - midR) / midR <= 1.05;
+    case 'columns':
+      return c % 3 !== 1;
+    case 'checker':
+      return (r + c) % 2 === 0;
+    case 'arch':
+      return !(r < rows - 2 && Math.abs(c - midC) < cols * 0.18);
+    case 'zigzag':
+      return ((r + c) % 4) < 2;
+    case 'spiral': {
+      const ring = Math.min(r, c, rows - 1 - r, cols - 1 - c);
+      return ring % 2 === 0;
+    }
+    case 'frame':
+      return r === 0 || r === rows - 1 || c === 0 || c === cols - 1 || (r === midR | 0 && c % 2 === 0);
+    case 'towers':
+      return c % 4 < 2;
+    case 'scatter':
+      return hash(r + seed, c - seed) > 0.4;
+    case 'staircase': {
+      const w = Math.max(2, Math.floor(cols * 0.4));
+      const start = (r * 2) % cols;
+      return ((c - start + cols) % cols) < w;
+    }
+    default:
+      return true;
+  }
+}
+
+function isGold(pattern, r, c, rows, cols, level) {
+  if (level < 2) return false;
+  if (pattern === 'fortress') {
+    if (r === 0 || c === 0 || c === cols - 1) return true;
+    if ((c === Math.floor(cols * 0.33) || c === Math.floor(cols * 0.66)) && r % 2 === 0) return true;
+    return false;
+  }
+  if (pattern === 'columns' && c % 3 === 0 && r === Math.floor(rows / 2)) return true;
+  if (pattern === 'towers' && c % 4 === 0 && r % 3 === 0) return true;
+  return false;
 }

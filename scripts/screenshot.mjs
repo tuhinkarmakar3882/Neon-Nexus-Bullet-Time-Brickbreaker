@@ -22,32 +22,38 @@ await sleep(2500);
 const browser = await puppeteer.launch({ executablePath: findChrome(), headless: 'new',
   args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'] });
 
-async function shoot(name, w, h) {
+const save = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` }).then(() => execSync(`cp ${OUT}/${name}.png ${LOCAL}/`));
+const kick = (page) => page.evaluate(() => {
+  const gs = window.__NEON.scene.getScene('Game');
+  gs.maxEnemies = 5; gs.enemyTimer = 0;
+  gs.balls.forEach((b) => { b.stuck = false; b.vy = -420; b.vx = 150; });
+});
+
+async function run(name, w, h) {
   const page = await browser.newPage();
   await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 });
   await page.goto(URL, { waitUntil: 'networkidle2', timeout: 30000 });
   await sleep(2200);
-  await page.screenshot({ path: `${OUT}/${name}-menu.png` });
-  execSync(`cp ${OUT}/${name}-menu.png ${LOCAL}/`);
+  await save(page, `${name}-menu`);
 
   await page.mouse.click(Math.round(w / 2), Math.round(h * 0.55));
   await page.evaluate(() => { window.__NEON.scene.start('Game'); window.__NEON.scene.stop('Menu'); });
-  await sleep(900);
-  await page.mouse.click(Math.round(w / 2), Math.round(h * 0.7));
-  await page.evaluate(() => {
-    const gs = window.__NEON.scene.getScene('Game');
-    ['Echo', 'Laser', 'Expand', 'Shield', 'Burst', 'ChargeShot'].forEach((k) => gs.applyPower(k));
-  });
-  await sleep(900);
-  await page.screenshot({ path: `${OUT}/${name}-game.png` });
-  execSync(`cp ${OUT}/${name}-game.png ${LOCAL}/`);
+  await sleep(700);
+
+  for (let lvl = 1; lvl <= 3; lvl++) {
+    if (lvl > 1) await page.evaluate(() => window.__NEON.scene.getScene('Game').startNextLevel());
+    await sleep(500);
+    await kick(page);
+    await sleep(1400);
+    await save(page, `${name}-l${lvl}`);
+  }
   await page.close();
   console.log(`shot ${name} ${w}x${h}`);
 }
 
 try {
-  await shoot('desktop', 1440, 900);
-  await shoot('mobile', 414, 896);
+  await run('desktop', 1440, 900);
+  await run('mobile', 414, 896);
 } finally {
   await browser.close();
   server.kill('SIGTERM');
