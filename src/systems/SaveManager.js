@@ -38,6 +38,7 @@ export const SaveManager = {
   loadSettings() {
     return {
       sound: this.getBool(STORAGE.SOUND, true),
+      music: this.getBool(STORAGE.MUSIC, true),
       bulletTime: this.getBool(STORAGE.BULLET_TIME, true),
       flashText: this.getBool(STORAGE.FLASH_TEXT, true),
       particles: this.getBool(STORAGE.PARTICLES, true),
@@ -45,6 +46,7 @@ export const SaveManager = {
   },
   saveSettings(s) {
     this.setBool(STORAGE.SOUND, s.sound);
+    this.setBool(STORAGE.MUSIC, s.music);
     this.setBool(STORAGE.BULLET_TIME, s.bulletTime);
     this.setBool(STORAGE.FLASH_TEXT, s.flashText);
     this.setBool(STORAGE.PARTICLES, s.particles);

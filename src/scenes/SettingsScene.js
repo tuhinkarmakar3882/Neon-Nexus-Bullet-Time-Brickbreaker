@@ -15,30 +15,33 @@ export class SettingsScene extends Phaser.Scene {
 
   create() {
     const W = GAME.WIDTH, H = GAME.HEIGHT;
-    this.add.rectangle(W / 2, H / 2, W, H, 0x05060a, 0.85);
-    this.add.text(W / 2, H * 0.18, 'SETTINGS', {
-      fontFamily: 'Orbitron, monospace', fontSize: '70px', fontStyle: '900', color: '#00ffc3',
+    this.add.rectangle(W / 2, H / 2, W, H, 0x05060a, 0.88);
+    this.add.text(W / 2, H * 0.14, 'SETTINGS', {
+      fontFamily: 'Orbitron, monospace', fontSize: '66px', fontStyle: '900', color: '#00ffc3',
     }).setOrigin(0.5).setShadow(0, 0, '#00ffc3', 20, true, true);
 
     this.settings = SaveManager.loadSettings();
 
     const items = [
-      ['sound', 'SOUND'],
+      ['sound', 'SOUND FX'],
+      ['music', 'MUSIC'],
       ['bulletTime', 'BULLET TIME'],
       ['flashText', 'FLASH TEXT'],
       ['particles', 'PARTICLES'],
     ];
 
+    const startY = H * 0.27;
+    const stepY = H * 0.1;
     this.toggles = {};
     items.forEach(([key, label], i) => {
-      const y = H * 0.34 + i * 110;
-      this.add.text(W / 2 - 240, y, label, {
-        fontFamily: 'Orbitron, monospace', fontSize: '32px', color: '#cfe9ff',
+      const y = startY + i * stepY;
+      this.add.text(W / 2 - 250, y, label, {
+        fontFamily: 'Orbitron, monospace', fontSize: '30px', color: '#cfe9ff',
       }).setOrigin(0, 0.5);
-      this.toggles[key] = this.makeToggle(W / 2 + 200, y, key);
+      this.toggles[key] = this.makeToggle(W / 2 + 210, y, key);
     });
 
-    neonButton(this, W / 2, H * 0.82, 'SAVE & CLOSE', () => this.close(), { width: 420, height: 84, fontSize: '32px' });
+    neonButton(this, W / 2, H * 0.85, 'SAVE & CLOSE', () => this.close(), { width: 420, height: 80, fontSize: '32px' });
   }
 
   makeToggle(x, y, key) {
@@ -59,23 +62,22 @@ export class SettingsScene extends Phaser.Scene {
     c.on('pointerup', () => {
       this.settings[key] = !this.settings[key];
       draw();
-      if (key === 'sound') { audio.init(); audio.setEnabled(this.settings.sound); audio.blip(660, 0.05); }
+      audio.init();
+      if (key === 'sound') { audio.setSoundEnabled(this.settings.sound); audio.blip(720); }
+      if (key === 'music') { audio.setMusicEnabled(this.settings.music); }
     });
     return c;
   }
 
   close() {
     SaveManager.saveSettings(this.settings);
-    audio.setEnabled(this.settings.sound);
-    // live-apply to running game
+    audio.setSoundEnabled(this.settings.sound);
+    audio.setMusicEnabled(this.settings.music);
     const gameScene = this.scene.get(SCENES.GAME);
     if (gameScene && gameScene.settings) gameScene.settings = SaveManager.loadSettings();
 
     this.scene.stop();
-    if (this.scene.isPaused(this.from) || this.scene.isSleeping(this.from)) {
-      this.scene.wake(this.from);
-    } else {
-      this.scene.resume(this.from);
-    }
+    if (this.scene.isSleeping(this.from)) this.scene.wake(this.from);
+    else if (this.scene.isPaused(this.from)) this.scene.resume(this.from);
   }
 }

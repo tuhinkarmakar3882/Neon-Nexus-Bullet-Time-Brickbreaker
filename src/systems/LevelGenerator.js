@@ -2,8 +2,8 @@ import { GAME, BRICK } from '../config/Constants.js';
 import { rand, randInt, pick } from '../utils/Helpers.js';
 
 // Generates brick layout data: [{ x, y, w, h, type }]. Pure data — the scene
-// turns these into Brick game objects. Zone-aware (fixes the legacy overlap bug)
-// and never produces an empty field.
+// turns these into Brick game objects. Zone-aware and never produces an empty
+// field. Scales with the responsive design resolution.
 
 const LAYOUTS = ['grid', 'circle', 'diamond', 'tunnel', 'wave', 'perlin'];
 
@@ -20,9 +20,9 @@ export function randomBrickType() {
 
 export function buildLevel(level) {
   const fieldTop = BRICK.TOP_MARGIN;
-  const fieldHeight = GAME.HEIGHT * 0.52;
-  const fieldLeft = 40;
-  const fieldWidth = GAME.WIDTH - 80;
+  const fieldHeight = GAME.HEIGHT * 0.5;
+  const fieldLeft = Math.round(GAME.WIDTH * 0.04);
+  const fieldWidth = GAME.WIDTH - fieldLeft * 2;
 
   const zoneCount = randInt(2, 3);
   const zoneHeight = fieldHeight / zoneCount;
@@ -34,14 +34,13 @@ export function buildLevel(level) {
       x: fieldLeft,
       y: fieldTop + i * zoneHeight,
       width: fieldWidth,
-      height: zoneHeight - 10,
+      height: zoneHeight - BRICK.GAP,
     };
     const idx = (Math.random() * pool.length) | 0;
     const layout = pool.length ? pool.splice(idx, 1)[0] : pick(LAYOUTS);
     generateZone(bricks, zone, layout, level);
   }
 
-  // Safety net: guarantee at least a few bricks exist.
   if (bricks.length === 0) {
     generateZone(bricks, { x: fieldLeft, y: fieldTop, width: fieldWidth, height: zoneHeight }, 'grid', level);
   }
@@ -65,11 +64,10 @@ function generateZone(bricks, zone, layout, level) {
 }
 
 function colsRows(zone) {
-  const cols = Math.max(3, Math.floor(zone.width / (BRICK.WIDTH + BRICK.GAP)));
+  const cols = Math.max(4, Math.floor(zone.width / (BRICK.WIDTH + BRICK.GAP)));
   const rows = Math.max(1, Math.floor(zone.height / (BRICK.HEIGHT + BRICK.GAP)));
   const bw = (zone.width - (cols - 1) * BRICK.GAP) / cols;
-  const bh = BRICK.HEIGHT;
-  return { cols, rows, bw, bh };
+  return { cols, rows, bw, bh: BRICK.HEIGHT };
 }
 
 function gridLayout(bricks, zone) {
@@ -77,23 +75,19 @@ function gridLayout(bricks, zone) {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (Math.random() < 0.1) continue;
-      const x = zone.x + c * (bw + BRICK.GAP);
-      const y = zone.y + r * (bh + BRICK.GAP);
-      place(bricks, x, y, bw, bh);
+      place(bricks, zone.x + c * (bw + BRICK.GAP), zone.y + r * (bh + BRICK.GAP), bw, bh);
     }
   }
 }
 
 function tunnelLayout(bricks, zone) {
   const { cols, rows, bw, bh } = colsRows(zone);
-  const gapStart = Math.floor(cols * 0.4);
-  const gapEnd = Math.ceil(cols * 0.6);
+  const gapStart = Math.floor(cols * 0.42);
+  const gapEnd = Math.ceil(cols * 0.58);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (c >= gapStart && c < gapEnd) continue;
-      const x = zone.x + c * (bw + BRICK.GAP);
-      const y = zone.y + r * (bh + BRICK.GAP);
-      place(bricks, x, y, bw, bh);
+      place(bricks, zone.x + c * (bw + BRICK.GAP), zone.y + r * (bh + BRICK.GAP), bw, bh);
     }
   }
 }
@@ -104,9 +98,7 @@ function waveLayout(bricks, zone, level) {
     for (let c = 0; c < cols; c++) {
       const phase = (c / cols + level / 10) * Math.PI * 2;
       const offset = Math.sin(phase) * (bh * 0.5);
-      const x = zone.x + c * (bw + BRICK.GAP);
-      const y = zone.y + r * (bh + BRICK.GAP) + offset;
-      place(bricks, x, y, bw, bh);
+      place(bricks, zone.x + c * (bw + BRICK.GAP), zone.y + r * (bh + BRICK.GAP) + offset, bw, bh);
     }
   }
 }
@@ -114,13 +106,11 @@ function waveLayout(bricks, zone, level) {
 function circleLayout(bricks, zone) {
   const cx = zone.x + zone.width / 2;
   const cy = zone.y + zone.height / 2;
-  const radius = Math.min(zone.width, zone.height) / 2.4;
-  const total = 18;
+  const radius = Math.min(zone.width, zone.height) / 2.3;
+  const total = Math.max(12, Math.round(radius / (BRICK.WIDTH * 0.6)));
   for (let i = 0; i < total; i++) {
     const a = (Math.PI * 2 * i) / total;
-    const x = cx + Math.cos(a) * radius - BRICK.WIDTH / 2;
-    const y = cy + Math.sin(a) * radius - BRICK.HEIGHT / 2;
-    place(bricks, x, y, BRICK.WIDTH, BRICK.HEIGHT);
+    place(bricks, cx + Math.cos(a) * radius - BRICK.WIDTH / 2, cy + Math.sin(a) * radius - BRICK.HEIGHT / 2, BRICK.WIDTH, BRICK.HEIGHT);
   }
 }
 
@@ -133,9 +123,7 @@ function diamondLayout(bricks, zone) {
   for (let i = -layers; i <= layers; i++) {
     const count = layers - Math.abs(i) + 1;
     for (let j = 0; j < count; j++) {
-      const x = cx + (j - (count - 1) / 2) * stepX - BRICK.WIDTH / 2;
-      const y = cy + i * stepY - BRICK.HEIGHT / 2;
-      place(bricks, x, y, BRICK.WIDTH, BRICK.HEIGHT);
+      place(bricks, cx + (j - (count - 1) / 2) * stepX - BRICK.WIDTH / 2, cy + i * stepY - BRICK.HEIGHT / 2, BRICK.WIDTH, BRICK.HEIGHT);
     }
   }
 }
@@ -146,15 +134,12 @@ function perlinLayout(bricks, zone, level) {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (valueNoise(c * 0.6 + seed, r * 0.6) > 0.52) {
-        const x = zone.x + c * (bw + BRICK.GAP);
-        const y = zone.y + r * (bh + BRICK.GAP);
-        place(bricks, x, y, bw, bh);
+        place(bricks, zone.x + c * (bw + BRICK.GAP), zone.y + r * (bh + BRICK.GAP), bw, bh);
       }
     }
   }
 }
 
-// Lightweight 2D value noise (no external dependency).
 function hash(x, y) {
   const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return n - Math.floor(n);

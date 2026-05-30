@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME, SCENES, BRICK } from '../config/Constants.js';
+import { GAME, SCENES } from '../config/Constants.js';
 import { POWERS, POWER_KEYS } from '../config/PowerUps.js';
 import { GAME_OVER_MESSAGES, LEVEL_CLEARED_MESSAGES } from '../config/Messages.js';
 import { Background } from '../objects/Background.js';
@@ -14,7 +14,7 @@ import { audio } from '../systems/AudioManager.js';
 import { Monetization } from '../systems/Monetization.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { addCameraFx } from '../utils/UI.js';
-import { rand, pick, clamp, dropChance, levelScale } from '../utils/Helpers.js';
+import { pick, clamp, dropChance, levelScale, lerpColor } from '../utils/Helpers.js';
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -26,11 +26,11 @@ export class GameScene extends Phaser.Scene {
     addCameraFx(this, { bloom: 1.0 });
     this.bg = new Background(this, 0x00ffc3);
 
-    // State
     this.score = 0;
     this.lives = GAME.STARTING_LIVES;
     this.continues = GAME.CONTINUES;
     this.level = 1;
+    this.combo = 0;
     this.timeScale = 1;
     this.bulletTimeRemaining = 0;
     this.over = false;
@@ -45,44 +45,41 @@ export class GameScene extends Phaser.Scene {
     this.laserAccum = 0;
     this.frame = 0;
 
-    // Power timing
     this.powerSys = new PowerUpSystem();
     this.powerSys.onExpire = (key) => this.onPowerExpire(key);
 
-    // Entities
     this.paddle = new Paddle(this);
     this.balls = [new Ball(this, this.paddle)];
     this.bricks = [];
     this.bullets = [];
     this.powers = [];
 
-    // Field FX layers
     this.blackHoleGfx = this.add.graphics().setDepth(8);
     this.echoGfx = this.add.graphics().setDepth(9);
     this.shieldGfx = this.add.graphics().setDepth(7);
 
     this.createEmitters();
     this.spawnLevel();
-
     this.setupInput();
 
-    // HUD
     this.scene.launch(SCENES.HUD);
     this.bus = this.game.events;
     this.emitStats();
     this.emitPowers();
+    this._hintShown = false;
 
-    this.flash('LEVEL ' + this.level, '#00ffc3', 1200);
-
+    this.time.delayedCall(80, () => this.flash('LEVEL ' + this.level, '#00ffc3', 1100));
     this.events.on('shutdown', () => this.cleanup());
   }
 
   cleanup() {
     this.bus?.emit('hud:flash', { text: '', color: '#fff', ms: 0 });
+    this.bus?.emit('hud:hint', false);
   }
 
   // ---------------- INPUT ----------------
   setupInput() {
+    this.bus = this.game.events;
     this.input.on('pointermove', (p) => {
       if (this.over || this.transitioning) return;
       this.paddle.setPointer(p.worldX);
@@ -97,9 +94,8 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-SPACE', () => this.releaseBalls());
     this.input.keyboard.on('keydown-ENTER', () => this.releaseBalls());
     this.input.keyboard.on('keydown-P', () => this.requestPause());
+    this.input.keyboard.on('keydown-ESC', () => this.requestPause());
 
-    // pause/settings requests from HUD buttons
-    this.bus = this.game.events;
     this._onPauseReq = () => this.requestPause();
     this.game.events.on('req:pause', this._onPauseReq);
     this.events.once('shutdown', () => this.game.events.off('req:pause', this._onPauseReq));
@@ -115,16 +111,16 @@ export class GameScene extends Phaser.Scene {
     this.balls.forEach((b) => b.release());
   }
 
-  // ---------------- EMITTERS ----------------
+  // ---------------- EMITTERS / FX ----------------
   createEmitters() {
     this.hitEmitter = this.add.particles(0, 0, 'spark', {
-      speed: { min: 60, max: 220 }, scale: { start: 0.7, end: 0 },
-      lifespan: 400, blendMode: 'ADD', emitting: false,
+      speed: { min: 80, max: 280 }, scale: { start: 0.8, end: 0 },
+      lifespan: 420, blendMode: 'ADD', emitting: false,
     }).setDepth(30);
 
     this.explodeEmitter = this.add.particles(0, 0, 'soft', {
-      speed: { min: 120, max: 420 }, scale: { start: 1.0, end: 0 },
-      lifespan: 700, blendMode: 'ADD', emitting: false, tint: 0xffd23d,
+      speed: { min: 160, max: 520 }, scale: { start: 1.2, end: 0 },
+      lifespan: 750, blendMode: 'ADD', emitting: false, tint: 0xffd23d,
     }).setDepth(31);
   }
 
@@ -134,11 +130,19 @@ export class GameScene extends Phaser.Scene {
     this.hitEmitter.explode(count, x, y);
   }
 
+  floatText(x, y, msg, color, size = 30) {
+    const t = this.add.text(x, y, msg, {
+      fontFamily: 'Orbitron, monospace', fontSize: size + 'px', fontStyle: 'bold', color,
+    }).setOrigin(0.5).setDepth(41);
+    t.setShadow(0, 0, color, 10, true, true);
+    this.tweens.add({ targets: t, y: y - 64, alpha: 0, duration: 720, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
+  }
+
   // ---------------- LEVEL ----------------
   spawnLevel() {
     const data = buildLevel(this.level);
     this.bricks = data.map((b) => new Brick(this, b.x, b.y, b.w, b.h, b.type, this.level));
-    this.bg.setAccent(pick([0x00ffc3, 0xff2bd6, 0x00b3ff, 0xffd23d, 0xaa66ff]));
+    this.bg.setAccent(pick([0x00ffc3, 0xff2bd6, 0x2b9bff, 0xffd23d, 0xaa66ff]));
     this.emitStats();
   }
 
@@ -154,33 +158,25 @@ export class GameScene extends Phaser.Scene {
     const def = POWERS[key];
     if (!def) return;
 
-    if (this.settings.flashText) this.flash(key, '#' + def.color.toString(16).padStart(6, '0'));
+    if (this.settings.flashText) this.flash(key, '#' + def.color.toString(16).padStart(6, '0'), 700);
     audio.power();
     if (def.bulletTime && this.settings.bulletTime) this.triggerBulletTime();
 
-    if (def.kind === 'timed' || def.kind === 'field') {
-      this.powerSys.activate(key, def.dur);
-    }
+    if (def.kind === 'timed' || def.kind === 'field') this.powerSys.activate(key, def.dur);
 
     switch (key) {
-      case 'Expand': this.paddle.setWidth(this.paddle.w * 1.3); break;
-      case 'Reduce': this.paddle.setWidth(this.paddle.w * 0.8); break;
+      case 'Expand': this.paddle.setWidth(this.paddle.w * 1.35); break;
+      case 'Reduce': this.paddle.setWidth(this.paddle.w * 0.75); break;
       case 'Magnet': this.paddle.magnet = true; break;
       case 'Glue': this.paddle.sticky = true; break;
       case 'Reverse': this.paddle.reversed = true; break;
       case 'Wrap': this.wrap = true; break;
       case 'Freeze': this.freeze = true; break;
       case 'Laser': this.laserAccum = 0; break;
-      case 'Shield': break; // handled in collision + render
-      case 'Flip':
-        this.cameras.main.setRotation(Math.PI);
-        break;
-      case 'Velocity':
-        this.balls.forEach((b) => b.setSpeed(b.speed * 1.2));
-        break;
-      case 'Chill':
-        this.balls.forEach((b) => b.setSpeed(b.speed * 0.7));
-        break;
+      case 'Shield': break;
+      case 'Flip': this.cameras.main.setRotation(Math.PI); break;
+      case 'Velocity': this.balls.forEach((b) => b.setSpeed(b.speed * 1.25)); break;
+      case 'Chill': this.balls.forEach((b) => b.setSpeed(b.speed * 0.65)); break;
       case 'Missile':
         this.powerSys.clear('Gravity');
         this.balls.forEach((b) => { b.missile = true; b.gravity = false; });
@@ -189,35 +185,22 @@ export class GameScene extends Phaser.Scene {
         this.powerSys.clear('Missile');
         this.balls.forEach((b) => { b.gravity = true; b.missile = false; });
         break;
-      case 'Teleport':
-        this.balls.forEach((b) => { b.teleport = true; });
-        break;
-      case 'ChargeShot':
-        this.chargeReady = true;
-        this.balls.forEach((b) => { b.chargeReady = true; });
-        break;
-      case 'Echo':
-        this.echo = true;
-        this.echoSegments = new Array(8).fill(true);
-        break;
+      case 'Teleport': this.balls.forEach((b) => { b.teleport = true; }); break;
+      case 'ChargeShot': this.chargeReady = true; this.balls.forEach((b) => { b.chargeReady = true; }); break;
+      case 'Echo': this.echo = true; this.echoSegments = new Array(8).fill(true); break;
       case 'Burst': this.doBurst(); break;
-      case 'Heart':
-        this.lives++;
-        this.bus.emit('hud:life');
-        break;
+      case 'Heart': this.lives++; this.bus.emit('hud:life'); break;
       case 'Joker': {
-        const opts = POWER_KEYS.filter((p) => p !== 'Joker');
-        this.applyPower(pick(opts));
+        const got = pick(POWER_KEYS.filter((p) => p !== 'Joker'));
+        this.flash('JOKER \u2192 ' + got, '#00ff00', 900);
+        this.applyPower(got);
         break;
       }
       case 'Shuffle':
         this.bricks.forEach((b) => { b.type = randomBrickType(); b.hp = b.type === 'boss' ? 3 : 1; b.redraw(); });
         break;
       case 'Squeeze':
-        if (!this.squeezed) {
-          this.squeezed = true;
-          this.bricks.forEach((b) => b.setScale(0.7));
-        }
+        if (!this.squeezed) { this.squeezed = true; this.bricks.forEach((b) => b.setScale(0.7)); }
         break;
       case 'BlackHole': this.spawnBlackHole(); break;
     }
@@ -241,10 +224,7 @@ export class GameScene extends Phaser.Scene {
       case 'Chill': this.balls.forEach((b) => b.setSpeed(GAME.BALL_MIN_SPEED * 1.15)); break;
       case 'Flip': this.cameras.main.setRotation(0); break;
       case 'BlackHole': this.blackHole = null; this.blackHoleGfx.clear(); break;
-      case 'Squeeze':
-        this.squeezed = false;
-        this.bricks.forEach((b) => b.setScale(1));
-        break;
+      case 'Squeeze': this.squeezed = false; this.bricks.forEach((b) => b.setScale(1)); break;
     }
     this.emitPowers();
   }
@@ -252,7 +232,7 @@ export class GameScene extends Phaser.Scene {
   doBurst() {
     const main = this.balls[0];
     if (!main) return;
-    [0.35, -0.35].forEach((off) => {
+    [0.4, -0.4, 0.8, -0.8].forEach((off) => {
       if (this.balls.length >= GAME.MAX_BALLS) return;
       const nb = new Ball(this, this.paddle);
       nb.stuck = false;
@@ -270,7 +250,7 @@ export class GameScene extends Phaser.Scene {
     const alive = this.bricks.filter((b) => b.alive);
     if (alive.length === 0) { this.powerSys.clear('BlackHole'); return; }
     const b = pick(alive);
-    this.blackHole = { x: b.cx, y: b.cy, r: 220 * levelScale(this.level, 0.6, 1.2), angle: 0 };
+    this.blackHole = { x: b.cx, y: b.cy, r: GAME.HEIGHT * 0.2 * levelScale(this.level, 0.7, 1.2), angle: 0 };
   }
 
   triggerBulletTime() {
@@ -279,7 +259,7 @@ export class GameScene extends Phaser.Scene {
     this.bulletTimeRemaining = GAME.BULLET_TIME_MS;
   }
 
-  // ---------------- COMBAT EVENTS ----------------
+  // ---------------- COMBAT ----------------
   spawnBullet(x, y, vy, owner) {
     if (this.bullets.length >= GAME.MAX_BULLETS) return;
     this.bullets.push(new Bullet(this, x, y, vy, owner));
@@ -287,12 +267,10 @@ export class GameScene extends Phaser.Scene {
 
   explode(brick) {
     audio.explode();
-    this.cameras.main.shake(220, 0.012);
+    this.cameras.main.shake(220, 0.01);
     if (this.settings.bulletTime) this.triggerBulletTime();
-    if (this.settings.particles) this.explodeEmitter.explode(26, brick.cx, brick.cy);
+    if (this.settings.particles) this.explodeEmitter.explode(28, brick.cx, brick.cy);
     this.spawnRipple(brick.cx, brick.cy);
-
-    // One-level splash (no recursion) within radius.
     this.bricks.forEach((b) => {
       if (!b.alive || b === brick) return;
       if (Math.hypot(b.cx - brick.cx, b.cy - brick.cy) < GAME.EXPLODE_RADIUS) {
@@ -306,19 +284,24 @@ export class GameScene extends Phaser.Scene {
   spawnRipple(x, y) {
     const ring = this.add.image(x, y, 'ring').setDepth(32).setTint(0xffd23d).setBlendMode('ADD');
     ring.setScale(0.1).setAlpha(0.9);
-    this.tweens.add({
-      targets: ring, scale: 2.6, alpha: 0, duration: 600, ease: 'Cubic.easeOut',
-      onComplete: () => ring.destroy(),
-    });
+    this.tweens.add({ targets: ring, scale: 3.2, alpha: 0, duration: 620, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
   }
 
   destroyBrick(brick, fromBall) {
     brick.alive = false;
-    this.score += GAME.SCORE_BRICK;
-    if (this.settings.particles) this.burstHit(brick.cx, brick.cy, brick.fillColor(), 8);
-    audio.brick();
+    audio.brick(fromBall ? this.combo : 0);
+    if (fromBall) {
+      this.combo++;
+      const mult = Math.min(6, 1 + Math.floor(this.combo / 4));
+      const pts = GAME.SCORE_BRICK * mult;
+      this.score += pts;
+      const col = mult > 1 ? '#ffd23d' : '#ffffff';
+      this.floatText(brick.cx, brick.cy, (mult > 1 ? `+${pts} x${mult}` : `+${pts}`), col, mult > 1 ? 34 : 26);
+    } else {
+      this.score += GAME.SCORE_BRICK;
+    }
+    if (this.settings.particles) this.burstHit(brick.cx, brick.cy, lerpColor(brick.fillColor(), 0xffffff, 0.4), 9);
     if (brick.type === 'explode') this.explode(brick);
-    // drop chance
     if (Math.random() < dropChance(this.level) && this.powers.length < GAME.MAX_POWERS) {
       this.powers.push(new PowerUp(this, brick.x, brick.y, pick(POWER_KEYS)));
     }
@@ -330,24 +313,22 @@ export class GameScene extends Phaser.Scene {
     if (this.balls.length > 0) return;
 
     audio.lose();
+    this.combo = 0;
     this.lives--;
     this.bus.emit('hud:life');
     this.powerSys.clearAll();
     this.paddle.reset();
     this.cameras.main.setRotation(0);
 
-    if (this.lives <= 0) {
-      this.gameOver();
-      return;
-    }
-    this.flash(pick(GAME_OVER_MESSAGES), '#ff3131', 1400);
-    const nb = new Ball(this, this.paddle);
-    this.balls.push(nb);
+    if (this.lives <= 0) { this.gameOver(); return; }
+    this.flash(pick(GAME_OVER_MESSAGES), '#ff3131', 1300);
+    this.balls.push(new Ball(this, this.paddle));
   }
 
   enemyStun() {
     this.paddle.stun(800);
-    this.cameras.main.flash(180, 120, 0, 0);
+    this.combo = 0;
+    this.cameras.main.flash(160, 120, 0, 0);
     if (this.settings.bulletTime) this.triggerBulletTime();
     if (this.settings.flashText) this.flash('STUN!', '#ff3131', 700);
     this.score = Math.max(0, this.score - GAME.SCORE_STUN_PENALTY);
@@ -362,14 +343,11 @@ export class GameScene extends Phaser.Scene {
     if (this.score > hs) SaveManager.setHighScore(this.score);
     this.scene.pause();
     this.scene.launch(SCENES.GAMEOVER, {
-      score: this.score,
-      highScore: Math.max(hs, this.score),
-      continues: this.continues,
-      message: pick(GAME_OVER_MESSAGES),
+      score: this.score, highScore: Math.max(hs, this.score),
+      continues: this.continues, message: pick(GAME_OVER_MESSAGES),
     });
   }
 
-  // Called by GameOverScene
   doContinue() {
     if (this.continues <= 0) { this.doRestart(); return; }
     this.continues--;
@@ -388,55 +366,43 @@ export class GameScene extends Phaser.Scene {
     this.scene.start(SCENES.GAME);
   }
 
-  doResume() {
-    this.scene.resume();
-  }
+  doResume() { this.scene.resume(); }
 
-  // ---------------- LEVEL FLOW ----------------
   completeLevel() {
     this.transitioning = true;
+    this.combo = 0;
     if (this.score > SaveManager.getHighScore()) SaveManager.setHighScore(this.score);
     audio.levelUp();
     this.scene.pause();
     Monetization.maybeShowLevelInterstitial();
-    this.scene.launch(SCENES.LEVEL_COMPLETE, {
-      level: this.level,
-      message: pick(LEVEL_CLEARED_MESSAGES),
-    });
+    this.scene.launch(SCENES.LEVEL_COMPLETE, { level: this.level, message: pick(LEVEL_CLEARED_MESSAGES) });
   }
 
-  // Called by LevelCompleteScene when its timer ends.
   startNextLevel() {
     this.level++;
     this.lives++;
     this.powerSys.clearAll();
     this.cameras.main.setRotation(0);
-    this.bricks.forEach((b) => b.destroy());
-    this.bricks = [];
-    this.bullets.forEach((b) => b.destroy());
-    this.bullets = [];
-    this.powers.forEach((p) => p.destroy());
-    this.powers = [];
+    this.bricks.forEach((b) => b.destroy()); this.bricks = [];
+    this.bullets.forEach((b) => b.destroy()); this.bullets = [];
+    this.powers.forEach((p) => p.destroy()); this.powers = [];
     this.balls.forEach((b) => b.destroy());
     this.paddle.reset();
     this.balls = [new Ball(this, this.paddle)];
-    this.blackHole = null;
-    this.echo = false;
+    this.blackHole = null; this.echo = false;
     this.spawnLevel();
     this.transitioning = false;
     this.scene.resume();
-    this.flash('LEVEL ' + this.level, '#00ffc3', 1200);
+    this.flash('LEVEL ' + this.level, '#00ffc3', 1100);
     this.emitStats();
     this.emitPowers();
   }
 
-  // ---------------- HUD COMMS ----------------
+  // ---------------- HUD ----------------
   emitStats() {
     this.bus?.emit('hud:stats', {
-      score: this.score,
-      lives: this.lives,
-      level: this.level,
-      bricksLeft: this.bricks.filter((b) => b.alive).length,
+      score: this.score, lives: this.lives, level: this.level,
+      bricksLeft: this.bricks.filter((b) => b.alive).length, combo: this.combo,
     });
   }
 
@@ -446,36 +412,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   flash(text, color, ms = 800) {
-    if (!this.settings.flashText && color === '#00ffc3') { /* still allow level text */ }
     this.bus?.emit('hud:flash', { text, color, ms });
   }
 
-  // ---------------- MAIN UPDATE ----------------
+  // ---------------- UPDATE ----------------
   update(time, delta) {
-    const realDt = delta; // ms
+    const realDt = delta;
     this.bg.update(realDt / 1000);
-
     if (this.over || this.transitioning) return;
 
-    // bullet-time countdown uses real time (pause-safe via scene pause)
     if (this.bulletTimeRemaining > 0) {
       this.bulletTimeRemaining -= realDt;
       if (this.bulletTimeRemaining <= 0) this.timeScale = 1;
     }
 
     const ts = this.timeScale;
-    const dtSec = Math.min(realDt / 1000, 1 / 20) * ts; // cap huge frames
+    const dtSec = Math.min(realDt / 1000, 1 / 20) * ts;
     const dtMs = realDt * ts;
     this.frame++;
 
-    // power timing
     this.powerSys.tick(dtMs);
 
-    // keyboard paddle
     if (this.cursors.left.isDown) this.paddle.moveByKeyboard(-1, realDt / 1000, ts);
     if (this.cursors.right.isDown) this.paddle.moveByKeyboard(1, realDt / 1000, ts);
 
-    // laser auto-fire
     if (this.powerSys.isActive('Laser')) {
       this.laserAccum += dtMs;
       while (this.laserAccum >= GAME.LASER_FIRE_MS) {
@@ -486,41 +446,34 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    this.updateBlackHole(dtSec, dtMs);
+    this.updateBlackHole(dtSec);
     this.updateEcho();
 
-    // bricks
     this.bricks.forEach((br) => {
       if (!br.alive) return;
-      if (br.update(dtMs, this.freeze)) {
-        this.spawnBullet(br.cx, br.y + br.h, GAME.CANNON_BULLET_SPEED, 'enemy');
-      }
+      if (br.update(dtMs, this.freeze)) this.spawnBullet(br.cx, br.y + br.h, GAME.CANNON_BULLET_SPEED, 'enemy');
     });
 
     this.updateBalls(dtSec);
     this.updateBullets(dtSec, ts);
     this.updatePowers(dtSec, ts);
 
-    // cull dead bricks
     const before = this.bricks.length;
     this.bricks = this.bricks.filter((b) => { if (!b.alive) { b.destroy(); return false; } return true; });
     if (this.bricks.length !== before) this.emitStats();
 
-    // sync visuals
     this.paddle.sync();
     this.balls.forEach((b) => b.sync());
     this.bricks.forEach((b) => b.sync());
     this.bullets.forEach((b) => b.sync());
     this.powers.forEach((p) => p.sync());
-
     this.renderFieldFx();
 
-    // level clear
-    if (this.bricks.length === 0) {
-      this.completeLevel();
-      return;
-    }
+    // launch hint
+    const anyStuck = this.balls.some((b) => b.stuck);
+    if (anyStuck !== this._hintShown) { this._hintShown = anyStuck; this.bus.emit('hud:hint', anyStuck); }
 
+    if (this.bricks.length === 0) { this.completeLevel(); return; }
     this.emitStats();
   }
 
@@ -534,10 +487,24 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
+      // steering forces
+      if (ball.missile) {
+        const desired = Math.atan2(this.paddle.y - ball.y, this.paddle.x - ball.x);
+        let cur = Math.atan2(ball.vy, ball.vx);
+        const diff = Phaser.Math.Angle.Wrap(desired - cur);
+        cur += clamp(diff, -3.2 * dtSec, 3.2 * dtSec);
+        ball.vx = Math.cos(cur) * ball.speed;
+        ball.vy = Math.sin(cur) * ball.speed;
+      } else if (ball.gravity) {
+        ball.vy += GAME.HEIGHT * 0.5 * dtSec;
+        const sp = Math.hypot(ball.vx, ball.vy);
+        const cap = ball.speed * 1.5;
+        if (sp > cap) { const k = cap / sp; ball.vx *= k; ball.vy *= k; }
+      }
+
       ball.x += ball.vx * dtSec;
       ball.y += ball.vy * dtSec;
 
-      // side walls
       if (this.wrap) {
         if (ball.x < -ball.r) ball.x = GAME.WIDTH + ball.r;
         else if (ball.x > GAME.WIDTH + ball.r) ball.x = -ball.r;
@@ -545,30 +512,16 @@ export class GameScene extends Phaser.Scene {
         if (ball.x <= ball.r) { ball.x = ball.r; ball.vx = Math.abs(ball.vx); audio.wall(); }
         else if (ball.x >= GAME.WIDTH - ball.r) { ball.x = GAME.WIDTH - ball.r; ball.vx = -Math.abs(ball.vx); audio.wall(); }
       }
-      // top
       if (ball.y < ball.r) { ball.y = ball.r; ball.vy = Math.abs(ball.vy); audio.wall(); }
 
-      // shield bounce
-      if (this.powerSys.isActive('Shield') && ball.y + ball.r > GAME.HEIGHT - 14) {
+      if (this.powerSys.isActive('Shield') && ball.y + ball.r > GAME.HEIGHT - 16) {
         ball.vy = -Math.abs(ball.vy);
-        ball.y = GAME.HEIGHT - 14 - ball.r;
+        ball.y = GAME.HEIGHT - 16 - ball.r;
         this.powerSys.clear('Shield');
         this.emitPowers();
       }
 
-      // bottom -> lost
       if (ball.y > GAME.HEIGHT + ball.r) { this.ballLost(ball); continue; }
-
-      // curve forces
-      if (ball.missile || ball.gravity) {
-        const ang = Math.atan2(this.paddle.y - ball.y, this.paddle.x - ball.x);
-        const strength = (ball.missile ? -1 : 1) * 5.0;
-        ball.vx += Math.cos(ang) * strength * 60 * dtSec;
-        ball.vy += Math.sin(ang) * strength * 60 * dtSec;
-        const sp = Math.hypot(ball.vx, ball.vy) || ball.speed;
-        const scale = ball.speed / sp;
-        ball.vx *= scale; ball.vy *= scale;
-      }
 
       // paddle collision
       if (ball.vy > 0 &&
@@ -580,11 +533,10 @@ export class GameScene extends Phaser.Scene {
         ball.vy = -Math.abs(ball.speed * Math.cos(ang));
         ball.y = this.paddle.top - ball.r;
         ball.enforceMinVertical();
+        this.combo = 0; // combo resets on paddle touch
         audio.paddle();
-        if (this.paddle.sticky) {
-          ball.stuck = true;
-          ball.stuckOffset = ball.x - this.paddle.x;
-        }
+        if (this.settings.particles) this.burstHit(ball.x, this.paddle.top, this.paddle.color(), 4);
+        if (this.paddle.sticky) { ball.stuck = true; ball.stuckOffset = ball.x - this.paddle.x; }
       }
 
       this.ballBrickCollisions(ball);
@@ -607,33 +559,28 @@ export class GameScene extends Phaser.Scene {
         const oneShot = this.chargeReady;
         const killed = br.hit(oneShot ? 99 : 1);
         if (this.settings.particles) this.burstHit(ball.x, ball.y, 0xffffff, 5);
-
         if (oneShot) { this.chargeReady = false; this.powerSys.clear('ChargeShot'); this.balls.forEach((b) => (b.chargeReady = false)); }
 
-        if (killed) {
-          this.destroyBrick(br, true);
-        } else {
-          audio.brick();
-        }
-        if (!ball.teleport) break; // one bounce per frame unless phasing
+        if (killed) this.destroyBrick(br, true);
+        else audio.brick(0);
+        if (!ball.teleport) break;
       }
     }
   }
 
-  updateBlackHole(dtSec, dtMs) {
+  updateBlackHole(dtSec) {
     if (!this.blackHole) return;
     const bh = this.blackHole;
     bh.angle += 2 * dtSec;
     for (const b of this.bricks) {
       if (!b.alive) continue;
-      const dx = bh.x - b.cx;
-      const dy = bh.y - b.cy;
+      const dx = bh.x - b.cx, dy = bh.y - b.cy;
       const dist = Math.hypot(dx, dy);
       if (dist >= bh.r) continue;
-      const pull = ((bh.r - dist) / bh.r) * 260 * dtSec;
+      const pull = ((bh.r - dist) / bh.r) * GAME.HEIGHT * 0.22 * dtSec;
       b.x += (dx / dist) * pull;
       b.y += (dy / dist) * pull;
-      if (dist < 22) {
+      if (dist < 24) {
         b.alive = false;
         this.score += GAME.SCORE_BLACKHOLE;
         if (this.settings.particles) this.burstHit(b.cx, b.cy, 0xffffff, 3);
@@ -644,13 +591,12 @@ export class GameScene extends Phaser.Scene {
   updateEcho() {
     if (!this.echo || !this.balls[0]) return;
     const count = this.echoSegments.length;
-    const r = 110;
+    const r = GAME.HEIGHT * 0.09;
     const cx = this.balls[0].x, cy = this.balls[0].y;
     this.echoSegments.forEach((alive, i) => {
       if (!alive) return;
       const ang = this.frame * 0.06 + (Math.PI * 2 / count) * i;
-      const rx = cx + Math.cos(ang) * r;
-      const ry = cy + Math.sin(ang) * r;
+      const rx = cx + Math.cos(ang) * r, ry = cy + Math.sin(ang) * r;
       for (const b of this.bricks) {
         if (b.alive && rx > b.x && rx < b.x + b.w && ry > b.y && ry < b.y + b.h) {
           b.alive = false;
@@ -667,11 +613,8 @@ export class GameScene extends Phaser.Scene {
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const b = this.bullets[i];
       let remove = false;
-
-      if (b.owner === 'enemy' &&
-        b.y > this.paddle.top && b.x > this.paddle.left && b.x < this.paddle.right) {
-        this.enemyStun();
-        remove = true;
+      if (b.owner === 'enemy' && b.y > this.paddle.top && b.x > this.paddle.left && b.x < this.paddle.right) {
+        this.enemyStun(); remove = true;
       } else if (b.owner === 'player') {
         for (const br of this.bricks) {
           if (!br.alive) continue;
@@ -679,16 +622,11 @@ export class GameScene extends Phaser.Scene {
             const killed = br.hit(1);
             if (this.settings.particles) this.burstHit(b.x, b.y, 0xff3131, 4);
             if (killed) this.destroyBrick(br, false);
-            remove = true;
-            break;
+            remove = true; break;
           }
         }
       }
-
-      if (!remove) {
-        b.update(dtSec, ts);
-        if (b.y < -20 || b.y > GAME.HEIGHT + 20) remove = true;
-      }
+      if (!remove) { b.update(dtSec, ts); if (b.y < -20 || b.y > GAME.HEIGHT + 20) remove = true; }
       if (remove) { b.destroy(); this.bullets.splice(i, 1); }
     }
   }
@@ -697,50 +635,41 @@ export class GameScene extends Phaser.Scene {
     for (let i = this.powers.length - 1; i >= 0; i--) {
       const p = this.powers[i];
       p.update(dtSec, ts, this.paddle);
-      if (p.overlapsPaddle(this.paddle)) {
-        this.applyPower(p.key);
-        p.destroy();
-        this.powers.splice(i, 1);
-        continue;
-      }
+      if (p.overlapsPaddle(this.paddle)) { this.applyPower(p.key); p.destroy(); this.powers.splice(i, 1); continue; }
       if (p.y > GAME.HEIGHT) { p.destroy(); this.powers.splice(i, 1); }
     }
   }
 
   renderFieldFx() {
-    // shield floor
     this.shieldGfx.clear();
     if (this.powerSys.isActive('Shield')) {
-      this.shieldGfx.fillStyle(POWERS.Shield.color, 0.35 + 0.15 * Math.sin(this.frame * 0.2));
-      this.shieldGfx.fillRect(0, GAME.HEIGHT - 14, GAME.WIDTH, 14);
+      this.shieldGfx.fillStyle(POWERS.Shield.color, 0.32 + 0.16 * Math.sin(this.frame * 0.2));
+      this.shieldGfx.fillRect(0, GAME.HEIGHT - 16, GAME.WIDTH, 16);
     }
 
-    // black hole vortex
     this.blackHoleGfx.clear();
     if (this.blackHole) {
       const bh = this.blackHole;
       this.blackHoleGfx.fillStyle(0x000000, 0.7);
-      this.blackHoleGfx.fillCircle(bh.x, bh.y, bh.r * 0.35);
+      this.blackHoleGfx.fillCircle(bh.x, bh.y, bh.r * 0.32);
       for (let k = 0; k < 3; k++) {
-        const rr = bh.r * (0.5 + k * 0.22);
         this.blackHoleGfx.lineStyle(3, POWERS.BlackHole.color, 0.5 - k * 0.12);
         this.blackHoleGfx.beginPath();
-        this.blackHoleGfx.arc(bh.x, bh.y, rr, bh.angle + k, bh.angle + k + Math.PI * 1.5);
+        this.blackHoleGfx.arc(bh.x, bh.y, bh.r * (0.5 + k * 0.22), bh.angle + k, bh.angle + k + Math.PI * 1.5);
         this.blackHoleGfx.strokePath();
       }
     }
 
-    // echo nodes
     this.echoGfx.clear();
     if (this.echo && this.balls[0]) {
       const count = this.echoSegments.length;
-      const r = 110;
+      const r = GAME.HEIGHT * 0.09;
       const cx = this.balls[0].x, cy = this.balls[0].y;
-      this.echoGfx.fillStyle(POWERS.Echo.color, 0.8);
+      this.echoGfx.fillStyle(POWERS.Echo.color, 0.85);
       this.echoSegments.forEach((alive, i) => {
         if (!alive) return;
         const ang = this.frame * 0.06 + (Math.PI * 2 / count) * i;
-        this.echoGfx.fillCircle(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, 7);
+        this.echoGfx.fillCircle(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, 8);
       });
     }
   }
