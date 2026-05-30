@@ -22,15 +22,15 @@ export class HUDScene extends Phaser.Scene {
     this.scoreText = this.add.text(36, 34, 'SCORE 0', labelStyle('30px', '#00ffc3'));
     this.levelText = this.add.text(W / 2, 34, 'LV 1', labelStyle('30px', '#cfe9ff')).setOrigin(0.5, 0);
     this.bricksText = this.add.text(W / 2, 68, 'BRICKS 0', labelStyle('20px', '#9fb4cc')).setOrigin(0.5, 0);
-    this.livesText = this.add.text(W - 36, 34, '\u2665 3', labelStyle('30px', '#ff5a8a')).setOrigin(1, 0);
+    this.livesText = this.add.text(W - 92, 34, '\u2665 3', labelStyle('30px', '#ff5a8a')).setOrigin(1, 0);
 
-    // Pause button
-    this.pauseBtn = this.add.container(W - 36, 78);
+    // Pause button (top-right of the bar)
+    this.pauseBtn = this.add.container(W - 44, 58);
     const pb = this.add.graphics();
     pb.fillStyle(0x00ffc3, 1); pb.fillRoundedRect(-24, -16, 48, 32, 8);
     pb.fillStyle(0x05060a, 1); pb.fillRect(-8, -8, 5, 16); pb.fillRect(3, -8, 5, 16);
     this.pauseBtn.add(pb);
-    this.pauseBtn.setSize(60, 44).setOrigin(1, 0.5);
+    this.pauseBtn.setSize(60, 44);
     this.pauseBtn.setInteractive(new Phaser.Geom.Rectangle(-30, -22, 60, 44), Phaser.Geom.Rectangle.Contains);
     this.pauseBtn.on('pointerup', () => bus.emit('req:pause'));
 
@@ -71,7 +71,7 @@ export class HUDScene extends Phaser.Scene {
   drawChips(list) {
     this.chips.removeAll(true);
     const chipW = 132, chipH = 40, gap = 10;
-    const perRow = Math.floor((GAME.WIDTH - 24) / (chipW + gap));
+    const perRow = Math.max(1, Math.floor((GAME.WIDTH - 24) / (chipW + gap)));
     list.forEach((p, i) => {
       const row = Math.floor(i / perRow);
       const col = i % perRow;
