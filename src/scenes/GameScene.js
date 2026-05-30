@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME, SCENES, JARDINAIN } from '../config/Constants.js';
-import { PAL } from '../config/Palette.js';
+import { PAL, cssHex } from '../config/Palette.js';
 import { POWERS, rollPower } from '../config/PowerUps.js';
 import { GAME_OVER_MESSAGES, LEVEL_CLEARED_MESSAGES } from '../config/Messages.js';
 import { Background } from '../objects/Background.js';
@@ -11,13 +11,18 @@ import { Bullet } from '../objects/Bullet.js';
 import { PowerUp } from '../objects/PowerUp.js';
 import { Jardinain } from '../objects/Jardinain.js';
 import { Pot } from '../objects/Pot.js';
+import { Enemy } from '../objects/Enemy.js';
+import { Gem } from '../objects/Gem.js';
 import { PowerUpSystem } from '../systems/PowerUpSystem.js';
 import { buildLevel } from '../systems/LevelGenerator.js';
 import { audio } from '../systems/AudioManager.js';
 import { Monetization } from '../systems/Monetization.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { addCameraFx } from '../utils/UI.js';
-import { pick, clamp } from '../utils/Helpers.js';
+import { pick, clamp, rand } from '../utils/Helpers.js';
+
+const SCORE_ENEMY = 220;
+const GEM_VALUE = 150;
 
 export class GameScene extends Phaser.Scene {
   constructor() { super(SCENES.GAME); }
@@ -26,7 +31,6 @@ export class GameScene extends Phaser.Scene {
     this.settings = SaveManager.loadSettings();
     addCameraFx(this, { bloom: 0.65 });
     this.bg = new Background(this, PAL.accent);
-    this.drawArena();
 
     this.score = 0;
     this.lives = GAME.STARTING_LIVES;
@@ -40,6 +44,7 @@ export class GameScene extends Phaser.Scene {
     this.laserAccum = 0;
     this.frame = 0;
     this._hintShown = false;
+    this.enemyTimer = 0;
 
     this.powerSys = new PowerUpSystem();
     this.powerSys.onExpire = (key) => this.onPowerExpire(key);
@@ -51,7 +56,10 @@ export class GameScene extends Phaser.Scene {
     this.powers = [];
     this.pots = [];
     this.jardinains = [];
+    this.enemies = [];
+    this.gems = [];
 
+    this.arenaGfx = this.add.graphics().setDepth(5);
     this.shieldGfx = this.add.graphics().setDepth(7);
     this.aimGfx = this.add.graphics().setDepth(23);
 
@@ -64,7 +72,7 @@ export class GameScene extends Phaser.Scene {
     this.emitStats();
     this.emitPowers();
 
-    this.time.delayedCall(80, () => this.flash(this.isBoss ? 'FORTRESS' : 'LEVEL ' + this.level, this.isBoss ? '#ffd770' : '#2fe6c7', 1200));
+    this.time.delayedCall(80, () => this.levelFlash());
     this.events.on('shutdown', () => this.cleanup());
   }
 
@@ -73,24 +81,26 @@ export class GameScene extends Phaser.Scene {
     this.bus?.emit('hud:hint', false);
   }
 
-  drawArena() {
+  levelFlash() {
+    const t = this.theme?.name || '';
+    this.flash((this.isBoss ? 'FORTRESS' : 'LEVEL ' + this.level) + (t ? '  \u00b7  ' + t.toUpperCase() : ''),
+      cssHex(this.isBoss ? PAL.gold : (this.theme?.bg ?? PAL.accent)), 1300);
+  }
+
+  drawArena(accent) {
     const W = GAME.WIDTH, H = GAME.HEIGHT, wx = GAME.WALL_X, wt = GAME.WALL_TOP;
-    const g = this.add.graphics().setDepth(5);
-    const draw = (x, y, w, h) => {
-      g.fillStyle(0x121830, 1); g.fillRect(x, y, w, h);
-      g.fillStyle(0x222c4a, 1); g.fillRect(x + 2, y + 2, w - 4, h - 4);
-    };
-    draw(0, wt, wx, H - wt);
-    draw(W - wx, wt, wx, H - wt);
-    draw(0, wt - 14, W, 16);
-    // inner energy edges
-    g.lineStyle(2, PAL.accent, 0.5);
+    const g = this.arenaGfx;
+    g.clear();
+    const slab = (x, y, w, h) => { g.fillStyle(0x121830, 1); g.fillRect(x, y, w, h); g.fillStyle(0x222c4a, 1); g.fillRect(x + 2, y + 2, w - 4, h - 4); };
+    slab(0, wt, wx, H - wt);
+    slab(W - wx, wt, wx, H - wt);
+    slab(0, wt - 14, W, 16);
+    g.lineStyle(2, accent, 0.55);
     g.lineBetween(wx, wt, wx, H);
     g.lineBetween(W - wx, wt, W - wx, H);
     g.lineBetween(wx, wt, W - wx, wt);
-    // corner nodes
-    g.fillStyle(PAL.accent, 0.9);
-    [[wx, wt], [W - wx, wt]].forEach(([x, y]) => g.fillCircle(x, y, 5));
+    g.fillStyle(accent, 0.9);
+    g.fillCircle(wx, wt, 5); g.fillCircle(W - wx, wt, 5);
   }
 
   setupInput() {
@@ -116,12 +126,8 @@ export class GameScene extends Phaser.Scene {
   releaseBalls() { this.balls.forEach((b) => b.release()); }
 
   createEmitters() {
-    this.hitEmitter = this.add.particles(0, 0, 'spark', {
-      speed: { min: 90, max: 320 }, scale: { start: 0.9, end: 0 }, lifespan: 450, blendMode: 'ADD', emitting: false,
-    }).setDepth(30);
-    this.explodeEmitter = this.add.particles(0, 0, 'soft', {
-      speed: { min: 180, max: 560 }, scale: { start: 1.3, end: 0 }, lifespan: 800, blendMode: 'ADD', emitting: false, tint: 0xffb24d,
-    }).setDepth(31);
+    this.hitEmitter = this.add.particles(0, 0, 'spark', { speed: { min: 90, max: 320 }, scale: { start: 0.9, end: 0 }, lifespan: 450, blendMode: 'ADD', emitting: false }).setDepth(30);
+    this.explodeEmitter = this.add.particles(0, 0, 'soft', { speed: { min: 180, max: 560 }, scale: { start: 1.3, end: 0 }, lifespan: 800, blendMode: 'ADD', emitting: false, tint: 0xffb24d }).setDepth(31);
   }
 
   burst(x, y, color, count = 8) {
@@ -137,16 +143,18 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------- LEVEL ----------------
   spawnLevel() {
-    const { bricks, isBoss } = buildLevel(this.level);
-    this.isBoss = isBoss;
+    const { bricks, isBoss, theme } = buildLevel(this.level);
+    this.isBoss = isBoss; this.theme = theme;
     this.bricks = bricks.map((b) => new Brick(this, b.x, b.y, b.w, b.h, b.type, b.color, this.level));
-    // jardinains on nest bricks
-    this.bricks.forEach((b) => {
-      if (b.type === 'nest' && this.jardinains.length < JARDINAIN.MAX_ALIVE) {
-        this.jardinains.push(new Jardinain(this, b));
-      }
-    });
-    this.bg.setAccent(pick([PAL.accent, PAL.accent2, PAL.info, PAL.accent3]));
+    this.bricks.forEach((b) => { if (b.type === 'nest' && this.jardinains.length < JARDINAIN.MAX_ALIVE) this.jardinains.push(new Jardinain(this, b)); });
+
+    this.bg.setAccent(theme.bg);
+    this.drawArena(theme.wall);
+
+    this.maxEnemies = clamp(1 + Math.floor(this.level / 2), 1, 5) + (isBoss ? 2 : 0);
+    this.enemySpawnMs = clamp(9000 - this.level * 450, 3800, 9000);
+    this.enemyTimer = this.enemySpawnMs * 0.7;
+
     this.emitStats();
   }
 
@@ -221,7 +229,7 @@ export class GameScene extends Phaser.Scene {
 
   spawnBullet(x, y, vy) { if (this.bullets.length < GAME.MAX_BULLETS) this.bullets.push(new Bullet(this, x, y, vy)); }
 
-  explodeAt(x, y, sourceColor) {
+  explodeAt(x, y) {
     audio.explode();
     this.cameras.main.shake(200, 0.009);
     if (this.settings.bulletTime) this.triggerBulletTime();
@@ -251,13 +259,15 @@ export class GameScene extends Phaser.Scene {
       const pts = base * mult;
       this.score += pts;
       this.floatText(brick.cx, brick.cy, mult > 1 ? `+${pts} x${mult}` : `+${pts}`, mult > 1 ? '#ffd23d' : '#e8eefc', mult > 1 ? 32 : 24);
-    } else {
-      this.score += base;
-    }
+    } else { this.score += base; }
     if (this.settings.particles) this.burst(brick.cx, brick.cy, brick.color, 9);
-    if (exploded) this.explodeAt(brick.cx, brick.cy, brick.color);
+    if (exploded) this.explodeAt(brick.cx, brick.cy);
+
     if (Math.random() < this.dropChance() && this.powers.length < GAME.MAX_POWERS) {
       this.powers.push(new PowerUp(this, brick.cx - 1, brick.cy, rollPower()));
+    } else if (Math.random() < 0.09 && this.gems.length < 12) {
+      const val = brick.type === 'silver' ? 220 : GEM_VALUE;
+      this.gems.push(new Gem(this, brick.cx, brick.cy, val, 0x9ff0ff));
     }
   }
 
@@ -268,22 +278,19 @@ export class GameScene extends Phaser.Scene {
     this.balls = this.balls.filter((b) => b !== ball);
     if (this.balls.length > 0) return;
     audio.lose();
-    this.combo = 0;
-    this.lives--;
-    this.bus.emit('hud:life');
-    this.powerSys.clearAll();
-    this.paddle.reset();
+    this.combo = 0; this.lives--; this.bus.emit('hud:life');
+    this.powerSys.clearAll(); this.paddle.reset();
     if (this.lives <= 0) { this.gameOver(); return; }
     this.flash(pick(GAME_OVER_MESSAGES), '#ff5a6e', 1200);
     this.balls.push(new Ball(this, this.paddle));
   }
 
-  potHitPaddle() {
+  stunPaddle(msg) {
     this.paddle.stun(750);
     this.combo = 0;
     this.cameras.main.flash(150, 120, 30, 0);
     if (this.settings.bulletTime) this.triggerBulletTime();
-    if (this.settings.flashText) this.flash('POTTED!', '#ff5a6e', 650);
+    if (this.settings.flashText) this.flash(msg, '#ff5a6e', 650);
     this.score = Math.max(0, this.score - GAME.SCORE_STUN_PENALTY);
     audio.lose();
   }
@@ -308,8 +315,7 @@ export class GameScene extends Phaser.Scene {
   doResume() { this.scene.resume(); }
 
   completeLevel() {
-    this.transitioning = true;
-    this.combo = 0;
+    this.transitioning = true; this.combo = 0;
     const bonus = GAME.SCORE_LEVEL_CLEAR + this.lives * 200;
     this.score += bonus;
     if (this.score > SaveManager.getHighScore()) SaveManager.setHighScore(this.score);
@@ -320,21 +326,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   startNextLevel() {
-    this.level++;
-    this.lives++;
+    this.level++; this.lives++;
     this.powerSys.clearAll();
     this.bricks.forEach((b) => b.destroy()); this.bricks = [];
     this.bullets.forEach((b) => b.destroy()); this.bullets = [];
     this.powers.forEach((p) => p.destroy()); this.powers = [];
     this.pots.forEach((p) => p.destroy()); this.pots = [];
     this.jardinains.forEach((j) => j.destroy()); this.jardinains = [];
+    this.enemies.forEach((e) => e.destroy()); this.enemies = [];
+    this.gems.forEach((gm) => gm.destroy()); this.gems = [];
     this.balls.forEach((b) => b.destroy());
     this.paddle.reset();
     this.balls = [new Ball(this, this.paddle)];
     this.spawnLevel();
     this.transitioning = false;
     this.scene.resume();
-    this.flash(this.isBoss ? 'FORTRESS' : 'LEVEL ' + this.level, this.isBoss ? '#ffd770' : '#2fe6c7', 1200);
+    this.levelFlash();
     this.emitStats(); this.emitPowers();
   }
 
@@ -373,11 +380,24 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // enemy spawning (only once a ball is in play)
+    const inPlay = this.balls.some((b) => !b.stuck);
+    if (inPlay) {
+      this.enemyTimer -= dtMs;
+      if (this.enemyTimer <= 0 && this.enemies.length < this.maxEnemies) {
+        this.enemyTimer = rand(this.enemySpawnMs * 0.7, this.enemySpawnMs * 1.3);
+        const x = rand(GAME.WALL_X + 60, GAME.WIDTH - GAME.WALL_X - 60);
+        this.enemies.push(Enemy.random(this, x, this.level));
+      }
+    }
+
     this.updateJardinains(dtMs, dtSec);
+    this.updateEnemies(dtSec);
     this.updateBalls(dtSec);
     this.updateBullets(dtSec, ts);
     this.updatePots(dtSec, ts);
     this.updatePowers(dtSec, ts);
+    this.updateGems(dtSec, ts);
 
     const before = this.bricks.length;
     this.bricks = this.bricks.filter((b) => { if (!b.alive) { b.destroy(); return false; } return true; });
@@ -388,6 +408,8 @@ export class GameScene extends Phaser.Scene {
     this.bricks.forEach((b) => b.sync());
     this.bullets.forEach((b) => b.sync());
     this.pots.forEach((p) => p.sync());
+    this.enemies.forEach((e) => e.sync());
+    this.gems.forEach((gm) => gm.sync());
     this.powers.forEach((p) => p.sync());
     this.renderFx();
 
@@ -402,12 +424,27 @@ export class GameScene extends Phaser.Scene {
     for (let i = this.jardinains.length - 1; i >= 0; i--) {
       const j = this.jardinains[i];
       if (j._destroyed) { this.jardinains.splice(i, 1); continue; }
-      const wantThrow = j.update(dtMs, dtSec);
-      if (wantThrow && this.pots.length < 8) {
-        this.pots.push(new Pot(this, j.x, j.y, this.paddle.x));
-        audio.blip(220);
-      }
+      if (j.update(dtMs, dtSec) && this.pots.length < 8) { this.pots.push(new Pot(this, j.x, j.y, this.paddle.x)); audio.blip(220); }
     }
+  }
+
+  updateEnemies(dtSec) {
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i];
+      if (e._d) { this.enemies.splice(i, 1); continue; }
+      const res = e.update(dtSec, this.paddle);
+      if (res === 'attack') { this.stunPaddle('HIT!'); this.burst(e.x, e.y, e.color, 8); e.destroy(); this.enemies.splice(i, 1); }
+      else if (res === 'gone') { e.destroy(); this.enemies.splice(i, 1); }
+    }
+  }
+
+  killEnemy(e) {
+    e.kill();
+    this.score += SCORE_ENEMY;
+    this.floatText(e.x, e.y, `+${SCORE_ENEMY}`, '#' + e.color.toString(16).padStart(6, '0'), 28);
+    this.burst(e.x, e.y, e.color, 12);
+    this.cameras.main.shake(120, 0.006);
+    audio.blip(660);
   }
 
   updateBalls(dtSec) {
@@ -433,21 +470,19 @@ export class GameScene extends Phaser.Scene {
 
       if (ball.y > GAME.HEIGHT + ball.r) { this.ballLost(ball); continue; }
 
-      // jardinains
       for (const j of this.jardinains) {
         if (j.hitBy(ball)) {
-          j.knockout();
-          this.score += GAME.SCORE_JARDINAIN;
+          j.knockout(); this.score += GAME.SCORE_JARDINAIN;
           this.floatText(j.x, j.y, `+${GAME.SCORE_JARDINAIN}`, '#86e6b0', 30);
-          this.burst(j.x, j.y, 0x86e6b0, 12);
-          this.cameras.main.shake(120, 0.006);
-          ball.vy = -Math.abs(ball.vy);
-          audio.blip(880);
-          break;
+          this.burst(j.x, j.y, 0x86e6b0, 12); this.cameras.main.shake(120, 0.006);
+          ball.vy = -Math.abs(ball.vy); audio.blip(880); break;
         }
       }
 
-      // paddle
+      for (const e of this.enemies) {
+        if (e.hitBy(ball.x, ball.y, ball.r)) { this.killEnemy(e); if (!ball.through) ball.vy = -Math.abs(ball.vy); break; }
+      }
+
       if (ball.vy > 0 && ball.x + ball.r > this.paddle.left && ball.x - ball.r < this.paddle.right &&
         ball.y + ball.r > this.paddle.top && ball.y - ball.r < this.paddle.y + this.paddle.h / 2) {
         const rel = (ball.x - this.paddle.x) / (this.paddle.w / 2);
@@ -456,8 +491,7 @@ export class GameScene extends Phaser.Scene {
         ball.vy = -Math.abs(ball.speed * Math.cos(ang));
         ball.y = this.paddle.top - ball.r;
         ball.enforceMinVertical();
-        this.combo = 0;
-        audio.paddle();
+        this.combo = 0; audio.paddle();
         if (this.settings.particles) this.burst(ball.x, this.paddle.top, this.paddle.glowColor(), 4);
         if (this.paddle.sticky) { ball.stuck = true; ball.stuckOffset = clamp(ball.x - this.paddle.x, -this.paddle.w / 2, this.paddle.w / 2); }
       }
@@ -480,12 +514,8 @@ export class GameScene extends Phaser.Scene {
         const dmg = ball.mega ? 2 : 1;
         const killed = br.hit(dmg);
         if (this.settings.particles) this.burst(ball.x, ball.y, 0xffffff, 4);
-        if (killed) {
-          if (ball.bomb) this.explodeAt(br.cx, br.cy, br.color);
-          this.destroyBrick(br, true);
-        } else if (!br.indestructible) {
-          audio.brick(0);
-        }
+        if (killed) { if (ball.bomb) this.explodeAt(br.cx, br.cy); this.destroyBrick(br, true); }
+        else if (!br.indestructible) audio.brick(0);
         if (!passThrough) break;
       }
     }
@@ -505,14 +535,14 @@ export class GameScene extends Phaser.Scene {
           remove = true; break;
         }
       }
-      // bullets can knock jardinains too
       if (!remove) {
         for (const j of this.jardinains) {
-          if (!j._destroyed && Math.hypot(b.x - j.x, b.y - j.y) < j.r) {
-            j.knockout(); this.score += GAME.SCORE_JARDINAIN;
-            this.floatText(j.x, j.y, `+${GAME.SCORE_JARDINAIN}`, '#86e6b0', 28);
-            remove = true; break;
-          }
+          if (!j._destroyed && Math.hypot(b.x - j.x, b.y - j.y) < j.r) { j.knockout(); this.score += GAME.SCORE_JARDINAIN; this.floatText(j.x, j.y, `+${GAME.SCORE_JARDINAIN}`, '#86e6b0', 28); remove = true; break; }
+        }
+      }
+      if (!remove) {
+        for (const e of this.enemies) {
+          if (e.hitBy(b.x, b.y, 6)) { this.killEnemy(e); remove = true; break; }
         }
       }
       if (!remove) { b.update(dtSec, ts); if (b.y < -20) remove = true; }
@@ -524,11 +554,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = this.pots.length - 1; i >= 0; i--) {
       const p = this.pots[i];
       p.update(dtSec, ts);
-      if (p.hitsPaddle(this.paddle)) {
-        this.potHitPaddle();
-        this.burst(p.x, p.y, 0xc8773f, 8);
-        p.destroy(); this.pots.splice(i, 1); continue;
-      }
+      if (p.hitsPaddle(this.paddle)) { this.stunPaddle('POTTED!'); this.burst(p.x, p.y, 0xc8773f, 8); p.destroy(); this.pots.splice(i, 1); continue; }
       if (p.y > GAME.HEIGHT + 40) { p.destroy(); this.pots.splice(i, 1); }
     }
   }
@@ -542,6 +568,20 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  updateGems(dtSec, ts) {
+    for (let i = this.gems.length - 1; i >= 0; i--) {
+      const gm = this.gems[i];
+      gm.update(dtSec, ts, this.paddle);
+      if (gm.overlapsPaddle(this.paddle)) {
+        this.score += gm.value;
+        this.floatText(gm.x, this.paddle.top, `+${gm.value}`, '#9ff0ff', 26);
+        this.burst(gm.x, gm.y, 0x9ff0ff, 8); audio.blip(990);
+        gm.destroy(); this.gems.splice(i, 1); continue;
+      }
+      if (gm.y > GAME.HEIGHT) { gm.destroy(); this.gems.splice(i, 1); }
+    }
+  }
+
   renderFx() {
     this.shieldGfx.clear();
     if (this.powerSys.isActive('Shield')) {
@@ -549,8 +589,6 @@ export class GameScene extends Phaser.Scene {
       this.shieldGfx.fillStyle(POWERS.Shield.color, a);
       this.shieldGfx.fillRect(GAME.WALL_X, GAME.HEIGHT - 18, GAME.WIDTH - GAME.WALL_X * 2, 16);
     }
-
-    // aim line while any ball is stuck
     this.aimGfx.clear();
     const stuck = this.balls.find((b) => b.stuck);
     if (stuck) {

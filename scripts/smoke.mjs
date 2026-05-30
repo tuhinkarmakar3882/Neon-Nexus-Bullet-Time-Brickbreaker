@@ -6,7 +6,6 @@ import puppeteer from 'puppeteer-core';
 const PORT = 4319;
 const URL = `http://localhost:${PORT}/`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 function findChrome() {
   for (const p of ['/usr/bin/google-chrome-stable', '/usr/local/bin/google-chrome', '/usr/local/bin/chrome']) {
     try { execSync(`test -x ${p}`); return p; } catch {}
@@ -25,7 +24,8 @@ const browser = await puppeteer.launch({ executablePath: findChrome(), headless:
 const evalState = (page) => page.evaluate(() => {
   const g = window.__NEON; const gs = g.scene.getScene('Game');
   return { active: ['Menu', 'Game', 'HUD', 'GameOver', 'LevelComplete', 'Pause'].filter((k) => g.scene.isActive(k)),
-    score: gs?.score, level: gs?.level, lives: gs?.lives, balls: gs?.balls?.length, bricks: gs?.bricks?.length, continues: gs?.continues };
+    score: gs?.score, level: gs?.level, lives: gs?.lives, balls: gs?.balls?.length, bricks: gs?.bricks?.length,
+    enemies: gs?.enemies?.length, gems: gs?.gems?.length, theme: gs?.theme?.name, continues: gs?.continues };
 });
 async function waitFor(page, pred, timeout = 8000, step = 300) {
   let last; for (let t = 0; t < timeout; t += step) { last = await evalState(page); if (pred(last)) return last; await sleep(step); } return last;
@@ -53,8 +53,17 @@ try {
     const gs = window.__NEON.scene.getScene('Game');
     ['Laser','Expand','Catch','Slow','Multi','Magnet','Shield','Through','Bomb','Mega','Life'].forEach((k) => gs.applyPower(k));
   });
-  await sleep(800);
+  await sleep(700);
   console.log('PHASE powers:', JSON.stringify(await evalState(page)));
+
+  // Enemies + gems
+  await page.evaluate(() => {
+    const gs = window.__NEON.scene.getScene('Game');
+    gs.maxEnemies = 8; gs.enemyTimer = 0;
+    gs.balls.forEach((b) => { b.stuck = false; if (Math.abs(b.vy) < 60) b.vy = -420; });
+  });
+  await sleep(2800);
+  console.log('PHASE enemies:', JSON.stringify(await evalState(page)));
 
   // Level complete via tap-advance
   await page.evaluate(() => { const gs = window.__NEON.scene.getScene('Game'); gs.bricks.forEach((b) => (b.alive = false)); });
@@ -65,7 +74,6 @@ try {
   console.log('PHASE levelup:', JSON.stringify(lvl));
   if (lvl.level < 2) errors.push('did not advance to level 2');
 
-  // Game over
   await page.evaluate(() => { const gs = window.__NEON.scene.getScene('Game'); gs.lives = 1; gs.balls.forEach((b) => { b.stuck = false; b.y = 99999; b.vy = 1; }); });
   const go = await waitFor(page, (s) => s.active.includes('GameOver'), 4000);
   console.log('PHASE gameover:', JSON.stringify(go));
