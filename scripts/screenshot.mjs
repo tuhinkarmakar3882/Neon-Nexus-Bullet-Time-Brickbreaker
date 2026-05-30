@@ -36,7 +36,7 @@ async function shoot(name, w, h) {
   await page.mouse.click(Math.round(w / 2), Math.round(h * 0.7));
   await page.evaluate(() => {
     const gs = window.__NEON.scene.getScene('Game');
-    ['Echo', 'Laser', 'Expand', 'Shield', 'Burst', 'ChargeShot'].forEach((k) => gs.applyPower(k));
+    ['Laser', 'Expand', 'Mega', 'Shield', 'Multi'].forEach((k) => gs.applyPower(k));
   });
   await sleep(900);
   await page.screenshot({ path: `${OUT}/${name}-game.png` });
