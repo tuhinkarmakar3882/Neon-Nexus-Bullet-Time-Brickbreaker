@@ -10,11 +10,18 @@
     "build": "vite build",
     "preview": "vite preview --host",
     "test:smoke": "node scripts/smoke.mjs",
+    "gen:icons": "node scripts/gen-icons.mjs",
+    "prebuild": "node scripts/gen-icons.mjs",
     "cap:sync": "cap sync",
     "cap:android": "npm run build && cap sync android && cap open android",
     "cap:ios": "npm run build && cap sync ios && cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "lucide": "^0.511.0",
     "phaser": "3.90.0"
   },
   "devDependencies": {

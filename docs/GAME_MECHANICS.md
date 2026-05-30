@@ -1,178 +1,236 @@
-# Neon Nexus: Bullet-Time Brick Breaker — Game Mechanics Reference
+# Neon Nexus — Game Mechanics Reference (v2)
 
-This document is a complete reverse-engineered specification of the original game
-(`legacy/worker.js` + `legacy/app-worker-based.js`, with `legacy/app.js` being the
-single-threaded mirror). It is the design source-of-truth for the Phaser rewrite under
-`src/`.
+Player-facing rules and systems for the **Twilight Garden** Phaser build under `src/`.  
+For architecture and file maps, see [`ARCHITECTURE.md`](./ARCHITECTURE.md). For the product roadmap, see [`REDESIGN.md`](./REDESIGN.md). Index: [`README.md`](./README.md).
 
----
-
-## 1. High-level Concept
-
-A neon, arcade brick-breaker. The player controls a paddle at the bottom of the screen,
-launches a ball, and clears every brick on the field to advance levels. Destroying bricks
-randomly drops **power-up capsules**. Picking a capsule applies an effect and (optionally)
-briefly triggers **Bullet Time** (global slow-motion). Enemy "cannon" bricks shoot back.
-
-- **Goal per level:** destroy all bricks (`bricks.length <= 0`).
-- **Lives:** start with `3`. Losing all balls costs a life. `0` lives → Game Over.
-- **Continues:** `3` continues available after Game Over (`canContinue`).
-- **Score:** `+10` per brick (laser/ball), `+5` per black-hole kill, `+10` per echo kill.
-  Getting stunned by an enemy bullet costs `-10` (floored at 0).
-- **Level up:** on clear, `level++` and `lives++`, a "level complete" modal shows for 3s,
-  a fresh procedural layout is generated, and a random background track plays.
+> **Note:** The original canvas prototype is documented only as historical context in `legacy/`. This file describes the **current** game.
 
 ---
 
-## 2. Core Entities
+## 1. Core loop
 
-### Paddle
-- Base width `120`, height `18`, move speed `9`.
-- Controlled by **mouse** (pointer-lock, relative `movementX`), **touch** (absolute x),
-  or **keyboard** (`ArrowLeft` / `ArrowRight`).
-- State flags: `sticky` (Glue), `magnet` (Magnet), `isReversed` (Reverse), `stun` (frames),
-  `isLaserActive`, `isMissileActive`, `isGravityActive`.
-- Color reflects state: stunned `#5a5a5a`, sticky = Glue color, reversed = Reverse color,
-  otherwise white.
+1. **Menu** — Play, Resume, Shop, Codex, Settings.
+2. **Level** — Break bricks, knock out garden gnomes, meet optional level goals.
+3. **Clear** — Destroy all destructible bricks + satisfy goal → stars, treasury, next level.
+4. **Fail** — Lose all lives → Game Over (free continues + rewarded options).
 
-### Ball
-- Radius `8`. Speed scales with screen height (`MIN_SPEED`..`MAX_SPEED`, exponential map).
-- Starts **stuck** to the paddle; `release()` launches it. Launch angle is derived from where
-  it sits on the paddle, clamped to `MAX_BOUNCE_ANGLE = 60°`.
-- Paddle bounce: relative hit position → reflection angle (max 60°), preserving speed.
-- Wall behaviour: bounces off side/top walls; with **Wrap** active, side walls are Pac-Man
-  style wrap-around. Falling below the bottom edge loses the ball.
-- Modifiers: `missile` (boomerang curve back toward paddle, `strength -0.075`),
-  `gravity` (curve toward paddle, `strength +0.075`), `chargeReady` (one-shot brick destroyer),
-  teleport (passes through bricks instead of bouncing).
-- Ball color: charged `#FFAC33`, teleport `#72F2EB`, missile = Missile color, else white.
-
-### Brick (types)
-| Type      | HP | Behaviour | Color |
-|-----------|----|-----------|-------|
-| `static`  | 1  | Stationary. | translucent purple |
-| `moving`  | 1  | Oscillates horizontally `sin(t/600)*50`. | orange |
-| `explode` | 1  | On death: screen shake, ripple, particles, **splash kills all bricks within radius 90**. | yellow |
-| `cannon`  | 1  | Periodically fires an **enemy bullet** downward (`RATE 2500ms` scaled by level). | violet |
-| `boss`    | 3  | Takes 3 hits; color changes per remaining HP. | peach → orange → red |
-
-Spawn weights (`_randomBrickType`): explode 5%, moving 5%, cannon 3%, boss 2%, else static.
-
-### Bullet
-- `player` bullets (from Laser) travel up, destroy bricks. `enemy` bullets (from cannon)
-  travel down; hitting the paddle triggers **enemy stun**.
-
-### Power capsule
-- Falls at speed `2`. Attracted to the paddle when **Magnet** is active.
-- Collected when it overlaps the paddle; applies its power.
-
-### Particle
-- Small square, random velocity, fades over `life` frames. Capped at `MAX_PARTICLES = 150`.
+| Stat | Default |
+|------|---------|
+| Lives | 3 |
+| Continues | 2 |
+| Combo multiplier | Steps every 8 brick hits (max ×3) |
 
 ---
 
-## 3. Bullet Time / Time Scale
-- Global `timeScale` multiplies all motion. Normal `1`, bullet-time `0.25` for `1200ms`.
-- Triggered when picking up a power-up (if enabled) and on explosions / stuns.
-- A delta-time helper caps frame delta at 4 frames and multiplies by `timeScale`.
+## 2. Controls
+
+| Input | Action |
+|-------|--------|
+| ← / → or drag | Move paddle |
+| Tap / Space / Enter | Launch ball, fire cannons, release sticky ball |
+| Double-tap (in play) | Spend Nexus meter (partial slow-mo) or open power draft at full meter |
+| P / Esc | Pause |
 
 ---
 
-## 4. Level Generation
-A level is built from 2–4 stacked **zones** (`_createZones`), each filled with a distinct,
-non-repeating layout chosen from a pool:
-- `grid` — rows/cols grid with 10% random gaps.
-- `circle` — 16 bricks around a ring.
-- `diamond` — concentric diamond rows.
-- `tunnel` — grid with a vertical empty channel (cols 5–7).
-- `wave` — grid rows offset by a sine wave.
-- `perlin` — Perlin-noise mask (`noise.perlin2`) decides which cells get a brick.
+## 3. Jardinains (gnomes)
 
-Power-up drop chance per brick decays with level: `getProbability(level)` (≈0.7 → min 0.1).
-Cannon fire-rate and black-hole radius also scale with level via `getDecreasingProbability`.
+Gnomes **pop up** on eligible bricks during play (not pre-placed on every brick).
 
----
+| Action | Result |
+|--------|--------|
+| **Dislodge** | ~55% chance to drop a power capsule (`GNOME_DISLODGE_DROP_CHANCE`) |
+| **Juggle** | Score scales as `250 × 1.55^(n−1) × concurrency` (chain capped at 7, max 3 airborne gnomes counted) |
+| **Knockout** | After **3** paddle juggles on one gnome, or knocked off screen — guaranteed power drop + Nexus + streak |
 
-## 5. Power-Ups (complete catalogue)
+**Gnome streak meter** (left vertical HUD bar): fills from juggles/knockouts → at 100% opens a **3-choice positive power draft**.
 
-All durations in milliseconds from `CFG.DUR`. "Active" power-ups appear lit in the sidebar.
-
-| Power | Color | Dur (ms) | Effect |
-|-------|-------|----------|--------|
-| **Expand**     | `#0099FF` | 10000 | Paddle width ×1.3 (capped at 3× base / half screen). |
-| **Reduce**     | `#FF00AA` | 10000 | Paddle width ×0.8 (floored at 0.2× base). |
-| **Magnet**     | `#FFFF00` | 9000  | Falling capsules are pulled toward the paddle. |
-| **Glue**       | `#FFD700` | 15000 | Ball sticks to paddle on contact; re-launch with click/Space. |
-| **Laser**      | `#FF0066` | 7000  | Paddle auto-fires twin lasers every 200ms. |
-| **Shield**     | `#DDDDFF` | 15000 | A one-shot floor that bounces the ball once instead of losing it. |
-| **Flip**       | `#FF007F` | 7000  | Flips the view (`rotateX(180deg)`) — disorienting control invert. |
-| **Velocity**   | `#007FFF` | 10000 | Ball speed ×1.2 (capped at MAX_SPEED). |
-| **Chill**      | `#00FFAA` | 15000 | Ball speed ×0.7 (floored at MIN_SPEED), restored after. |
-| **Burst**      | `#FF00FF` | 5000  | Splits the main ball into +2 extra balls (±0.3 rad). |
-| **Heart**      | `#55FF55` | —     | +1 life. |
-| **Joker**      | `#00FF00` | 10000 | Applies a random *other* power-up. |
-| **Reverse**    | `#FF0055` | 5000  | Paddle controls inverted. |
-| **Wrap**       | `#FFFF33` | 15000 | Ball wraps around the side walls (Pac-Man). |
-| **Freeze**     | `#00FFFF` | 10000 | Freezes brick behaviour (moving/cannon) for the duration. |
-| **ChargeShot** | `#FFC300` | 15000 | Next brick hit is a one-shot kill (turns it into an explode). |
-| **BlackHole**  | `#FF0000` | 4000  | Spawns a vortex at a random brick that pulls in & destroys nearby bricks. |
-| **Missile**    | `#FF5733` | 7000  | Ball boomerangs back toward the paddle. |
-| **Gravity**    | `#AA00FF` | 5000  | Ball curves toward the paddle. |
-| **Echo**       | `#E0E0FF` | 8000  | 8 orbiting echo nodes around the ball destroy bricks they touch. |
-| **Teleport**   | `#00FFF0` | 8000  | Ball passes through bricks (no bounce) while destroying them. |
-| **Squeeze**    | `#FF4500` | 5000  | All bricks shrink to 70% for 5s, then restore. |
-| **Shuffle**    | `#FF8800` | 5000  | Randomly re-rolls every brick's type. |
-
-> Note: the original's `COLORS` map had several mislabeled comments (e.g. "Chill" commented
-> as orange but valued teal). The rewrite keeps the **values**, fixes the labels, and adds a
-> distinct color for `Shuffle` (the original reused/omitted it).
+**Tiers:** normal, heavy, speed, elite — see Codex → GNOMES tab after first knockout per tier.
 
 ---
 
-## 6. Visual / Audio Feedback
-- **Flash text** center-screen on power-up pickup and on life loss/level events.
-- **Screen shake** on explosions; **hue-rotate "hit"** flash on enemy stun.
-- **Shockwave ripples** on explosions (concentric dashed arcs).
-- **Confetti** on level clear (legacy single-thread version only).
-- **Background music**: random track per level from a Pixabay CDN playlist.
-- Neon glow via canvas `shadowBlur`/`shadowColor` in the original.
+## 4. Power-ups (44 keys)
+
+Catalog: `src/config/PowerUps.js` (`POWER_KEYS`). Capsules show category color, Lucide icon, and polarity (positive / **cursed** stripes / wild).
+
+### Drop sources
+
+| Source | Chance / rule |
+|--------|----------------|
+| Gnome dislodge | ~55% |
+| Gnome knockout | Always (if room on field) |
+| Random gnome drop roll | ~35% base (`GNOME_DROP_CHANCE`) when not forced |
+| Gnome streak draft | Player picks 1 of 3 |
+| Combo gambit (CASH) | Combo ≥8, cashes combo for instant power |
+| Silver / explosive / reinforced brick | Small % (`tryBrickPowerDrop`) |
+| Blessed / mystery capsules | Visual variants; blessed biases loadout |
+
+### Cursed capsules
+
+Negative powers **auto-apply** after ~5s if ignored (lower arena). Grab again to clear **Flip** early.
+
+### Fusion (tier II)
+
+Picking a power you already have active fuses to tier II (e.g. Laser → Laser II) — see `PowerFusion.js`.
+
+### Stacking
+
+| Category | Rule |
+|----------|------|
+| Cannons (Laser, Fire, Ice, Shock, Napalm) | Latest replaces previous |
+| Ball mods (Explosive, Nuke, Frost, Electric, …) | Latest replaces previous |
+| Paddle / env utilities | Stack concurrently |
+
+### Negatives (~10–24% by level)
+
+Reduce, SlowPaddle, Flip, HeavyBall, FogSight, GnomeRush, etc.
 
 ---
 
-## 7. Settings (persisted in `localStorage`)
-- `isSoundEnabled` — mute/unmute background music.
-- `isBulletTimeEnabled` — enable/disable slow-mo triggers.
-- `isFlashTextEnabled` — enable/disable center flash text.
+## 5. Nexus meter & bullet time
+
+**Right vertical HUD bar** — fills from combos, near-misses, gnome knockouts.
+
+| State | Action |
+|-------|--------|
+| Partial fill | Double-tap → spend meter for brief slow-mo |
+| Full meter | Auto-opens **3-choice positive power draft** (tap meter or double-tap to reopen) |
+
+Settings toggle can disable bullet-time FX. Active slow-mo shows **SLOW-MO** on the right meter.
 
 ---
 
-## 8. Bugs found in the original (fixed in the rewrite)
+## 6. Level goals (alternate win conditions)
 
-1. **Double game loop.** `Game` constructor calls `startLoop()` *and* the `INIT` handler calls
-   `game.startLoop()` again, running two `requestAnimationFrame` loops → effectively double
-   speed and double updates.
-2. **Procedural layout ignores zone X.** Grid/tunnel layouts hard-code `20 + c*bw` instead of
-   using `zone.x`, so multi-zone procedural levels overlap/misalign bricks.
-3. **`levelType` computed but never used** in `buildLevel` — always falls back to procedural.
-4. **`_blackHoleAngle` never initialized** → `NaN` rotation on first BlackHole.
-5. **BlackHole on empty/short brick arrays** → `rand(0, -1)` / `NaN` index.
-6. **Power expiry double-bookkeeping.** Powers are tracked both in the `active` map (expiry via
-   `performance.now()`) and via individual `setTimeout`s; `setTimeout`s keep running while the
-   game is paused, desyncing state.
-7. **Bullet-time fires on every pickup**, including instant powers, making the game feel sludgy.
-8. **Particle cap splice is wrong**: `splice(len - MAX, len)` removes the wrong slice.
-9. **Mouse vs keyboard paddle fight.** Mouse path writes `paddleX` while keyboard writes
-   `paddle.x`; they overwrite each other frame to frame.
-10. **Ball/paddle collision ignores ball radius** on the x-axis test, allowing edge clipping.
-11. **`RESIZE` case missing `break`** → falls through into `keydown` handling.
-12. **Explode splash** silently sets `alive=false` without awarding score or chaining, and can
-    recurse oddly with overlapping explode bricks.
-13. **Squeeze restore uses global `game`** and can stack if picked up repeatedly, permanently
-    shrinking bricks.
-14. **No upper bound on ball/paddle speed coupling** when Velocity + paddle bounce combine,
-    occasionally producing near-horizontal "stuck" balls (no minimum vertical velocity).
+Picked procedurally (~38% chance from level 3+). Fortress levels may use **Boss Perch**.
 
-The rewrite (`src/`) reimplements all mechanics on **Phaser 3** with a single fixed-step update
-loop, a unified input controller, a timer system that respects pause, a minimum vertical-velocity
-guard, correct zone-aware level generation, WebGL bloom/glow for the neon look, and stubbed
-monetization + cross-platform (PWA/Capacitor) packaging.
+| Goal | Win condition |
+|------|----------------|
+| Clear all | Default — destroy destructibles |
+| Rescue | ≥2 gnome knockouts before clear |
+| Silence | No pot may hit paddle |
+| Nest hunt | Destroy all nest bricks |
+| Escort | Protect lantern brick until clear |
+| Boss perch | Knock fortress gnome off perch, then clear |
+
+Goal + mutator text appears under the top HUD bar; mutator intro card at level start.
+
+---
+
+## 7. Mutators & biomes
+
+Up to **2 mutators** per level (from level 31+). All **13** mutators:
+
+FastBall · LowVisibility (Mist) · DoubleJardinains · NarrowArena · WideArena · GnomeSwarm · BrickFrenzy · HeavyGravity · PotMonsoon · GlassFloor · CannonsOnly · GnomeParliament · BrickBloom
+
+**Seasonal mutator** injected every 7 levels from `SeasonalMutators.js`.
+
+**Biomes** shift every 10 levels: Garden → Nexus → Frost → Ember (`Themes.js`).
+
+---
+
+## 8. Stars, treasury & meta
+
+| System | Rule |
+|--------|------|
+| **3-star levels** | 1★ for clear; +1★ par time (`90s + 8s × level`); +1★ no lives lost; +1★ ≥1 knockout (max 3★) |
+| **Treasury** | Stars ×50, combo bank milestones, shop currency |
+| **Treasury** | Stars ×50, combo bank milestones, shop currency |
+| **Gnome contracts** | Optional per-level bonus — no pot hits, elite knockout, juggle chain (`GnomeContracts.js`) |
+| **Codex journal** | Stats + achievements |
+
+Persistence: `MetaProgress.js` → `localStorage['nn_meta_v1']`.
+
+---
+
+## 9. Brick specials (tactical)
+
+Beyond normal/silver/reinforced: explosive, invisible, nest, boss, gold, steel, portal, shifting, **mirror**, **moss**, **beehive**, **seedpod**, **linked**, **hostage**.
+
+Fortress every **5** levels.
+
+---
+
+## 10. HUD layout
+
+| Zone | Content |
+|------|---------|
+| **Top bar** | Score, level, bricks, lives, pause, active power chips |
+| **Left vertical meter** | Gnome streak (fill bottom→top), CASH gambit button |
+| **Right vertical meter** | Nexus meter, treasury, slow-mo label |
+| **Below bar** | Goal line, mutator line |
+| **Immersive mode** | Settings toggle hides chrome; tap top to peek |
+
+---
+
+## 11. Monetization (cosmetic-first)
+
+Demo ad provider in dev; swap for AdMob/AdSense in production.
+
+| Moment | Reward |
+|--------|--------|
+| Game Over | Rewarded continue or **revive + 2 powers** |
+| Level clear | Optional 2× clear bonus (rewarded) |
+| Every 2 levels | Interstitial (90s cap; skipped with Remove Ads) |
+| Menu | Banner slot |
+| Shop | Paddle hulls, ball trails, garden themes (treasury / premium) |
+
+---
+
+## 12. Settings (persisted)
+
+Sound, music, volumes, bullet time, flash text, particles, scanlines, reduced FX, haptics, **immersive HUD**, remove ads IAP.
+
+---
+
+## 13. VFX, sound & animation
+
+All audio is **Web Audio synthesis** (`AudioManager.js`). All motion is **tween + particle** based — no sprite sheets.
+
+### Sound highlights
+
+| Moment | Audio |
+|--------|-------|
+| Brick hits | Pitch rises with combo |
+| Power pickup | Category stinger (paddle / ball / wild / env) |
+| Cursed pickup | Downward “wrong note” sweep |
+| Gnome pop-up | `gnomePop()` sweep |
+| Juggle chain | `juggle(n)` — pitch climbs with depth |
+| Knockout | `wowHit()` + `explode()` |
+| Near-miss | `clutch()` + CLUTCH! callout |
+| Nexus / slow-mo | `bulletTime()` wash |
+| Boss clear | `fortressShatter()` + arena shard burst |
+| Level clear | 5-note `levelUp()` arpeggio |
+
+Background music: Am–F–C–G loop at 102 BPM with pad, bass, arp, and light drums.
+
+### Visual highlights
+
+| Moment | FX |
+|--------|-----|
+| Level start | Bricks stagger-drop in; difficulty tier pulse |
+| Gnome spawn | Rise-pop + green ripple ring |
+| Knockout | Hit-stop slow-mo, confetti, radial blast, camera tilt |
+| Near-miss | Blue ripple + sparks + Nexus meter fill |
+| Big power | Screen punch, radial ring, optional confetti |
+| Cursed power | Red flash, paddle wobble, CURSED! surge text |
+| Fortress win | Wall shards, arena fade, screen punch |
+| Nexus burst | Row fire blasts + full slow-mo |
+
+Toggle **Reduced FX** in Settings to cut particles and bloom. Toggle **Bullet Time** to disable slow-mo overlay (meter still fills).
+
+Full catalog: [`ARCHITECTURE.md` §18](./ARCHITECTURE.md#18-audio-vfx--animation).
+
+---
+
+## 14. Legacy prototype
+
+`docs/GAME_MECHANICS.md` previously described the original 23-power canvas game. Fixed differences in v2:
+
+- Gnome-centric economy (not random brick drops as primary)
+- 44 power keys + tier-II fusion
+- Custom Phaser physics, pause-safe timers
+- Procedural fortress layouts, level goals, mutators
+- Meta progression, shop/cosmetics
+
+See [`legacy/`](../legacy/) for the old implementation only.

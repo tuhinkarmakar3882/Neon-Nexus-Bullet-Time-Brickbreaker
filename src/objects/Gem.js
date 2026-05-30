@@ -1,32 +1,22 @@
 import { GAME } from '../config/Constants.js';
 
-// A collectible gem that drops from bricks for bonus score. Magnet-attracted,
-// spins, and sparkles. Worth more than the brick that dropped it.
+/** Collectible garden dew crystal — bonus score. */
 export class Gem {
-  constructor(scene, x, y, value = 150, color = 0x7fefff) {
+  constructor(scene, x, y, value = 150, color = 0xb8f0e8) {
     this.scene = scene;
-    this.x = x; this.y = y;
+    this.x = x;
+    this.y = y;
     this.value = value;
     this.color = color;
-    this.r = Math.max(11, GAME.HEIGHT * 0.011);
+    this.r = Math.max(12, GAME.HEIGHT * 0.012);
     this.fall = GAME.HEIGHT * 0.1;
     this.spin = 0;
 
-    this.glow = scene.add.image(x, y, 'soft').setDepth(15).setTint(color).setAlpha(0.6)
-      .setBlendMode('ADD').setDisplaySize(this.r * 4, this.r * 4);
-    this.gfx = scene.add.graphics().setDepth(16);
-    this.draw();
-  }
-
-  draw() {
-    const g = this.gfx; const r = this.r; const c = this.color;
-    g.clear();
-    g.fillStyle(c, 1);
-    g.fillPoints([{ x: 0, y: -r }, { x: r * 0.8, y: -r * 0.2 }, { x: 0, y: r }, { x: -r * 0.8, y: -r * 0.2 }], true);
-    g.fillStyle(0xffffff, 0.85);
-    g.fillPoints([{ x: 0, y: -r }, { x: r * 0.8, y: -r * 0.2 }, { x: 0, y: -r * 0.1 }], true);
-    g.lineStyle(1.5, 0xffffff, 0.7);
-    g.strokePoints([{ x: 0, y: -r }, { x: r * 0.8, y: -r * 0.2 }, { x: 0, y: r }, { x: -r * 0.8, y: -r * 0.2 }], true);
+    this.glow = scene.add.image(x, y, 'soft').setDepth(15).setTint(color).setAlpha(0.5)
+      .setBlendMode('ADD').setDisplaySize(this.r * 3.8, this.r * 3.8);
+    this.sprite = scene.add.image(x, y, 'gem').setDepth(16).setTint(color);
+    this.spark = scene.add.image(x, y, 'spark').setDepth(17).setTint(0xffffff)
+      .setAlpha(0.55).setBlendMode('ADD').setDisplaySize(this.r * 0.8, this.r * 0.8);
   }
 
   update(dtSec, timeScale, paddle) {
@@ -43,9 +33,15 @@ export class Gem {
   }
 
   sync() {
-    this.gfx.setPosition(this.x, this.y).setScale(0.55 + 0.45 * Math.abs(Math.cos(this.spin)), 1);
+    const sx = 0.6 + 0.4 * Math.abs(Math.cos(this.spin));
+    this.sprite.setPosition(this.x, this.y).setDisplaySize(this.r * 2.2 * sx, this.r * 2.2);
     this.glow.setPosition(this.x, this.y);
+    this.spark.setPosition(this.x, this.y - this.r * 0.5).setAlpha(0.35 + 0.35 * Math.abs(Math.sin(this.spin * 2)));
   }
 
-  destroy() { this.gfx.destroy(); this.glow.destroy(); }
+  destroy() {
+    this.sprite.destroy();
+    this.glow.destroy();
+    this.spark.destroy();
+  }
 }

@@ -9,13 +9,19 @@
     "backgroundColor": "#05060a"
   },
   "ios": {
-    "contentInset": "always",
+    "contentInset": "never",
     "backgroundColor": "#05060a"
   },
   "plugins": {
     "SplashScreen": {
       "backgroundColor": "#05060a",
       "showSpinner": false
+    },
+    "AdMob": {
+      "appId": "ca-app-pub-3940256099942544~3347511713",
+      "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+      "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+      "isTesting": true
     }
   }
 }

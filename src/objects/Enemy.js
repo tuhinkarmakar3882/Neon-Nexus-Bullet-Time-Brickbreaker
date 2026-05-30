@@ -1,13 +1,9 @@
 import { GAME } from '../config/Constants.js';
+import { PAL } from '../config/Palette.js';
 
-// Wandering Arkanoid-style mobs. Three kinds with distinct looks + behaviour:
-//   drifter — hexagon drone, slow sway descent
-//   chaser  — arrowhead that steers toward the paddle
-//   zigzag  — diamond that strafes side to side
-// Killed by ball or laser (deflects the ball + points). If it reaches the
-// paddle it detonates and stuns you.
+// Garden pests — moth, hornet, firefly. Twilight palette, organic silhouettes.
 const KINDS = ['drifter', 'chaser', 'zigzag'];
-const COLORS = { drifter: 0xb14dff, chaser: 0xff5a6e, zigzag: 0xffb24d };
+const COLORS = { drifter: PAL.info, chaser: PAL.danger, zigzag: PAL.accent };
 
 export class Enemy {
   constructor(scene, kind, x, level) {
@@ -20,6 +16,7 @@ export class Enemy {
     this.alive = true;
     this.spin = 0;
     this.flip = 0;
+    this.wingPhase = Math.random() * Math.PI * 2;
 
     const base = GAME.HEIGHT * 0.05 + level * 5;
     this.vy = Math.min(base, GAME.HEIGHT * 0.12);
@@ -27,7 +24,7 @@ export class Enemy {
     this.swayPhase = Math.random() * Math.PI * 2;
 
     this.glow = scene.add.image(this.x, this.y, 'soft').setDepth(12).setTint(this.color)
-      .setAlpha(0.55).setBlendMode('ADD').setDisplaySize(this.r * 4, this.r * 4);
+      .setAlpha(0.42).setBlendMode('ADD').setDisplaySize(this.r * 3.6, this.r * 3.6);
     this.gfx = scene.add.graphics().setDepth(13);
     this.draw();
   }
@@ -35,41 +32,66 @@ export class Enemy {
   static random(scene, x, level) { return new Enemy(scene, null, x, level); }
 
   draw() {
-    const g = this.gfx; const r = this.r; const c = this.color;
+    const g = this.gfx;
+    const r = this.r;
+    const c = this.color;
     g.clear();
-    g.lineStyle(2, 0xffffff, 0.5);
-    if (this.kind === 'drifter') {
-      g.fillStyle(c, 1); this.poly(g, 6, r, 0);
-      g.fillStyle(0x05060c, 0.6); this.poly(g, 6, r * 0.55, this.spin);
-      g.fillStyle(0xffffff, 0.9); g.fillCircle(0, 0, r * 0.22);
-    } else if (this.kind === 'chaser') {
-      g.fillStyle(c, 1);
-      g.fillTriangle(0, r, -r * 0.9, -r * 0.7, r * 0.9, -r * 0.7);
-      g.fillStyle(0x05060c, 0.5); g.fillCircle(0, -r * 0.2, r * 0.28);
-      g.fillStyle(0xffffff, 0.9); g.fillCircle(0, -r * 0.2, r * 0.14);
-    } else {
-      g.fillStyle(c, 1); this.poly(g, 4, r, Math.PI / 4);
-      g.lineStyle(3, 0xffffff, 0.7);
-      g.lineBetween(-r * 0.5, 0, r * 0.5, 0);
-      g.lineBetween(0, -r * 0.5, 0, r * 0.5);
-    }
-  }
 
-  poly(g, sides, rad, rot) {
-    const pts = [];
-    for (let i = 0; i < sides; i++) {
-      const a = rot + (Math.PI * 2 * i) / sides - Math.PI / 2;
-      pts.push({ x: Math.cos(a) * rad, y: Math.sin(a) * rad });
+    if (this.kind === 'drifter') {
+      // lunar moth — wide wings
+      const wing = 0.55 + 0.45 * Math.abs(Math.sin(this.wingPhase));
+      g.fillStyle(c, 0.35);
+      g.fillEllipse(-r * 0.9 * wing, -r * 0.1, r * 0.85, r * 1.1);
+      g.fillEllipse(r * 0.9 * wing, -r * 0.1, r * 0.85, r * 1.1);
+      g.fillStyle(c, 1);
+      g.fillEllipse(0, 0, r * 0.35, r * 0.7);
+      g.fillStyle(0xfff8ef, 0.9);
+      g.fillCircle(-r * 0.12, -r * 0.25, r * 0.1);
+      g.fillCircle(r * 0.12, -r * 0.25, r * 0.1);
+      g.fillStyle(0x120818, 0.8);
+      g.fillCircle(-r * 0.12, -r * 0.22, r * 0.05);
+      g.fillCircle(r * 0.12, -r * 0.22, r * 0.05);
+      g.lineStyle(1.5, 0xffffff, 0.4);
+      g.lineBetween(-r * 0.5, r * 0.1, r * 0.5, r * 0.1);
+    } else if (this.kind === 'chaser') {
+      // hornet — pointed body, stripes
+      g.fillStyle(c, 0.3);
+      g.fillEllipse(-r * 0.7, 0, r * 0.55, r * 0.45);
+      g.fillEllipse(r * 0.7, 0, r * 0.55, r * 0.45);
+      g.fillStyle(c, 1);
+      g.fillEllipse(0, 0, r * 0.55, r * 0.95);
+      g.fillStyle(0x120818, 0.55);
+      g.fillRect(-r * 0.45, -r * 0.15, r * 0.9, r * 0.12);
+      g.fillRect(-r * 0.4, r * 0.08, r * 0.8, r * 0.1);
+      g.fillStyle(0xfff8ef, 0.85);
+      g.fillCircle(0, -r * 0.35, r * 0.18);
+      g.fillStyle(0x120818, 0.7);
+      g.fillCircle(-r * 0.06, -r * 0.35, r * 0.05);
+      g.fillCircle(r * 0.06, -r * 0.35, r * 0.05);
+      g.fillStyle(c, 1);
+      g.fillTriangle(0, r * 0.55, -r * 0.12, r * 0.35, r * 0.12, r * 0.35);
+    } else {
+      // firefly beetle — round shell
+      g.fillStyle(c, 0.25);
+      g.fillEllipse(-r * 0.75, -r * 0.05, r * 0.6, r * 0.5);
+      g.fillEllipse(r * 0.75, -r * 0.05, r * 0.6, r * 0.5);
+      g.fillStyle(c, 1);
+      g.fillCircle(0, 0, r * 0.82);
+      g.fillStyle(0xfff8ef, 0.5);
+      g.fillEllipse(0, -r * 0.15, r * 0.5, r * 0.35);
+      g.lineStyle(2, 0xffffff, 0.45);
+      g.strokeCircle(0, 0, r * 0.82);
+      g.fillStyle(0xfff8ef, 0.95);
+      g.fillCircle(0, r * 0.55, r * 0.14);
+      g.fillStyle(c, 0.8);
+      g.fillCircle(0, -r * 0.55, r * 0.12);
     }
-    g.beginPath();
-    g.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
-    g.closePath(); g.fillPath();
   }
 
   update(dtSec, paddle) {
     if (!this.alive) return null;
-    const lw = GAME.WALL_X + this.r, rw = GAME.WIDTH - GAME.WALL_X - this.r;
+    const lw = GAME.WALL_X + this.r;
+    const rw = GAME.WIDTH - GAME.WALL_X - this.r;
 
     if (this.kind === 'chaser') {
       const dir = Math.sign(paddle.x - this.x) || 1;
@@ -88,11 +110,10 @@ export class Enemy {
     if (this.x < lw) { this.x = lw; this.vx = Math.abs(this.vx); }
     else if (this.x > rw) { this.x = rw; this.vx = -Math.abs(this.vx); }
 
-    this.spin += dtSec * (this.kind === 'zigzag' ? 6 : 3);
+    this.spin += dtSec * (this.kind === 'zigzag' ? 5 : 2);
+    this.wingPhase += dtSec * 12;
+    if (this.kind === 'drifter' || this.kind === 'chaser') this.draw();
 
-    if (this.kind === 'drifter') this.draw();
-
-    // reached the paddle line?
     if (this.y + this.r >= paddle.top && this.x > paddle.left - this.r && this.x < paddle.right + this.r) return 'attack';
     if (this.y > GAME.HEIGHT + this.r * 2) return 'gone';
     return null;
@@ -103,18 +124,23 @@ export class Enemy {
   }
 
   sync() {
-    this.gfx.setPosition(this.x, this.y).setRotation(this.kind === 'drifter' ? 0 : this.spin);
+    this.gfx.setPosition(this.x, this.y).setRotation(this.kind === 'zigzag' ? this.spin * 0.3 : 0);
     this.glow.setPosition(this.x, this.y);
   }
 
   kill() {
     this.alive = false;
     const dir = Math.random() < 0.5 ? -1 : 1;
-    this.scene.tweens.add({ targets: [this.gfx, this.glow], y: this.y + 120, x: this.x + dir * 120, alpha: 0, angle: dir * 360, duration: 450, onComplete: () => this.destroy() });
+    this.scene.tweens.add({
+      targets: [this.gfx, this.glow], y: this.y + 120, x: this.x + dir * 120,
+      alpha: 0, angle: dir * 360, duration: 450, onComplete: () => this.destroy(),
+    });
   }
 
   destroy() {
-    if (this._d) return; this._d = true;
-    this.gfx.destroy(); this.glow.destroy();
+    if (this._d) return;
+    this._d = true;
+    this.gfx.destroy();
+    this.glow.destroy();
   }
 }

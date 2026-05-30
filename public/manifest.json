@@ -1,7 +1,7 @@
 {
   "name": "Neon Nexus: Bullet-Time Brick Breaker",
   "short_name": "Neon Nexus",
-  "description": "A visually-stunning, cross-platform neon brick breaker with bullet-time and 23 power-ups.",
+  "description": "Neon brick breaker with 27 power-ups, elemental balls, Jardinains, and infinite procedural levels.",
   "id": "/",
   "start_url": "./index.html",
   "scope": "./",

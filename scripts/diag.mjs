@@ -5,8 +5,12 @@ const PORT = 4321;
 const URL = `http://localhost:${PORT}/`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function findChrome() {
-  for (const p of ['/usr/bin/google-chrome-stable', '/usr/local/bin/google-chrome', '/usr/local/bin/chrome']) {
-    try { execSync(`test -x ${p}`); return p; } catch {}
+  for (const p of [
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/local/bin/google-chrome',
+  ]) {
+    try { execSync(`test -x "${p}"`); return p; } catch {}
   }
   return 'google-chrome';
 }
