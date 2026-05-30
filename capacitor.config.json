@@ -1,0 +1,21 @@
+{
+  "appId": "com.tuhinkarmakar.neonnexus",
+  "appName": "Neon Nexus",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "backgroundColor": "#05060a",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#05060a"
+  },
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#05060a"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "backgroundColor": "#05060a",
+      "showSpinner": false
+    }
+  }
+}
