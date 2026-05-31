@@ -35,7 +35,7 @@ export class PauseScene extends Phaser.Scene {
       {
         label: 'QUIT TO MENU', primary: false, color: PAL.danger, fontSize: '16px',
         onClick: () => {
-          InputRouter.onOverlayClose(false);
+          InputRouter.onOverlayClose(SCENES.PAUSE, false);
           this.scene.stop(SCENES.HUD);
           this.scene.stop(SCENES.GAME);
           this.scene.stop();
@@ -59,7 +59,7 @@ export class PauseScene extends Phaser.Scene {
   }
 
   resume() {
-    InputRouter.onOverlayClose();
+    InputRouter.onOverlayClose(SCENES.PAUSE);
     this.scene.resume(SCENES.GAME);
     this.scene.stop();
   }

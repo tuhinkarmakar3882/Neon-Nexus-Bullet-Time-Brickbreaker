@@ -31,7 +31,7 @@ export class GameOverScene extends Phaser.Scene {
     const adsReady = isAdSurfaceEnabled('rewarded') && Monetization.getProviderName() !== 'noop';
 
     const resume = () => {
-      InputRouter.onOverlayClose();
+      InputRouter.onOverlayClose(SCENES.GAMEOVER);
       this.scene.stop();
       game.doVideoContinue();
     };
@@ -56,7 +56,7 @@ export class GameOverScene extends Phaser.Scene {
       {
         label: 'RESTART', primary: false, fontSize: '14px',
         onClick: () => {
-          InputRouter.onOverlayClose(false);
+          InputRouter.onOverlayClose(SCENES.GAMEOVER, false);
           this.scene.stop();
           game.doRestart();
         },
@@ -64,7 +64,7 @@ export class GameOverScene extends Phaser.Scene {
       {
         label: 'MAIN MENU', primary: false, fontSize: '14px', color: 0x8b9bb4,
         onClick: () => {
-          InputRouter.onOverlayClose(false);
+          InputRouter.onOverlayClose(SCENES.GAMEOVER, false);
           this.scene.stop(SCENES.HUD);
           this.scene.stop(SCENES.GAME);
           this.scene.stop();

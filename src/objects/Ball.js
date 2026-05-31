@@ -39,6 +39,8 @@ export class Ball {
     this.chargeShot = false;
     this.wrap = false;
     this.heavyMode = false;
+    this._steerPhase = 0;
+    this._chaosSparkCd = 0;
 
     this._trailTint = 0xffffff;
     this._trailId = 'comet';
@@ -140,13 +142,23 @@ export class Ball {
     this.setSpeed(sp * (1 + GAME.BOUNCE_SPEED_DELTA * mult));
   }
 
-  /** Keep steering mods from runaway velocity growth. */
-  clampToSpeed() {
-    const sp = this.speed || this.baseSpeed;
+  /** Keep steering mods from runaway velocity growth — chaos modes use wider band. */
+  clampToSpeed(opts = {}) {
+    const base = this.speed || this.baseSpeed;
+    const minMult = opts.minMult ?? 1;
+    const maxMult = opts.maxMult ?? 1;
+    const min = base * minMult;
+    const max = base * maxMult;
     const cur = Math.hypot(this.vx, this.vy);
     if (cur < 1) return;
-    this.vx = (this.vx / cur) * sp;
-    this.vy = (this.vy / cur) * sp;
+    const clamped = clamp(cur, min, max);
+    this.vx = (this.vx / cur) * clamped;
+    this.vy = (this.vy / cur) * clamped;
+  }
+
+  /** @deprecated use clampToSpeed — kept for callers expecting fixed speed cap. */
+  clampToFixedSpeed() {
+    this.clampToSpeed();
   }
 
   resetToLevelBase() {
@@ -170,6 +182,8 @@ export class Ball {
     this.chargeShot = false;
     this.wrap = false;
     this.heavyMode = false;
+    this._steerPhase = 0;
+    this._chaosSparkCd = 0;
     this._portalGraceUntil = 0;
     this.resetToLevelBase();
   }
@@ -186,6 +200,7 @@ export class Ball {
   sync() {
     const c = this.tint();
     const mod = this.isModified();
+    const chaos = this.missileMode || this.gravityMode || this.echoMode;
     const speed = Math.hypot(this.vx, this.vy);
     const d = this.r * 2.35;
     const idTint = this._identityTint ?? 0xffffff;
@@ -194,9 +209,10 @@ export class Ball {
       .setDisplaySize(this.r * 2.8, this.r * 1.35)
       .setAlpha(mod ? 0.4 : 0.5);
 
-    this.core.setPosition(this.x, this.y).setDisplaySize(d, d).setTint(c).setAlpha(1);
+    this.core.setPosition(this.x, this.y).setDisplaySize(d, d).setTint(c).setAlpha(1)
+      .setRotation(chaos ? this._steerPhase * 0.35 : 0);
 
-    const haloScale = (mod ? 4.8 : 4.2) + Math.min(0.6, speed / 900);
+    const haloScale = (mod ? 4.8 : 4.2) + Math.min(0.6, speed / 900) + (chaos ? 0.35 : 0);
     const glow = fxGlowScale(this.scene, 1);
     this.halo.setPosition(this.x, this.y).setTint(mod ? c : idTint)
       .setDisplaySize(this.r * haloScale, this.r * haloScale)
@@ -213,7 +229,7 @@ export class Ball {
 
     if (!mod) this.trail.setParticleTint(this._identityIndex === 0 ? this._trailTint : idTint);
     else this.trail.setParticleTint(c);
-    this.trail.frequency = mod ? 9 : (TRAIL_PROFILES[this._trailId]?.frequency ?? 14);
+    this.trail.frequency = chaos ? 5 : (mod ? 9 : (TRAIL_PROFILES[this._trailId]?.frequency ?? 14));
     this.trailTarget.x = this.x;
     this.trailTarget.y = this.y;
   }

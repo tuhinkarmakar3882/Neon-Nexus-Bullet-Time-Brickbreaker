@@ -49,26 +49,29 @@ export class HUDScene extends Phaser.Scene {
 
     const pauseX = this._pauseX;
     const pauseY = this._chromeCy;
+    const pauseDepth = 1010;
     if (this.textures.exists('pause-icon')) {
-      this.pauseBtn = makeButton(this, pauseX, pauseY, '', () => bus.emit('req:pause'), {
-        width: pauseSize, height: pauseSize, fontSize: '1px', depth: 1006, compact: true, primary: false,
+      this.pauseBtn = makeButton(this, pauseX, pauseY, '', () => this._onPauseTap(), {
+        width: pauseSize, height: pauseSize, fontSize: '1px', depth: pauseDepth, compact: true, primary: false,
+        activateOnDown: true,
       });
       this.pauseIcon = this.add.image(pauseX, pauseY, 'pause-icon')
-        .setDisplaySize(uiPx(16, { min: 14, max: 18 }), uiPx(16, { min: 14, max: 18 })).setDepth(1007);
+        .setDisplaySize(uiPx(16, { min: 14, max: 18 }), uiPx(16, { min: 14, max: 18 })).setDepth(pauseDepth + 1);
     } else {
-      this.pauseBtn = makeButton(this, pauseX, pauseY, 'II', () => bus.emit('req:pause'), {
-        width: pauseSize, height: pauseSize, fontSize: '12px', depth: 1006, compact: true, primary: false,
+      this.pauseBtn = makeButton(this, pauseX, pauseY, 'II', () => this._onPauseTap(), {
+        width: pauseSize, height: pauseSize, fontSize: '12px', depth: pauseDepth, compact: true, primary: false,
+        activateOnDown: true,
       });
       this.pauseIcon = null;
     }
 
     this.toastText = this.add.text(arenaCx, H * 0.55, '', {
       ...orbitronStyle(22, PAL.text, { fontStyle: 'bold', align: 'center', wordWrap: { width: arenaW } }),
-    }).setOrigin(0.5).setAlpha(0).setDepth(1005);
+    }).setOrigin(0.5).setAlpha(0).setDepth(1004).disableInteractive();
 
     this.flashText = this.add.text(arenaCx, H * 0.4, '', {
       ...orbitronStyle(64, PAL.text, { fontStyle: '900', align: 'center', wordWrap: { width: arenaW } }),
-    }).setOrigin(0.5).setAlpha(0).setDepth(1008);
+    }).setOrigin(0.5).setAlpha(0).setDepth(1004).disableInteractive();
 
     const hintMsg = portrait ? 'TAP TO LAUNCH' : 'TAP / CLICK / SPACE TO LAUNCH';
     this.hintText = this.add.text(arenaCx, paddleY - uiPx(10, { min: 8, max: 12 }), hintMsg, {
@@ -325,7 +328,9 @@ export class HUDScene extends Phaser.Scene {
       if (!this._immersive || p.y > GAME.WALL_TOP) return;
       this._immersivePeek = true;
       this.applyImmersive();
-      this.time.delayedCall(2200, () => {
+      this._immersivePeekTimer?.remove(false);
+      this._immersivePeekTimer = this.time.delayedCall(2200, () => {
+        this._immersivePeekTimer = null;
         this._immersivePeek = false;
         this.applyImmersive();
       });
@@ -345,9 +350,14 @@ export class HUDScene extends Phaser.Scene {
     bus.on('hud:gambit', this.onGambit);
     bus.on('hud:mutators', this.onMutators);
     bus.on('hud:immersive', this.onImmersive);
+    this._onPauseReq = () => this.dismissOverlays();
+    bus.on('req:pause', this._onPauseReq);
     this.events.once('shutdown', () => {
       this._clearFlashTimers?.();
       this._clearToastTimers?.();
+      this._immersivePeekTimer?.remove(false);
+      this._immersivePeekTimer = null;
+      bus.off('req:pause', this._onPauseReq);
       bus.off('hud:stats', this.onStats);
       bus.off('hud:flash', this.onFlash); bus.off('hud:life', this.onLife);
       bus.off('hud:hint', this.onHint); bus.off('hud:toast', this.onToast);
@@ -387,64 +397,107 @@ export class HUDScene extends Phaser.Scene {
   _clearFlashTimers() {
     this._flashHideTimer?.remove(false);
     this._flashHideTimer = null;
+    this._flashHideAt = 0;
     this.tweens.killTweensOf(this.flashText);
   }
 
   _clearToastTimers() {
     this._toastHideTimer?.remove(false);
     this._toastHideTimer = null;
+    this._toastHideAt = 0;
     this.tweens.killTweensOf(this.toastText);
+  }
+
+  /** Immediately hide flash + toast — never blocks pause. */
+  dismissOverlays() {
+    this._clearFlashTimers();
+    this._clearToastTimers();
+    if (this.flashText?.active) this.flashText.setAlpha(0).setText('').setScale(1);
+    if (this.toastText?.active) this.toastText.setAlpha(0).setText('');
+  }
+
+  _onPauseTap() {
+    this.dismissOverlays();
+    this.game.events.emit('req:pause');
+  }
+
+  _hideFlash() {
+    this._flashHideTimer = null;
+    this._flashHideAt = 0;
+    this.tweens.killTweensOf(this.flashText);
+    if (!this.flashText?.active) return;
+    if (this.flashText.alpha <= 0.01) {
+      this.flashText.setAlpha(0).setText('');
+      return;
+    }
+    this.tweens.add({
+      targets: this.flashText,
+      alpha: { from: this.flashText.alpha, to: 0 },
+      duration: 280,
+      ease: 'Cubic.easeIn',
+      onComplete: () => {
+        if (this.flashText?.active) this.flashText.setAlpha(0).setText('').setScale(1);
+      },
+    });
+  }
+
+  _hideToast() {
+    this._toastHideTimer = null;
+    this._toastHideAt = 0;
+    this.tweens.killTweensOf(this.toastText);
+    if (!this.toastText?.active) return;
+    if (this.toastText.alpha <= 0.01) {
+      this.toastText.setAlpha(0).setText('');
+      return;
+    }
+    this.tweens.add({
+      targets: this.toastText,
+      alpha: { from: this.toastText.alpha, to: 0 },
+      duration: 320,
+      ease: 'Cubic.easeIn',
+      onComplete: () => {
+        if (this.toastText?.active) this.toastText.setAlpha(0).setText('');
+      },
+    });
   }
 
   showFlash(f) {
     this._clearFlashTimers();
     if (!f?.text) {
-      this.flashText.setAlpha(0).setText('');
+      this.dismissOverlays();
       return;
     }
-    const holdMs = Math.max(0, f.ms ?? 800);
+    const holdMs = Math.min(Math.max(0, f.ms ?? 800), 9000);
+    this._flashHideAt = Date.now() + holdMs;
     this.flashText.setFontSize(uiPx(64, { min: 28, max: 64 }));
     this.flashText.setText(f.text).setColor(f.color ?? cssHex(PAL.text)).setAlpha(1).setScale(0.8)
       .setShadow(0, 0, f.color ?? cssHex(PAL.text), 22, true, true);
     fitTextWidth(this.flashText, arenaWidth(), uiPx(22, { min: 18, max: 28 }));
     this.tweens.add({ targets: this.flashText, scale: 1, duration: 200, ease: 'Back.easeOut' });
-    this._flashHideTimer = this.time.delayedCall(holdMs, () => {
-      this._flashHideTimer = null;
-      this.tweens.killTweensOf(this.flashText);
-      this.tweens.add({
-        targets: this.flashText,
-        alpha: { from: 1, to: 0 },
-        duration: 300,
-        ease: 'Cubic.easeIn',
-        onComplete: () => {
-          if (this.flashText?.active) this.flashText.setAlpha(0).setText('');
-        },
-      });
-    });
+    this._flashHideTimer = this.time.delayedCall(holdMs, () => this._hideFlash());
   }
 
   showToast(t) {
     this._clearToastTimers();
     if (!t?.text) {
-      this.toastText.setAlpha(0).setText('');
+      if (this.toastText?.active) this.toastText.setAlpha(0).setText('');
       return;
     }
-    const holdMs = Math.max(0, t.ms ?? 2000);
+    const holdMs = Math.min(Math.max(0, t.ms ?? 2000), 12000);
+    this._toastHideAt = Date.now() + holdMs;
     this.toastText.setFontSize(uiPx(22, { min: 14, max: 22 }));
     this.toastText.setText(t.text).setAlpha(1);
     fitTextWidth(this.toastText, arenaWidth(), uiPx(12, { min: 11, max: 16 }));
-    this._toastHideTimer = this.time.delayedCall(holdMs, () => {
-      this._toastHideTimer = null;
-      this.tweens.killTweensOf(this.toastText);
-      this.tweens.add({
-        targets: this.toastText,
-        alpha: { from: 1, to: 0 },
-        duration: 400,
-        ease: 'Cubic.easeIn',
-        onComplete: () => {
-          if (this.toastText?.active) this.toastText.setAlpha(0).setText('');
-        },
-      });
-    });
+    this._toastHideTimer = this.time.delayedCall(holdMs, () => this._hideToast());
+  }
+
+  update() {
+    const now = Date.now();
+    if (this._flashHideAt && now >= this._flashHideAt && this.flashText?.alpha > 0) {
+      this._hideFlash();
+    }
+    if (this._toastHideAt && now >= this._toastHideAt && this.toastText?.alpha > 0) {
+      this._hideToast();
+    }
   }
 }

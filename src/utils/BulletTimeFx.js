@@ -117,7 +117,7 @@ export function screenPunch(scene, amt = 0.05, dur = 70) {
   });
 }
 
-export function impactFlash(scene, color = 0xffffff, alpha = 0.35) {
+export function impactFlash(scene, color = 0xffffff, alpha = 0.22) {
   const cam = scene.cameras?.main;
   if (!cam) return;
   const r = (color >> 16) & 255;

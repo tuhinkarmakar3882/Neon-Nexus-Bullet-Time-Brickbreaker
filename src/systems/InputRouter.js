@@ -21,7 +21,10 @@ class InputRouterService {
     if (!this.game) return;
     this._overlayActive = true;
     const sm = this.game.scene;
-    if (sm.isActive(SCENES.HUD) && !sm.isPaused(SCENES.HUD)) sm.pause(SCENES.HUD);
+    // Clear any stuck flash/toast when an overlay takes focus.
+    this.game.events.emit('hud:flash', { text: '', ms: 0 });
+    this.game.events.emit('hud:toast', { text: '', ms: 0 });
+    // Keep HUD running so flash/toast timers, stats, and immersive peek stay in sync.
     if (overlayKey !== SCENES.PAUSE && sm.isActive(SCENES.GAME) && !sm.isPaused(SCENES.GAME)) {
       sm.pause(SCENES.GAME);
     }
@@ -29,10 +32,18 @@ class InputRouterService {
     if (overlay?.input) overlay.input.setTopOnly(true);
   }
 
-  onOverlayClose(resumeGame = true) {
+  /**
+   * @param {string|null|boolean} closingKey - overlay being closed, or legacy boolean resumeGame
+   * @param {boolean} [resumeGame=true]
+   */
+  onOverlayClose(closingKey = null, resumeGame = true) {
     if (!this.game) return;
+    if (typeof closingKey === 'boolean') {
+      resumeGame = closingKey;
+      closingKey = null;
+    }
     const sm = this.game.scene;
-    const stillOverlayed = OVERLAY_SCENES.some((k) => sm.isActive(k));
+    const stillOverlayed = OVERLAY_SCENES.some((k) => k !== closingKey && sm.isActive(k));
     this._overlayActive = stillOverlayed;
     if (stillOverlayed) return;
 

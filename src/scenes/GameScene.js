@@ -277,7 +277,8 @@ export class GameScene extends Phaser.Scene {
     const twist = this.twistLabel ? `  ·  ${this.twistLabel}` : '';
     this.flash(
       (this.isBoss ? 'FORTRESS' : 'LEVEL ' + this.level) + (band ? `  ·  ${band}` : '') + layout + twist + (t ? `  ·  ${t.toUpperCase()}` : ''),
-      cssHex(this.isBoss ? PAL.gold : (this.theme?.bg ?? PAL.accent)), 1300,
+      cssHex(this.isBoss ? PAL.gold : (this.theme?.bg ?? PAL.accent)), 1100,
+      'high',
     );
     tierPulse(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.32, rating, cssHex(this.isBoss ? PAL.gold : PAL.accent3));
     microShake(this, 0.003 + rating * 0.0004, 100);
@@ -431,6 +432,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.input.on('pointerdown', (p) => {
       if (InputRouter.shouldBlockGameplay() || this.over || this.transitioning || this.draftOpen) return;
+      if (p.y < GAME.WALL_TOP) return;
       const now = this.time.now;
       if (now - (this._lastTapMs ?? 0) < 320 && this.trySpendNexus()) {
         this._lastTapMs = now;
@@ -461,10 +463,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   requestPause() {
+    // Always dismiss HUD overlays first — must not depend on guards below.
+    this.bus?.emit('hud:flash', { text: '', ms: 0 });
+    this.bus?.emit('hud:toast', { text: '', ms: 0 });
+
     if (this.over || this.transitioning) return;
+
+    const sm = this.scene;
+    if (!sm.isActive()) return;
+    if (sm.isActive(SCENES.PAUSE)) return;
+    if (InputRouter.isOverlayActive()) return;
+
+    // Recover from a stuck paused state (game frozen without a menu overlay).
+    if (sm.isPaused() && !this._completingLevel) {
+      sm.resume();
+    }
+    if (sm.isPaused()) return;
+
     RunPersistence.saveRun(this);
-    this.scene.pause();
-    this.scene.launch(SCENES.PAUSE);
+    sm.pause();
+    sm.launch(SCENES.PAUSE);
     InputRouter.onOverlayOpen(SCENES.PAUSE);
   }
 
@@ -723,8 +741,7 @@ export class GameScene extends Phaser.Scene {
     const intensity = GAME.BT_NEXUS_INTENSITY_MIN
       + ratio * (GAME.BT_NEXUS_INTENSITY_MAX - GAME.BT_NEXUS_INTENSITY_MIN);
     this.triggerBulletTime(ms, { intensity, punch: true, player: true, nexus: true, wow: true });
-    impactFlash(this, 0x4488ff, 0.2);
-    this.flash('NEXUS SLOW-MO', '#8ec5ff', 600);
+    this.flash('NEXUS SLOW-MO', '#8ec5ff', 500);
     hapticPulse(12);
     return true;
   }
@@ -1009,15 +1026,15 @@ export class GameScene extends Phaser.Scene {
     if (c.id === 'knockoutElite' && c.tier === 'elite' && j.tier === 'elite') {
       this.contractDone = true;
       this.applyPower(rollPower(this.level, this.nextPowerDropSeed()));
-      this.flash('CONTRACT!', '#ffd23d', 800);
+      this.flash('CONTRACT!', '#ffd23d', 650, 'high');
     } else if (c.id === 'knockoutElite' && c.tier !== 'elite' && this.levelKnockouts >= (c.target ?? 2)) {
       this.contractDone = true;
       this.applyPower(rollPower(this.level, this.nextPowerDropSeed()));
-      this.flash('CONTRACT!', '#ffd23d', 800);
+      this.flash('CONTRACT!', '#ffd23d', 650, 'high');
     } else if (c.id === 'juggleChain' && j.juggleCount >= (c.target ?? 4)) {
       this.contractDone = true;
       this.addGnomeStreak(GAME.GNOME_STREAK_MAX);
-      this.flash('JUGGLE CONTRACT!', '#ffd23d', 800);
+      this.flash('JUGGLE CONTRACT!', '#ffd23d', 650, 'high');
     }
   }
 
@@ -1042,7 +1059,7 @@ export class GameScene extends Phaser.Scene {
       shifting: 'SHIFTING — glides horizontally',
       portal: 'PORTAL — teleports ball & gnomes',
     };
-    if (msgs[brick.type]) this.time.delayedCall(400, () => this.flash(msgs[brick.type], '#ffd23d', 900));
+    if (msgs[brick.type]) this.time.delayedCall(400, () => this.toast(msgs[brick.type], 2200));
   }
 
   destructiblesLeft() {
@@ -1219,7 +1236,10 @@ export class GameScene extends Phaser.Scene {
       case 'Echo':
       case 'ChargeShot':
       case 'Wrap':
-        this.balls.forEach((b) => this.applyActiveStateToBall(b));
+        this.balls.forEach((b) => {
+          this.chaosKickBall(b, key);
+          this.applyActiveStateToBall(b);
+        });
         break;
       case 'TimeFreeze':
         this.timeFreezeUntil = this.time.now + (POWERS.TimeFreeze.dur ?? 5000);
@@ -1238,8 +1258,32 @@ export class GameScene extends Phaser.Scene {
         this.shieldHitsLeft = POWERS[key]?.shieldHits ?? 1;
         break;
     }
-    if (!silent && !powerHasBallMod(key)) {
-      this.balls.forEach((b) => this.applyActiveStateToBall(b));
+    // Always sync ball modifiers after any power change (covers resume + edge cases).
+    this.balls.forEach((b) => this.applyActiveStateToBall(b));
+  }
+
+  /** Initial velocity nudge when chaos ball mods activate. */
+  chaosKickBall(ball, key) {
+    if (ball.stuck) return;
+    const sp = ball.speed || ball.baseSpeed;
+    const ang = Math.atan2(ball.vy, ball.vx);
+    switch (key) {
+      case 'Missile':
+        ball.vx += Math.cos(ang + Math.PI * 0.42) * sp * 0.28;
+        ball.vy += Math.sin(ang + Math.PI * 0.42) * sp * 0.28;
+        break;
+      case 'Gravity':
+        ball.vy += sp * 0.22;
+        ball.vx += (Math.random() - 0.5) * sp * 0.18;
+        break;
+      case 'Wrap':
+        ball.vx *= 1.12;
+        break;
+      case 'Echo':
+        ball.echoAngle = Math.random() * Math.PI * 2;
+        break;
+      default:
+        break;
     }
   }
 
@@ -1255,7 +1299,7 @@ export class GameScene extends Phaser.Scene {
     popScale(this, this.paddle.body, { peak: neg ? 0.92 : 1.1, dur: neg ? 140 : 120, from: neg ? 1.05 : 0.94 });
 
     if (neg) {
-      impactFlash(this, PAL.powerNeg, 0.42);
+      impactFlash(this, PAL.powerNeg, 0.28);
       microShake(this, 0.014, 180);
       if (!skipPunch) screenPunch(this, 0.045, 110);
       surgeText(this, px, py - 52, 'CURSED!', cssHex(PAL.powerNeg), 34);
@@ -1271,7 +1315,7 @@ export class GameScene extends Phaser.Scene {
     if (big) {
       radialBlast(this, px, py, { tint, scale: 4.2, dur: 520 });
       spawnConfetti(this, px, py - 20, this.settings.reducedFx ? 16 : 32);
-      impactFlash(this, tint, 0.22);
+      impactFlash(this, tint, 0.15);
     }
     if (CANNON_TYPES.includes(key)) {
       launchBurst(this, px, py, tint);
@@ -1342,7 +1386,7 @@ export class GameScene extends Phaser.Scene {
         rippleRing(this, this.paddle.x, this.paddle.y, { tint: powerFillColor('ExtraPaddle'), scale: 3, dur: 480 });
         break;
       case 'InstantWin':
-        this.flash('LEVEL CLEAR!', cssHex(PAL.accent2), 700);
+        this.flash('LEVEL CLEAR!', cssHex(PAL.accent2), 650, 'high');
         this.time.delayedCall(250, () => {
           if (!this.transitioning && !this.draftOpen) this.completeLevel();
         });
@@ -1524,10 +1568,11 @@ export class GameScene extends Phaser.Scene {
 
   updateEchoOrbs(ball, dtSec) {
     if (!ball.echoMode) return;
-    ball.echoAngle += dtSec * 4.5;
-    const orbitR = ball.r * 3.2;
-    for (let i = 0; i < 6; i++) {
-      const a = ball.echoAngle + (i * Math.PI * 2) / 6;
+    ball.echoAngle += dtSec * GAME.ECHO_ORBIT_SPEED;
+    const orbitR = ball.r * GAME.ECHO_ORBIT_RADIUS;
+    const count = GAME.ECHO_ORBIT_COUNT;
+    for (let i = 0; i < count; i++) {
+      const a = ball.echoAngle + (i * Math.PI * 2) / count;
       const ex = ball.x + Math.cos(a) * orbitR;
       const ey = ball.y + Math.sin(a) * orbitR;
       for (const br of this.bricks) {
@@ -1608,7 +1653,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.settings.bulletTime && !hitStop && !player) return;
     if (hitStop) this.hitStopRemaining = Math.max(this.hitStopRemaining, GAME.HIT_STOP_MS);
     if (punch) screenPunch(this, wow ? 0.09 : 0.045);
-    if (wow) impactFlash(this, nexus ? 0x4488ff : PAL.accent2, nexus ? 0.22 : 0.28);
+    if (wow) impactFlash(this, nexus ? 0x4488ff : PAL.accent2, nexus ? 0.14 : 0.18);
     if (this.bulletTimeRemaining <= 0) audio.bulletTime();
     if (nexus) {
       this._nexusSlowMo = true;
@@ -1877,7 +1922,7 @@ export class GameScene extends Phaser.Scene {
     if (p.type === 'anchor') {
       this.paddle.applyAnchorShrink();
       this.syncPaddleWidth();
-      this.flash('ANCHOR HIT!', cssHex(PAL.powerNeg), 650);
+      this.toast('Anchor hit — paddle shrunk', 1400);
       audio.lose();
     } else if (p.type === 'phone') {
       if (Math.random() < 0.5) {
@@ -1885,18 +1930,18 @@ export class GameScene extends Phaser.Scene {
         this.time.delayedCall(GAME.PHONE_SCRAMBLE_MS, () => {
           if (!this.powerSys.isActive('Flip')) this.controlsInverted = false;
         });
-        this.flash('CONTROLS SCRAMBLED!', cssHex(PAL.powerNeg), 700);
+        this.toast('Controls scrambled!', 1400);
       } else {
         this.uiScrambleUntil = this.time.now + GAME.PHONE_SCRAMBLE_MS;
         this.bus.emit('hud:scramble', true);
         this.time.delayedCall(GAME.PHONE_SCRAMBLE_MS, () => this.bus.emit('hud:scramble', false));
-        this.flash('SIGNAL JAM!', cssHex(PAL.danger), 700);
+        this.toast('Signal jam — HUD scrambled', 1400);
       }
     } else {
       this.paddle.stun(GAME.POT_STUN_MS);
       wobble(this, this.paddle.body, { angle: 5, dur: 180, repeat: 0 });
       rippleRing(this, this.paddle.x, this.paddle.y, { tint: 0xc8773f, scale: 1.8, dur: 260 });
-      this.flash('POTTED!', '#ff5a6e', 450);
+      this.toast('Potted!', 900);
       audio.lose();
     }
     this.burst(p.x, p.y, 0xc8773f, 8);
@@ -2077,7 +2122,7 @@ export class GameScene extends Phaser.Scene {
     this.powerSys.clearAll(); this.paddle.reset();
     RunPersistence.saveRun(this);
     if (this.lives <= 0) { this.gameOver(); return; }
-    this.flash(pick(GAME_OVER_MESSAGES), '#ff5a6e', 1200);
+    this.flash(pick(GAME_OVER_MESSAGES), '#ff5a6e', 1000, 'high');
     this.balls.push(new Ball(this, this.paddle, this.balls.length));
     this.balls.forEach((b) => { this.syncBallSpeed(b, { reset: true }); });
   }
@@ -2090,7 +2135,7 @@ export class GameScene extends Phaser.Scene {
     comboFlare(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.42, 0xffd23d, this.combo);
     rippleRing(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.42, { tint: 0xffd23d, scale: 3.6, dur: 500 });
     if (this.combo >= 16 && !this.settings.reducedFx) {
-      impactFlash(this, 0xff44aa, 0.18);
+      impactFlash(this, 0xff44aa, 0.12);
       microShake(this, 0.008, 140);
     }
     if (this.settings.bulletTime) this.triggerBulletTime(360, { intensity: 0.75, punch: true });
@@ -2118,7 +2163,7 @@ export class GameScene extends Phaser.Scene {
     if (this.contract?.id === 'noPotHit') this.contractDone = false;
     this.paddle.stun(GAME.PADDLE_STUN_MS);
     this.combo = 0;
-    impactFlash(this, 0xff5a6e, 0.22);
+    impactFlash(this, 0xff5a6e, 0.14);
     wobble(this, this.paddle.body, { angle: 6, dur: 220, repeat: 0 });
     rippleRing(this, this.paddle.x, this.paddle.y, { tint: PAL.danger, scale: 2, dur: 280 });
     if (this.settings.bulletTime) this.triggerBulletTime(320, { intensity: 0.55 });
@@ -2173,7 +2218,7 @@ export class GameScene extends Phaser.Scene {
     this.balls = [new Ball(this, this.paddle, 0)];
     this.applyEquippedCosmetics();
     rollPowerDraft(this.level, this.nextPowerDropSeed(), 2).forEach((k) => this.applyPower(k));
-    this.flash('REVIVED!', cssHex(PAL.accent2), 700);
+    this.flash('REVIVED!', cssHex(PAL.accent2), 650, 'high');
     InputRouter.onOverlayClose();
     this.scene.resume();
     this.emitStats();
@@ -2195,7 +2240,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (!this.canCompleteLevel()) {
-      this.flash('GOAL INCOMPLETE', '#ff8899', 900);
+      this.flash('GOAL INCOMPLETE', '#ff8899', 800, 'high');
       return;
     }
     // Meter bonuses before transition lock so a full meter can open the draft overlay.
@@ -2232,7 +2277,7 @@ export class GameScene extends Phaser.Scene {
       audio.fortressShatter?.();
       microShake(this, 0.014, 220);
       screenPunch(this, 0.11, 150);
-      impactFlash(this, PAL.accent2, 0.3);
+      impactFlash(this, PAL.accent2, 0.18);
       const shardN = this.settings.reducedFx ? 6 : 12;
       shardBurst(this, wx + 8, wt + 48, PAL.accent2, shardN);
       shardBurst(this, W - wx - 8, wt + 48, PAL.accent2, shardN);
@@ -2333,7 +2378,32 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  flash(text, color, ms = 800) { this.bus?.emit('hud:flash', { text, color, ms }); }
+  toast(text, ms = 1600) {
+    if (!text) {
+      this.bus?.emit('hud:toast', { text: '', ms: 0 });
+      return;
+    }
+    this.bus?.emit('hud:toast', { text, ms });
+  }
+
+  flash(text, color, ms = 580, priority = 'normal') {
+    if (!text) {
+      this.bus?.emit('hud:flash', { text: '', color: color ?? '#fff', ms: 0 });
+      return;
+    }
+    const now = this.time?.now ?? 0;
+    if (priority !== 'high') {
+      const gap = now - (this._lastFlashAt ?? 0);
+      if (gap < 480) {
+        this.toast(text, Math.min(ms, 1400));
+        return;
+      }
+      if (text === this._lastFlashText && gap < 1400) return;
+    }
+    this._lastFlashText = text;
+    this._lastFlashAt = now;
+    this.bus?.emit('hud:flash', { text, color, ms });
+  }
 
   nearestDestructible(fromX, fromY) {
     let best = null, bestD = Infinity;
@@ -2518,21 +2588,53 @@ export class GameScene extends Phaser.Scene {
   }
 
   applyBallSteering(ball, dtSec) {
+    if (!ball.missileMode && !ball.gravityMode) return;
+
+    const px = this.paddle.x;
+    const py = this.paddle.top - ball.r * 0.5;
+    const dx = px - ball.x;
+    const dy = py - ball.y;
+    const dist = Math.max(48, Math.hypot(dx, dy));
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const tanX = -ny;
+    const tanY = nx;
+    const baseSp = ball.speed || ball.baseSpeed;
+    ball._steerPhase = (ball._steerPhase ?? 0) + dtSec * (ball.missileMode ? 8 : 5.5);
+
     if (ball.missileMode) {
-      ball.vx += (this.paddle.x - ball.x) * 0.45 * dtSec;
-      ball.vy += (this.paddle.top - ball.y) * -0.22 * dtSec;
+      const radial = baseSp * GAME.STEER_MISSILE_RADIAL;
+      const swirl = Math.sin(ball._steerPhase) * GAME.STEER_SWIRL_MISSILE * baseSp * 0.01;
+      ball.vx += (nx * radial + tanX * swirl) * dtSec;
+      ball.vy += (ny * radial + tanY * swirl) * dtSec;
     }
     if (ball.gravityMode) {
-      ball.vx += (this.paddle.x - ball.x) * 0.5 * dtSec;
-      ball.vy += (this.paddle.top - ball.y) * 0.28 * dtSec;
+      const radial = baseSp * GAME.STEER_GRAVITY_RADIAL;
+      const swirl = Math.sin(ball._steerPhase) * GAME.STEER_SWIRL_GRAVITY * baseSp * 0.01;
+      ball.vy += baseSp * GAME.STEER_GRAVITY_EXTRA_Y * dtSec;
+      ball.vx += (nx * radial + tanX * swirl) * dtSec;
+      ball.vy += (ny * radial + tanY * swirl) * dtSec;
     }
-    if (ball.missileMode || ball.gravityMode) ball.clampToSpeed();
+
+    ball.clampToSpeed({
+      minMult: GAME.STEER_SPEED_MIN,
+      maxMult: GAME.STEER_SPEED_MAX,
+    });
   }
 
   resolveBallWalls(ball, lw, rw, tw) {
     if (ball.wrap) {
-      if (ball.x < lw + ball.r) ball.x = rw - ball.r;
-      else if (ball.x >= rw - ball.r) ball.x = lw + ball.r;
+      if (ball.x < lw + ball.r) {
+        ball.x = rw - ball.r;
+        ball.vx = Math.abs(ball.vx) * 1.04;
+        hitSpark(this, ball.x, ball.y, { tint: 0xffe156, count: 3, spread: 14 });
+        audio.wall();
+      } else if (ball.x >= rw - ball.r) {
+        ball.x = lw + ball.r;
+        ball.vx = -Math.abs(ball.vx) * 1.04;
+        hitSpark(this, ball.x, ball.y, { tint: 0xffe156, count: 3, spread: 14 });
+        audio.wall();
+      }
       return;
     }
     if (ball.x <= lw + ball.r) {

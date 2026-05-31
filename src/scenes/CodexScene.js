@@ -408,7 +408,7 @@ export class CodexScene extends Phaser.Scene {
 
   close() {
     this._scroll?.destroy();
-    InputRouter.onOverlayClose(this.from === SCENES.GAME || this.from === SCENES.PAUSE);
+    InputRouter.onOverlayClose(SCENES.CODEX, this.from === SCENES.GAME || this.from === SCENES.PAUSE);
     this.scene.stop();
     if (this.scene.isSleeping(this.from)) this.scene.wake(this.from);
     else if (this.scene.isPaused(this.from)) this.scene.resume(this.from);

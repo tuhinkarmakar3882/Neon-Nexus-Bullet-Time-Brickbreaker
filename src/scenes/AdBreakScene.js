@@ -54,7 +54,7 @@ export class AdBreakScene extends Phaser.Scene {
   }
 
   finish() {
-    InputRouter.onOverlayClose();
+    InputRouter.onOverlayClose(SCENES.AD_BREAK);
     this.scene.stop();
     this.game.events.emit('ad:break:done');
   }

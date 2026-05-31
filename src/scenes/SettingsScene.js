@@ -335,7 +335,7 @@ export class SettingsScene extends Phaser.Scene {
       gameScene.bus.emit('hud:immersive', { on: true });
     }
 
-    InputRouter.onOverlayClose(this.from === SCENES.GAME || this.from === SCENES.PAUSE);
+    InputRouter.onOverlayClose(SCENES.SETTINGS, this.from === SCENES.GAME || this.from === SCENES.PAUSE);
     this.scene.stop();
     if (this.scene.isSleeping(this.from)) this.scene.wake(this.from);
     else if (this.scene.isPaused(this.from)) this.scene.resume(this.from);

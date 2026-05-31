@@ -335,7 +335,7 @@ export class ShopScene extends Phaser.Scene {
     this._scroll?.destroy();
     this.input.off('pointerup', this._onRowTap);
     if (this._bannerWasVisible) Monetization.showBanner();
-    InputRouter.onOverlayClose(this.from === SCENES.MENU);
+    InputRouter.onOverlayClose(SCENES.SHOP, this.from === SCENES.MENU);
     this.scene.stop();
     if (this.scene.isPaused(this.from)) this.scene.resume(this.from);
   }

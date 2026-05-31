@@ -1,6 +1,6 @@
 import { GAME } from '../config/Constants.js';
 import {
-  POWERS, categoryColor, powerFillColor, powerBadgeTextColor, powerPillLabel,
+  POWERS, powerFillColor, powerBadgeTextColor, powerPillLabel,
 } from '../config/PowerUps.js';
 import { PAL } from '../config/Palette.js';
 import { iconTextureKey } from '../utils/IconTextures.js';
@@ -15,7 +15,6 @@ export class PowerUp {
     this.variant = opts.variant ?? 'normal';
     const def = POWERS[key];
     this.color = powerFillColor(key);
-    this.catColor = categoryColor(def?.category);
     this.polarity = def?.polarity ?? 'pos';
     this.label = powerPillLabel(key);
     this.w = Math.max(82, GAME.WIDTH * 0.078);
@@ -39,10 +38,6 @@ export class PowerUp {
     this.pill = scene.add.image(0, 0, 'pill')
       .setDisplaySize(this.w, this.h).setTint(this.color);
     this.container.add(this.pill);
-
-    this.stripeGfx = scene.add.graphics();
-    this.container.add(this.stripeGfx);
-    this.drawCategoryStripe();
 
     if (this.polarity === 'neg') {
       this.stripesGfx = scene.add.graphics();
@@ -135,18 +130,6 @@ export class PowerUp {
       yoyo: true,
       repeat: -1,
     });
-  }
-
-  drawCategoryStripe() {
-    const g = this.stripeGfx;
-    if (!g) return;
-    g.clear();
-    const hw = this.w / 2;
-    const hh = this.h / 2;
-    g.fillStyle(this.catColor, 0.92);
-    g.fillRoundedRect(-hw + 2, -hh + 3, 7, this.h - 6, 3);
-    g.fillStyle(0xffffff, 0.22);
-    g.fillRoundedRect(-hw + 3, -hh + 4, 2, this.h - 8, 1);
   }
 
   drawNegStripes() {

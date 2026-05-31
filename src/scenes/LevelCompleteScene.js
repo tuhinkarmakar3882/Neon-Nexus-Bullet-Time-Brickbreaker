@@ -168,7 +168,7 @@ export class LevelCompleteScene extends Phaser.Scene {
     const advance = () => {
       if (advanced) return;
       advanced = true;
-      InputRouter.onOverlayClose();
+      InputRouter.onOverlayClose(SCENES.LEVEL_COMPLETE);
       this.scene.stop();
       game.startNextLevel();
     };

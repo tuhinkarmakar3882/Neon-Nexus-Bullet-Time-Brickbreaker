@@ -1,5 +1,6 @@
 /** Capacitor native lifecycle — pause audio, back button, billing init. */
 import { Capacitor } from '@capacitor/core';
+import { SCENES } from '../config/Constants.js';
 import { initPlayBilling } from './PlayBilling.js';
 import { audio } from './AudioManager.js';
 
@@ -13,13 +14,12 @@ export async function initNativeBridge(game) {
     App.addListener('backButton', () => {
       const sm = game?.scene;
       if (!sm) return;
-      if (sm.isActive('Pause')) {
-        sm.getScene('Pause')?.resume?.();
-        sm.stop('Pause');
+      if (sm.isActive(SCENES.PAUSE)) {
+        sm.getScene(SCENES.PAUSE)?.resume?.();
         return;
       }
-      if (sm.isActive('Game') && !sm.isPaused('Game')) {
-        sm.getScene('Game')?.requestPause?.();
+      if (sm.isActive(SCENES.GAME) && !sm.isPaused(SCENES.GAME)) {
+        sm.getScene(SCENES.GAME)?.requestPause?.();
         return;
       }
       App.exitApp();
