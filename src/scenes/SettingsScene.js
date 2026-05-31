@@ -34,6 +34,7 @@ export class SettingsScene extends Phaser.Scene {
       headerReserve: uiPx(compact ? 64 : 72, { min: 56, max: 80 }),
     });
     const rowW = Math.min(panel.cardW * 0.9, uiPx(480, { max: 520 }));
+    const toggleW = uiPx(72, { min: 48, max: 88 });
     const toggleH = uiPx(36, { min: 28, max: 40 });
     const shopBtnW = Math.min(rowW, uiPx(400, { max: 420 }));
     const rowGap = toggleH + uiPx(18, { min: 14, max: 22 });

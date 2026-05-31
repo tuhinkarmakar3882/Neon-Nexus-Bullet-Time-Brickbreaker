@@ -1206,6 +1206,8 @@ export class GameScene extends Phaser.Scene {
     else if (this.powerSys.isActive('Expand')) w *= GAME.PADDLE_EXPAND_MULT;
     if (this.powerSys.isActive('Reduce')) w *= GAME.PADDLE_SHRINK_MULT;
     this.paddle.setWidth(w);
+    if (this.paddle.body?.setScale) this.paddle.body.setScale(1);
+    this.paddle.sync?.();
   }
 
   syncPaddleSpeedMult() {

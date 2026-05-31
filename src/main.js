@@ -205,6 +205,28 @@ function bootGame() {
 attachViewportListeners();
 initInstallPrompt();
 
+/** PWA: register Workbox SW and reload when a new build is deployed. */
+function registerPwaServiceWorker() {
+  if (!import.meta.env.PROD || typeof window === 'undefined' || Capacitor.isNativePlatform()) return;
+  if (!('serviceWorker' in navigator)) return;
+
+  navigator.serviceWorker.register('./sw.js', { scope: './' }).then((registration) => {
+    registration.addEventListener('updatefound', () => {
+      const worker = registration.installing;
+      worker?.addEventListener('statechange', () => {
+        if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+          window.location.reload();
+        }
+      });
+    });
+    setInterval(() => registration.update(), 60 * 60 * 1000);
+  }).catch((err) => {
+    console.warn('[PWA] service worker registration failed', err);
+  });
+}
+
+registerPwaServiceWorker();
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', bootGame, { once: true });
 } else {

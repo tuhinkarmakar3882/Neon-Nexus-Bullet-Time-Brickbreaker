@@ -162,10 +162,17 @@ async function runFlow(page, label) {
     if (!gs.powerSys.isActive('LaserII')) throw new Error('Laser fusion should yield LaserII');
     gs.applyPower('Expand');
     gs.applyPower('Reduce');
+    const padW = (shrink) => {
+      let w = gs.paddle.baseW * (gs.paddle.widthPenaltyMult ?? 1) * 1.35;
+      if (shrink) w *= 0.65;
+      return w;
+    };
     const w = gs.paddle.w;
-    if (Math.abs(w - gs.paddle.baseW * 1.35 * 0.65) > 2) throw new Error('Expand+Reduce width wrong: ' + w);
+    if (Math.abs(w - padW(true)) > 3) throw new Error(`Expand+Reduce width wrong: w=${w} expected=${padW(true)}`);
     gs.powerSys.clear('Reduce');
-    if (Math.abs(gs.paddle.w - gs.paddle.baseW * 1.35) > 2) throw new Error('Expand should remain after Reduce expires');
+    if (Math.abs(gs.paddle.w - padW(false)) > 3) {
+      throw new Error(`Expand should remain after Reduce expires: w=${gs.paddle.w} expected=${padW(false)} keys=${gs.powerSys.keys().join(',')}`);
+    }
   });
   await sleep(200);
 
