@@ -3,7 +3,7 @@
 // Provider is selected at boot via createAdProvider() + AdsConfig (see config/AdsConfig.js).
 // Game scenes call Monetization.* only — swap Google AdMob / demo / noop via config.
 
-import { AdsConfig } from '../config/AdsConfig.js';
+import { AdsConfig, isAdSurfaceEnabled } from '../config/AdsConfig.js';
 import { MetaProgress } from './MetaProgress.js';
 import { SaveManager } from './SaveManager.js';
 
@@ -75,6 +75,20 @@ class MonetizationService {
     return this.offerRewarded('continue');
   }
 
+  /** Rewarded continue — bypasses when ads are off, unconfigured, or unavailable. */
+  async offerRewardedContinueWithBypass() {
+    if (!isAdSurfaceEnabled('rewarded') || this.getProviderName() === 'noop') {
+      return { granted: true, bypassed: true };
+    }
+    try {
+      const res = await this.provider.showRewarded({ placement: AdsConfig.placements?.continue ?? 'continue' });
+      if (res?.rewarded) return { granted: true, bypassed: !!res.simulated };
+      return { granted: true, bypassed: true };
+    } catch {
+      return { granted: true, bypassed: true };
+    }
+  }
+
   async offerRewardedDoubleBonus() {
     return this.offerRewarded('double_bonus');
   }
@@ -101,20 +115,76 @@ class MonetizationService {
     Promise.resolve(this.provider.hideBanner?.()).catch(() => {});
   }
 
-  async purchase(productId) {
+  getProduct(productId) {
+    return this.products?.[productId] ?? null;
+  }
+
+  formatPrice(productId) {
+    return this.getProduct(productId)?.price ?? '';
+  }
+
+  isSimulatedStore() {
+    const name = this.getProviderName();
+    return name === 'demo-web' || name === 'demo';
+  }
+
+  isStoreAvailable() {
+    return this.getProviderName() !== 'noop';
+  }
+
+  purchaseErrorMessage(res) {
+    if (res?.cancelled) return '';
+    if (res?.reason === 'store_unavailable') return 'Store unavailable — try again on a device build.';
+    if (res?.message) return res.message;
+    return 'Purchase could not be completed.';
+  }
+
+  applyEntitlements(productId) {
+    if (productId === 'remove_ads') {
+      this.removeAds = true;
+      SaveManager.setRemoveAds(true);
+      this.hideBanner();
+    }
+    if (productId === 'coins_small') MetaProgress.addGems(50);
+    if (productId === 'premium') MetaProgress.setPremium(true);
+  }
+
+  applyRestoreResult(res) {
+    if (!res) return;
+    const products = res.products ?? [];
+    if (res.removeAds || products.includes('remove_ads')) {
+      this.removeAds = true;
+      SaveManager.setRemoveAds(true);
+      this.hideBanner();
+    }
+    if (res.premium || products.includes('premium')) MetaProgress.setPremium(true);
+  }
+
+  async syncStoreEntitlements() {
+    if (!this.isStoreAvailable()) return { success: false };
     try {
-      const res = await this.provider.purchase(productId);
-      if (res?.success) {
-        if (productId === 'remove_ads') {
-          this.removeAds = true;
-          SaveManager.setRemoveAds(true);
-        }
-        if (productId === 'coins_small') MetaProgress.addGems(50);
-        if (productId === 'premium') MetaProgress.setPremium(true);
-      }
-      return res;
+      const res = await this.provider.restore?.();
+      if (res?.success) this.applyRestoreResult(res);
+      return res ?? { success: false };
     } catch {
       return { success: false };
+    }
+  }
+
+  async restorePurchases() {
+    return this.syncStoreEntitlements();
+  }
+
+  async purchase(productId) {
+    if (!this.isStoreAvailable()) {
+      return { success: false, reason: 'store_unavailable' };
+    }
+    try {
+      const res = await this.provider.purchase(productId);
+      if (res?.success) this.applyEntitlements(productId);
+      return res ?? { success: false };
+    } catch {
+      return { success: false, reason: 'failed' };
     }
   }
 }

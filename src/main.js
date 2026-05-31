@@ -12,6 +12,7 @@ import { LevelCompleteScene } from './scenes/LevelCompleteScene.js';
 import { CodexScene } from './scenes/CodexScene.js';
 import { ShopScene } from './scenes/ShopScene.js';
 import { AdBreakScene } from './scenes/AdBreakScene.js';
+import { PurchaseScene } from './scenes/PurchaseScene.js';
 import { InputRouter } from './systems/InputRouter.js';
 import { RunPersistence } from './systems/RunPersistence.js';
 import { Monetization } from './systems/Monetization.js';
@@ -60,7 +61,7 @@ function buildPhaserConfig() {
     fps: { target: 60, min: 30 },
     scene: [
       BootScene, PreloadScene, MenuScene, GameScene, HUDScene,
-      PauseScene, SettingsScene, GameOverScene, LevelCompleteScene, CodexScene, ShopScene, AdBreakScene,
+      PauseScene, SettingsScene, GameOverScene, LevelCompleteScene, CodexScene, ShopScene, AdBreakScene, PurchaseScene,
     ],
   };
 }
@@ -155,6 +156,7 @@ function bootGame() {
         Monetization.removeAds = SaveManager.getRemoveAds();
         try {
           await adProvider.init?.();
+          await Monetization.syncStoreEntitlements();
         } catch (e) {
           console.warn('[Monetization] init skipped', e);
         }

@@ -38,6 +38,14 @@ export const GAME = {
 
   LASER_BULLET_SPEED: 980,
   LASER_FIRE_MS: 95,
+  /** Min ms between auto-fire shots per cannon type */
+  CANNON_FIRE_MS: {
+    laser: 380,
+    fire: 620,
+    ice: 520,
+    shock: 480,
+    napalm: 700,
+  },
   POT_SPEED: 360,
 
   MAX_BALLS: 24,
@@ -228,4 +236,5 @@ export const SCENES = {
   CODEX: 'Codex',
   SHOP: 'Shop',
   AD_BREAK: 'AdBreak',
+  PURCHASE: 'Purchase',
 };

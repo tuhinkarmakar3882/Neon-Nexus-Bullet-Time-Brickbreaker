@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME, SCENES, JARDINAIN, BRICK } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
-import { POWERS, powerFillColor, powerColorHex, resolvePowerKey, CANNON_TYPES, BALL_MODS, categoryColor, POWER_KEYS, powerDisplayName } from '../config/PowerUps.js';
+import { POWERS, powerFillColor, powerColorHex, resolvePowerKey, CANNON_TYPES, BALL_MODS, POWER_KEYS, powerDisplayName, powerPillLabel } from '../config/PowerUps.js';
 import { rollPower, rollPowerDraft, rollPositivePowerDraft, rollCapsuleVariant, rollBlessedPower } from '../config/DropTables.js';
 import { mutatorDisplay } from '../config/Mutators.js';
 import { goalProgressText } from '../config/LevelGoals.js';
@@ -34,9 +34,10 @@ import { InputRouter } from '../systems/InputRouter.js';
 import { hapticPulse } from '../systems/Haptics.js';
 import { scaledBallBaseSpeed, difficultyFor } from '../systems/DifficultyScaler.js';
 import { addCameraFx, spawnConfetti, makeButton } from '../utils/UI.js';
-import { popScale, squashStretch, wobble, rippleRing, staggerDropIn, shardBurst, brickBreakFx, microShake, surgeText, hitSpark, brickNudge, launchBurst, risePop, tierPulse, dropIn, spinIn, powerAcquireBurst } from '../utils/MicroFx.js';
+import { popScale, squashStretch, wobble, rippleRing, staggerDropIn, shardBurst, brickBreakFx, microShake, surgeText, hitSpark, brickNudge, launchBurst, risePop, tierPulse, dropIn, spinIn, powerAcquireBurst, powerPickupFx, explosiveImpactFx, fireImpactFx, electricImpactFx, frostImpactFx } from '../utils/MicroFx.js';
 import { initBulletTimeFx, setBulletTimeIntensity, screenPunch, impactFlash, radialBlast, resetGameplayCamera, clearBulletTimeFx } from '../utils/BulletTimeFx.js';
 import { pick, clamp, rand, mulberry32 } from '../utils/Helpers.js';
+import { fitTextWidth, orbitronStyle, uiPx, wrapWidth } from '../utils/Typography.js';
 import { resolveSettings } from '../config/VfxQuality.js';
 import { gemsForLevelClear } from '../config/GemRewards.js';
 
@@ -171,7 +172,6 @@ export class GameScene extends Phaser.Scene {
     this.scene.launch(SCENES.HUD);
     this.bus = this.game.events;
     this.emitStats();
-    this.emitPowers();
     this.emitGnomeStreak();
     this.emitBtMeter();
     this.bus?.emit('hud:treasury', { value: MetaProgress.getTreasury() });
@@ -276,7 +276,7 @@ export class GameScene extends Phaser.Scene {
     if (this.over || !this.goal || this.goal.type === 'clear') return;
     const W = GAME.WIDTH;
     const card = this.add.text(W / 2, GAME.HEIGHT * 0.52, `${this.goal.label}\n${this.goal.desc}`, {
-      fontFamily: 'Orbitron, monospace', fontSize: '22px', color: '#cfe9ff', align: 'center', wordWrap: { width: W * 0.85 },
+      ...orbitronStyle(22, '#cfe9ff', { align: 'center', wordWrap: { width: wrapWidth(0.85) } }),
     }).setOrigin(0.5).setDepth(1200).setAlpha(0);
     this.tweens.add({ targets: card, alpha: 1, duration: 280, yoyo: true, hold: 1800, onComplete: () => card.destroy() });
   }
@@ -368,14 +368,14 @@ export class GameScene extends Phaser.Scene {
     bg.fillRoundedRect(-cw / 2, -ch / 2, cw, ch, 18);
     bg.lineStyle(2, 0xffd23d, 0.75);
     bg.strokeRoundedRect(-cw / 2, -ch / 2, cw, ch, 18);
-    const tag = this.add.text(0, -ch / 2 + 24, ids.length > 1 ? 'LEVEL MUTATORS' : 'LEVEL MUTATOR', {
-      fontFamily: 'Orbitron, monospace', fontSize: '14px', color: '#8899aa', fontStyle: 'bold',
+    const tag = this.add.text(0, -ch / 2 + uiPx(24, { min: 18, max: 24 }), ids.length > 1 ? 'LEVEL MUTATORS' : 'LEVEL MUTATOR', {
+      ...orbitronStyle(14, '#8899aa', { fontStyle: 'bold' }),
     }).setOrigin(0.5);
     card.add([bg, tag]);
     ids.forEach((id, i) => {
       const info = mutatorDisplay(id);
-      const t = this.add.text(0, -ch / 2 + 56 + i * 34, `${info.label} — ${info.desc}`, {
-        fontFamily: 'Orbitron, monospace', fontSize: '15px', color: cssHex(info.color), align: 'center', wordWrap: { width: cw - 40 },
+      const t = this.add.text(0, -ch / 2 + uiPx(56, { min: 44, max: 56 }) + i * uiPx(34, { min: 28, max: 34 }), `${info.label} — ${info.desc}`, {
+        ...orbitronStyle(15, cssHex(info.color), { align: 'center', wordWrap: { width: cw - 40 } }),
       }).setOrigin(0.5, 0);
       card.add(t);
     });
@@ -505,10 +505,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   floatText(x, y, msg, color, size = 28) {
-    const t = this.add.text(x, y, msg, { fontFamily: 'Orbitron, monospace', fontSize: size + 'px', fontStyle: 'bold', color }).setOrigin(0.5).setDepth(41);
+    const t = this.add.text(x, y, msg, { ...orbitronStyle(size, color, { fontStyle: 'bold' }) }).setOrigin(0.5).setDepth(41);
+    fitTextWidth(t, wrapWidth(0.72), uiPx(14, { min: 12, max: 16 }));
     t.setShadow(0, 0, color, 10, true, true).setScale(0.6).setAlpha(0);
     this.tweens.add({ targets: t, scale: 1, alpha: 1, duration: 120, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: t, y: y - 60, alpha: 0, duration: 720, delay: 80, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
+    this.tweens.add({ targets: t, y: y - uiPx(60, { min: 40, max: 60 }), alpha: 0, duration: 720, delay: 80, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
   }
 
   spawnLevel() {
@@ -741,18 +742,16 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  checkNearMiss(ball) {
-    const py = this.paddle.y - this.paddle.h / 2;
-    if (ball.vy <= 0 || ball.y < py - 40) return;
-    const edgeDist = Math.abs(ball.x - this.paddle.x) - this.paddle.w / 2;
-    if (edgeDist > ball.r && edgeDist < ball.r + 28 && ball.y > py - ball.r - 8) {
-      this.addBtMeter(GAME.BT_METER_NEAR_MISS_FILL);
-      surgeText(this, ball.x, ball.y, 'CLUTCH!', '#8ec5ff', 28);
-      rippleRing(this, ball.x, ball.y, { tint: 0x8ec5ff, scale: 2, dur: 320, depth: 32 });
-      hitSpark(this, ball.x, ball.y, { tint: 0x8ec5ff, count: 5, spread: 18 });
-      audio.clutch?.();
-      hapticPulse(6);
-    }
+  /** Nexus meter bonus for a clutch edge save — only on paddle bounce near the corner. */
+  awardClutchBounce(ball) {
+    const rel = Math.abs((ball.x - this.paddle.x) / (this.paddle.w / 2));
+    if (rel < 0.78) return;
+    this.addBtMeter(GAME.BT_METER_NEAR_MISS_FILL);
+    surgeText(this, ball.x, ball.y, 'CLUTCH!', '#8ec5ff', 28);
+    rippleRing(this, ball.x, ball.y, { tint: 0x8ec5ff, scale: 2, dur: 320, depth: 32 });
+    hitSpark(this, ball.x, ball.y, { tint: 0x8ec5ff, count: 5, spread: 18 });
+    audio.clutch?.();
+    hapticPulse(6);
   }
 
   comboScoreMult() {
@@ -847,16 +846,17 @@ export class GameScene extends Phaser.Scene {
 
     const isNexus = source === 'nexus';
     const title = this.add.text(W / 2, H * 0.22, isNexus ? 'NEXUS FULL' : 'GNOME STREAK', {
-      fontFamily: 'Orbitron, monospace', fontSize: '22px', color: '#8899aa', fontStyle: 'bold',
+      ...orbitronStyle(22, '#8899aa', { fontStyle: 'bold' }),
     }).setOrigin(0.5);
     const subtitle = this.add.text(W / 2, H * 0.28, 'PICK ONE POWER', {
-      fontFamily: 'Orbitron, monospace', fontSize: '40px', color: cssHex(isNexus ? PAL.accent : PAL.accent2), fontStyle: '900',
+      ...orbitronStyle(40, cssHex(isNexus ? PAL.accent : PAL.accent2), { fontStyle: '900' }),
     }).setOrigin(0.5).setShadow(0, 0, cssHex(isNexus ? PAL.accent : PAL.accent2), 16, true, true);
+    fitTextWidth(subtitle, wrapWidth(0.9), uiPx(22, { min: 18, max: 26 }));
     container.add([title, subtitle]);
 
-    const btnW = Math.min(W * 0.86, 520);
-    const btnH = 96;
-    const gap = 16;
+    const btnW = Math.min(W * 0.86, uiPx(520, { max: 520 }));
+    const btnH = uiPx(96, { min: 64, max: 96 });
+    const gap = uiPx(16, { min: 10, max: 16 });
     const startY = H * 0.42;
 
     picks.forEach((key, i) => {
@@ -871,7 +871,7 @@ export class GameScene extends Phaser.Scene {
         depth: 2101,
       });
       const hint = this.add.text(W / 2, y + btnH * 0.34, def?.desc ?? '', {
-        fontFamily: 'Orbitron, monospace', fontSize: '13px', color: '#a8c4e8', align: 'center', wordWrap: { width: btnW - 32 },
+        ...orbitronStyle(13, '#a8c4e8', { align: 'center', wordWrap: { width: btnW - 32 } }),
       }).setOrigin(0.5, 0).setDepth(2102);
       container.add(btn);
       container.add(hint);
@@ -1248,6 +1248,7 @@ export class GameScene extends Phaser.Scene {
     } else if (def.kind === 'timed') {
       rippleRing(this, px, py, { tint, scale: 2.8, dur: 440 });
     }
+    powerPickupFx(this, key, px, py, def);
     this.settleCameraAfterFx(big ? 130 : 95);
   }
 
@@ -1270,7 +1271,6 @@ export class GameScene extends Phaser.Scene {
       this.controlsInverted = false;
       this.powerSys.clear('Flip');
       this.flash('CONTROLS FIXED', cssHex(PAL.powerPos), 600);
-      this.emitPowers();
       return;
     }
 
@@ -1292,7 +1292,7 @@ export class GameScene extends Phaser.Scene {
         audio.powerNegative?.();
       }
     }
-    if (this.settings.flashText) this.flash(key.replace(/([A-Z])/g, ' $1').trim().toUpperCase(), powerColorHex(key), 650);
+    if (this.settings.flashText) this.flash(powerPillLabel(key), powerColorHex(key), 650);
     if (neg) audio.powerNegative?.();
     else audio.powerCategory?.(def.category ?? 'env');
     const willBt = def.bulletTime && this.settings.bulletTime;
@@ -1323,7 +1323,6 @@ export class GameScene extends Phaser.Scene {
         break;
       default: this.applyPowerSideEffects(key);
     }
-    this.emitPowers();
     RunPersistence.saveRun(this);
     this.playPowerAcquireFx(key, def, { skipPunch: willBt });
   }
@@ -1374,12 +1373,12 @@ export class GameScene extends Phaser.Scene {
         break;
     }
     this.balls.forEach((b) => this.applyActiveStateToBall(b));
-    this.emitPowers();
   }
 
   doEarthquake() {
     audio.explode?.();
     this.cameras.main.shake(450, 0.018);
+    explosiveImpactFx(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.35, PAL.accent3, { scale: 5, shake: 0.016, shards: 18 });
     this.flash('EARTHQUAKE!', cssHex(PAL.accent3), 800);
     this.jardinains.forEach((j) => {
       if (j._destroyed) return;
@@ -1502,30 +1501,30 @@ export class GameScene extends Phaser.Scene {
 
     if (t === 'laser') {
       if (now < this.cannonCooldown) return;
-      this.cannonCooldown = now + GAME.LASER_FIRE_MS;
+      this.cannonCooldown = now + GAME.CANNON_FIRE_MS.laser;
       this.spawnProjectile(this.paddle.left + 13, y, { type: 'laser', vy: -GAME.LASER_BULLET_SPEED });
       this.spawnProjectile(this.paddle.right - 13, y, { type: 'laser', vy: -GAME.LASER_BULLET_SPEED });
       audio.laser();
     } else if (t === 'fire') {
       if (now < this.cannonCooldown) return;
-      this.cannonCooldown = now + 420;
+      this.cannonCooldown = now + GAME.CANNON_FIRE_MS.fire;
       const jitter = rand(-80, 80);
       this.spawnProjectile(this.paddle.x + jitter * 0.3, y, { type: 'fire', vx: jitter * 0.5, vy: -500 });
       audio.fireHit?.() ?? audio.blip(320);
     } else if (t === 'ice') {
       if (now < this.cannonCooldown) return;
-      this.cannonCooldown = now + 85;
+      this.cannonCooldown = now + GAME.CANNON_FIRE_MS.ice;
       this.spawnProjectile(this.paddle.x, y, { type: 'ice', vy: -1180 });
       audio.frostHit?.() ?? audio.blip(880);
     } else if (t === 'shock') {
       if (now < this.cannonCooldown) return;
-      this.cannonCooldown = now + 260;
+      this.cannonCooldown = now + GAME.CANNON_FIRE_MS.shock;
       const rel = clamp((worldX - this.paddle.x) / (this.paddle.w / 2), -1, 1);
       this.spawnProjectile(this.paddle.x, y, { type: 'shock', vx: rel * 440, vy: -820, bounces: 4 });
       audio.blip(660);
     } else if (t === 'napalm') {
       if (now < this.cannonCooldown) return;
-      this.cannonCooldown = now + 380;
+      this.cannonCooldown = now + GAME.CANNON_FIRE_MS.napalm;
       const jitter = rand(-60, 60);
       this.spawnProjectile(this.paddle.x + jitter * 0.25, y, { type: 'napalm', vx: jitter * 0.4, vy: -480 });
       audio.fireHit?.() ?? audio.blip(280);
@@ -1567,6 +1566,7 @@ export class GameScene extends Phaser.Scene {
   /** Fire cannon shot — smaller blast than explosive ball. */
   fireBlastAt(x, y, radiusMult = 1) {
     audio.fireHit?.();
+    fireImpactFx(this, x, y, { tint: PAL.powerFire });
     this.cameras.main.shake(100, 0.005);
     if (this.settings.particles) this.burst(x, y, PAL.powerFire, 10);
     this.spawnRipple(x, y, PAL.powerFire);
@@ -1580,6 +1580,7 @@ export class GameScene extends Phaser.Scene {
   /** Electric ball / shock — one-hit any brick type. */
   electricHitBrick(br, ball) {
     audio.cannonHit?.();
+    electricImpactFx(this, br.cx, br.cy);
     this.spawnRipple(br.cx, br.cy, 0xa78bfa);
     if (this.settings.particles) this.burst(ball.x, ball.y, 0xa78bfa, 8);
     br.frostMarked = false;
@@ -1600,6 +1601,7 @@ export class GameScene extends Phaser.Scene {
   explodeGrid3x3(center, ball = null) {
     audio.explode();
     this.cameras.main.shake(200, 0.009);
+    explosiveImpactFx(this, center.cx, center.cy, PAL.explosive, { scale: 3.6, shake: 0.009, shards: 14 });
     if (this.settings.particles) this.explodeEmitter.explode(26, center.cx, center.cy);
     this.spawnRipple(center.cx, center.cy, PAL.explosive);
     const cellW = center.w + BRICK.GAP;
@@ -1896,9 +1898,15 @@ export class GameScene extends Phaser.Scene {
     if (brick.frostMarked) this.statusSys.spreadFrostFrom(brick);
 
     if (this.settings.particles) this.burst(brick.cx, brick.cy, brick.color, 9);
+    let breakStyle = 'normal';
+    if (exploded || ball?.element === 'explosive') breakStyle = 'explosive';
+    else if (ball?.element === 'nuke') breakStyle = 'nuke';
+    else if (ball?.element === 'frost') breakStyle = 'frost';
+    else if (ball?.element === 'electric') breakStyle = 'electric';
     brickBreakFx(this, brick.cx, brick.cy, brick.color, {
       reduced: this.settings.reducedFx,
       particles: this.settings.particles,
+      style: breakStyle,
     });
     if (brick.panel?.active) {
       this.tweens.add({
@@ -2057,6 +2065,21 @@ export class GameScene extends Phaser.Scene {
     RunPersistence.saveRun(this);
   }
 
+  /** Resume after watching a rewarded ad (or bypass when ads unavailable). */
+  doVideoContinue() {
+    this.over = false;
+    this.lives = GAME.STARTING_LIVES;
+    this.powerSys.clearAll();
+    this.paddle.reset();
+    this.balls.forEach((b) => b.destroy());
+    this.balls = [new Ball(this, this.paddle)];
+    this.applyEquippedCosmetics();
+    InputRouter.onOverlayClose();
+    this.scene.resume();
+    this.emitStats();
+    RunPersistence.saveRun(this);
+  }
+
   doReviveWithPowers() {
     this.over = false;
     this.lives = 1;
@@ -2144,6 +2167,9 @@ export class GameScene extends Phaser.Scene {
     if (this.settings.bulletTime) this.triggerBulletTime(550, { punch: true, intensity: 1, wow: true });
     RunPersistence.saveRun(this);
     this.scene.pause();
+    this.tweens.killTweensOf(this.paddle.body);
+    this.paddle.body?.setAngle(0);
+    this.paddle.body?.setScale(1);
     try {
       await Monetization.maybeShowLevelInterstitial();
     } catch (e) {
@@ -2202,7 +2228,7 @@ export class GameScene extends Phaser.Scene {
     InputRouter.onOverlayClose();
     this.scene.resume();
     this.levelFlash();
-    this.emitStats(); this.emitPowers();
+    this.emitStats();
     RunPersistence.saveRun(this);
     this.flushPendingDrafts();
   }
@@ -2221,19 +2247,6 @@ export class GameScene extends Phaser.Scene {
         escortLost: this.goalFail && this.goal?.type === 'escort',
       }),
     });
-  }
-
-  emitPowers() {
-    this.bus?.emit('hud:powers', this.powerSys.keys().map((k) => ({
-      key: k,
-      short: POWERS[k]?.short ?? '??',
-      category: POWERS[k]?.category ?? 'env',
-      ratio: this.powerSys.ratio(k),
-      color: powerFillColor(k),
-      categoryColor: categoryColor(POWERS[k]?.category),
-      polarity: POWERS[k]?.polarity,
-      icon: `icon-${k}`,
-    })));
   }
 
   flash(text, color, ms = 800) { this.bus?.emit('hud:flash', { text, color, ms }); }
@@ -2297,7 +2310,6 @@ export class GameScene extends Phaser.Scene {
 
     this.powerSys.tick(dtMs);
     this.statusSys.tick();
-    if (this.powerSys.keys().length && this.frame % 12 === 0) this.emitPowers();
     if (this.blackHole && this.powerSys.isActive('BlackHole') && this.frame % 10 === 0) {
       this.pullBlackHole();
     }
@@ -2473,6 +2485,7 @@ export class GameScene extends Phaser.Scene {
       ball.stuck = true;
       ball.stuckOffset = clamp(ball.x - this.paddle.x, -this.paddle.w / 2, this.paddle.w / 2);
     }
+    this.awardClutchBounce(ball);
     return true;
   }
 
@@ -2520,11 +2533,9 @@ export class GameScene extends Phaser.Scene {
           this.powerSys.clear('Shield');
           this.powerSys.clear('ShieldII');
         }
-        this.emitPowers();
       }
 
       if (ball.y > GAME.HEIGHT + ball.r) { this.ballLost(ball); continue; }
-      this.checkNearMiss(ball);
 
       for (const j of this.jardinains) {
         if (!j.hitBy(ball)) continue;
@@ -2626,6 +2637,7 @@ export class GameScene extends Phaser.Scene {
           } else {
             this.statusSys.markFrostCluster(br);
             audio.frostHit?.();
+            frostImpactFx(this, br.cx, br.cy);
             this.bounceBallOffBrick(ball, br, false);
             if (this.settings.particles) this.burst(ball.x, ball.y, PAL.powerFrost, 4);
           }
@@ -2663,6 +2675,7 @@ export class GameScene extends Phaser.Scene {
         case 'ice':
           this.statusSys.freezeBrick(br, 5000);
           audio.frostHit?.();
+          frostImpactFx(this, b.x, b.y);
           if (this.settings.particles) this.burst(b.x, b.y, PAL.powerFrost, 5);
           return true;
         case 'shock':

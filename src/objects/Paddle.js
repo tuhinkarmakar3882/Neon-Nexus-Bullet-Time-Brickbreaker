@@ -108,6 +108,7 @@ export class Paddle {
   }
 
   sync() {
+    this.body.setAngle(0);
     this.body.setSize(this.w, this.h);
     this.body.setPosition(this.x, this.y);
     this.body.setTint(this.stunned ? 0xaa9080 : this._hullTint);

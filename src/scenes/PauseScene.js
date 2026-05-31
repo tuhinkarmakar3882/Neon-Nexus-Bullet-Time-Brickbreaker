@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
-import { layoutButtonStack, makeOverlayPanel } from '../utils/UI.js';
+import { anchorButtonStack, makeResponsiveOverlayPanel } from '../utils/UI.js';
 import { InputRouter } from '../systems/InputRouter.js';
+import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 
 export class PauseScene extends Phaser.Scene {
   constructor() {
@@ -12,30 +13,25 @@ export class PauseScene extends Phaser.Scene {
   create() {
     InputRouter.onOverlayOpen(SCENES.PAUSE);
     this.input.setTopOnly(true);
-    const panel = makeOverlayPanel(this);
-
-    this.add.text(panel.cx, panel.cy - panel.cardH / 2 + 72, 'PAUSED', {
-      fontFamily: 'Orbitron, monospace', fontSize: '72px', fontStyle: '900', color: cssHex(PAL.accent),
-    }).setOrigin(0.5).setDepth(1001).setShadow(0, 0, cssHex(PAL.accent), 22, true, true);
-
-    layoutButtonStack(this, panel, [
-      { label: 'RESUME', onClick: () => this.resume(), height: 88, fontSize: '36px' },
+    const panel = makeResponsiveOverlayPanel(this, { dimAlpha: 0.82 });
+    const { stackTop, frame } = anchorButtonStack(this, panel, [
+      { label: 'RESUME', onClick: () => this.resume(), fontSize: '18px', color: PAL.accent },
       {
-        label: 'CODEX', height: 68, primary: false, fontSize: '26px',
+        label: 'CODEX', primary: false, fontSize: '16px',
         onClick: () => {
           this.scene.launch(SCENES.CODEX, { from: SCENES.PAUSE });
           this.scene.sleep();
         },
       },
       {
-        label: 'SETTINGS', height: 72, primary: false, fontSize: '28px',
+        label: 'SETTINGS', primary: false, fontSize: '16px',
         onClick: () => {
           this.scene.launch(SCENES.SETTINGS, { from: SCENES.PAUSE });
           this.scene.sleep();
         },
       },
       {
-        label: 'QUIT', height: 72, primary: false, color: PAL.danger, fontSize: '28px',
+        label: 'QUIT TO MENU', primary: false, color: PAL.danger, fontSize: '16px',
         onClick: () => {
           InputRouter.onOverlayClose(false);
           this.scene.stop(SCENES.HUD);
@@ -44,7 +40,16 @@ export class PauseScene extends Phaser.Scene {
           this.scene.start(SCENES.MENU);
         },
       },
-    ], { width: 360, gap: 14, offsetY: 32 });
+    ], { minTop: frame.titleY + uiPx(48, { min: 40, max: 52 }) });
+
+    const title = this.add.text(frame.cx, frame.titleY, 'PAUSED', {
+      ...orbitronStyle(48, cssHex(PAL.accent), { fontStyle: '900', align: 'center' }),
+    }).setOrigin(0.5, 0).setDepth(1001).setShadow(0, 0, cssHex(PAL.accent), 22, true, true);
+    fitTextWidth(title, frame.wrap, uiPx(28, { min: 24, max: 36 }));
+
+    this.add.text(frame.cx, Math.min(frame.titleY + uiPx(56, { min: 48, max: 60 }), stackTop - uiPx(36, { min: 28, max: 40 })), 'Take a breath — the garden waits.', {
+      ...orbitronStyle(14, PAL.textMuted, { align: 'center', wordWrap: { width: frame.wrap } }),
+    }).setOrigin(0.5, 0).setDepth(1001);
 
     this.input.keyboard.on('keydown-P', () => this.resume());
     this.input.keyboard.on('keydown-ESC', () => this.resume());

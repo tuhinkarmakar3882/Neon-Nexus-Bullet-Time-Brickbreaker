@@ -2,17 +2,13 @@ import Phaser from 'phaser';
 import { GAME, SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { PADDLE_HULLS, BALL_TRAILS, GARDEN_THEMES } from '../config/Cosmetics.js';
-import { makeButton, makeOverlayPanel } from '../utils/UI.js';
+import { makeButton, makeResponsiveOverlayPanel, overlayFrame, attachOverlayScroll } from '../utils/UI.js';
 import { MetaProgress } from '../systems/MetaProgress.js';
 import { Monetization } from '../systems/Monetization.js';
 import { InputRouter } from '../systems/InputRouter.js';
 import { clamp } from '../utils/Helpers.js';
 import { audio } from '../systems/AudioManager.js';
-
-const DEPTH = 1002;
-const ROW_H = 54;
-const ROW_GAP = 10;
-const SECTION_GAP = 22;
+import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 
 export class ShopScene extends Phaser.Scene {
   constructor() { super(SCENES.SHOP); }
@@ -25,45 +21,42 @@ export class ShopScene extends Phaser.Scene {
     this._bannerWasVisible = document.getElementById('ad-banner')?.classList.contains('visible');
     Monetization.hideBanner();
 
-    const W = GAME.WIDTH;
-    const panel = makeOverlayPanel(this, { dimAlpha: 0.94, cardH: GAME.HEIGHT * 0.9 });
+    const DEPTH = 1002;
+    this._rowH = uiPx(52, { min: 46, max: 54 });
+    this._rowGap = uiPx(10, { min: 8, max: 12 });
+    const SECTION_GAP = uiPx(20, { min: 16, max: 22 });
+    this._depth = DEPTH;
+
+    const panel = makeResponsiveOverlayPanel(this, { dimAlpha: 0.94, maxCardW: 720 });
     this.panel = panel;
+    const frame = overlayFrame(panel, { footerReserve: uiPx(64, { min: 56, max: 68 }), headerReserve: uiPx(108, { min: 96, max: 112 }) });
 
-    const cardTop = panel.cy - panel.cardH / 2;
-    const cardBottom = panel.cy + panel.cardH / 2;
-    const contentLeft = panel.cx - panel.cardW / 2 + 20;
-    this.contentWidth = panel.cardW - 40;
-    const headerBottom = cardTop + 112;
-    const footerTop = cardBottom - 68;
+    const cardTop = frame.cardTop;
+    this.contentWidth = panel.cardW - frame.pad * 2;
+    const headerBottom = frame.contentTop;
+    const contentBottom = frame.footerY - uiPx(30, { min: 26, max: 34 });
     this.contentTop = headerBottom;
-    this.contentH = footerTop - headerBottom;
+    this.contentH = Math.max(80, contentBottom - headerBottom);
 
-    this.add.text(panel.cx, cardTop + 40, 'GARDEN SHOP', {
-      fontFamily: 'Orbitron, monospace',
-      fontSize: clamp(Math.round(W * 0.038), 30, 42) + 'px',
-      fontStyle: '900',
-      color: cssHex(PAL.accent),
-    }).setOrigin(0.5).setDepth(DEPTH + 2).setShadow(0, 0, cssHex(PAL.accent), 14, true, true);
+    const title = this.add.text(frame.cx, cardTop + uiPx(28, { min: 22, max: 32 }), 'GARDEN SHOP', {
+      ...orbitronStyle(34, cssHex(PAL.accent), { fontStyle: '900', align: 'center' }),
+    }).setOrigin(0.5, 0).setDepth(DEPTH + 2).setShadow(0, 0, cssHex(PAL.accent), 14, true, true);
+    fitTextWidth(title, this.contentWidth, uiPx(24, { min: 20, max: 28 }));
 
-    this.add.text(panel.cx, cardTop + 72, 'GEMS', {
-      fontFamily: 'Orbitron, monospace',
-      fontSize: '11px',
-      color: PAL.textMuted,
-      letterSpacing: '0.22em',
-    }).setOrigin(0.5).setDepth(DEPTH + 2);
+    this.add.text(frame.cx, cardTop + uiPx(58, { min: 48, max: 62 }), 'GEMS', {
+      ...orbitronStyle(10, PAL.textMuted, { letterSpacing: '0.22em', align: 'center' }),
+    }).setOrigin(0.5, 0).setDepth(DEPTH + 2);
 
-    this.status = this.add.text(panel.cx, cardTop + 92, `💎  ${MetaProgress.getGems()}`, {
-      fontFamily: 'Orbitron, monospace',
-      fontSize: '22px',
-      color: cssHex(PAL.accent2),
-      fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(DEPTH + 2);
+    this.status = this.add.text(frame.cx, cardTop + uiPx(76, { min: 64, max: 80 }), `💎  ${MetaProgress.getGems()}`, {
+      ...orbitronStyle(20, cssHex(PAL.accent2), { fontStyle: 'bold', align: 'center' }),
+    }).setOrigin(0.5, 0).setDepth(DEPTH + 2);
 
     const divider = this.add.graphics().setDepth(DEPTH + 2);
     divider.lineStyle(1, PAL.accent, 0.28);
-    divider.lineBetween(contentLeft, headerBottom - 10, contentLeft + this.contentWidth, headerBottom - 10);
+    divider.lineBetween(frame.cx - this.contentWidth / 2, headerBottom - uiPx(8, { min: 6, max: 10 }), frame.cx + this.contentWidth / 2, headerBottom - uiPx(8, { min: 6, max: 10 }));
 
     this.scrollY = 0;
+    this._hitRows = [];
     this.scrollLayer = this.add.container(panel.cx, headerBottom).setDepth(DEPTH);
 
     let y = 8;
@@ -84,61 +77,66 @@ export class ShopScene extends Phaser.Scene {
 
     const maskGfx = this.make.graphics().setDepth(DEPTH);
     maskGfx.fillStyle(0xffffff);
-    maskGfx.fillRect(contentLeft, headerBottom, this.contentWidth, this.contentH);
+    maskGfx.fillRect(frame.cx - this.contentWidth / 2, headerBottom, this.contentWidth, this.contentH);
     this.scrollLayer.setMask(maskGfx.createGeometryMask());
 
     this.fadeTop = this.add.rectangle(
-      panel.cx, headerBottom + 18, this.contentWidth, 28, 0x080b16, 0.55,
+      frame.cx, headerBottom + 18, this.contentWidth, uiPx(24, { min: 20, max: 28 }), 0x080b16, 0.55,
     ).setDepth(DEPTH + 1).setVisible(false);
     this.fadeBottom = this.add.rectangle(
-      panel.cx, footerTop - 18, this.contentWidth, 28, 0x080b16, 0.55,
+      frame.cx, contentBottom - uiPx(18, { min: 14, max: 22 }), this.contentWidth, uiPx(24, { min: 20, max: 28 }), 0x080b16, 0.55,
     ).setDepth(DEPTH + 1).setVisible(false);
 
-    this.scrollHint = this.add.text(panel.cx, footerTop - 28, 'SWIPE TO SCROLL', {
-      fontFamily: 'Orbitron, monospace',
-      fontSize: '10px',
-      color: PAL.textMuted,
-      letterSpacing: '0.18em',
+    this.scrollHint = this.add.text(frame.cx, contentBottom - uiPx(22, { min: 18, max: 24 }), 'SWIPE TO SCROLL', {
+      ...orbitronStyle(9, PAL.textMuted, { letterSpacing: '0.18em', align: 'center' }),
     }).setOrigin(0.5).setDepth(DEPTH + 2).setAlpha(this.maxScroll > 0 ? 0.55 : 0);
 
-    this._ptrDown = false;
-    this._didDrag = false;
-    this._onPtrDown = (p) => {
-      if (!this.inScrollBounds(p)) return;
-      this._ptrDown = true;
-      this._didDrag = false;
-      this._ptrStartY = p.y;
-      this._scrollAtDown = this.scrollY;
-    };
-    this._onPtrMove = (p) => {
-      if (!this._ptrDown) return;
-      const dy = p.y - this._ptrStartY;
-      if (Math.abs(dy) > 8) this._didDrag = true;
-      if (!this._didDrag) return;
-      this.scrollY = clamp(this._scrollAtDown + dy, 0, this.maxScroll);
-      this.scrollLayer.y = this.contentTop - this.scrollY;
-      this.updateScrollFade();
-    };
-    this._onPtrUp = () => {
-      this._ptrDown = false;
-    };
-    this.input.on('pointerdown', this._onPtrDown);
-    this.input.on('pointermove', this._onPtrMove);
-    this.input.on('pointerup', this._onPtrUp);
-    this.input.on('wheel', (_p, _dx, _dy, dz) => {
-      if (this.maxScroll <= 0) return;
-      this.scrollBy(dz * 0.4);
+    const scrollLeft = frame.cx - this.contentWidth / 2;
+    this._scroll = attachOverlayScroll(this, {
+      left: scrollLeft,
+      top: this.contentTop,
+      width: this.contentWidth,
+      height: this.contentH,
+      getScroll: () => this.scrollY,
+      setScroll: (v) => {
+        this.scrollY = v;
+        this.scrollLayer.y = this.contentTop - this.scrollY;
+        this.updateScrollFade();
+      },
+      getMaxScroll: () => this.maxScroll,
     });
 
-    makeButton(this, panel.cx, cardBottom - 36, 'BACK', () => this.close(), {
-      width: 240,
-      height: 52,
-      fontSize: '20px',
+    this._onRowTap = (pointer) => {
+      if (this._purchasing || this.scene.isActive(SCENES.PURCHASE)) return;
+      if (this._scroll?.isDragGesture()) {
+        this._scroll.resetGesture();
+        return;
+      }
+      if (!this.inScrollBounds(pointer)) return;
+      const localY = pointer.y - this.scrollLayer.y;
+      for (const row of this._hitRows) {
+        if (localY >= row.top && localY <= row.bottom) {
+          if (row.action) row.action();
+          else if (row.c && row.kind) this.selectCosmetic(row.c, row.kind);
+          return;
+        }
+      }
+    };
+    this.input.on('pointerup', this._onRowTap);
+
+    makeButton(this, frame.cx, frame.footerY, 'BACK', () => this.close(), {
+      width: Math.min(this.contentWidth, uiPx(240, { max: 260 })),
+      height: uiPx(48, { min: 42, max: 52 }),
+      fontSize: '16px',
       primary: false,
       depth: DEPTH + 3,
     });
 
     this.updateScrollFade();
+    this.events.once('shutdown', () => {
+      this._scroll?.destroy();
+      if (this._onRowTap) this.input.off('pointerup', this._onRowTap);
+    });
   }
 
   inScrollBounds(p) {
@@ -151,11 +149,7 @@ export class ShopScene extends Phaser.Scene {
 
   addSection(title, y) {
     const label = this.add.text(-this.contentWidth / 2 + 4, y, title, {
-      fontFamily: 'Orbitron, monospace',
-      fontSize: '12px',
-      color: cssHex(PAL.accent3),
-      fontStyle: 'bold',
-      letterSpacing: '0.14em',
+      ...orbitronStyle(11, cssHex(PAL.accent3), { fontStyle: 'bold', letterSpacing: '0.14em' }),
     }).setOrigin(0, 0);
     this.scrollLayer.add(label);
     return y + 28;
@@ -169,15 +163,15 @@ export class ShopScene extends Phaser.Scene {
     const equipped = MetaProgress.getEquipped()[kind] === c.id;
     const rowW = this.contentWidth - 8;
     const tint = kind === 'theme' ? c.accent : c.tint;
-    const row = this.add.container(0, y + ROW_H / 2);
+    const row = this.add.container(0, y + this._rowH / 2);
 
     const bg = this.add.graphics();
     const drawBg = (hover = false) => {
       bg.clear();
       bg.fillStyle(equipped ? 0x142038 : 0x080c14, equipped ? 0.95 : hover ? 0.88 : 0.72);
-      bg.fillRoundedRect(-rowW / 2, -ROW_H / 2, rowW, ROW_H, 12);
+      bg.fillRoundedRect(-rowW / 2, -this._rowH / 2, rowW, this._rowH, 12);
       bg.lineStyle(2, equipped ? PAL.accent : owned ? 0x557799 : 0x334455, equipped ? 1 : 0.85);
-      bg.strokeRoundedRect(-rowW / 2, -ROW_H / 2, rowW, ROW_H, 12);
+      bg.strokeRoundedRect(-rowW / 2, -this._rowH / 2, rowW, this._rowH, 12);
     };
     drawBg(false);
 
@@ -185,11 +179,9 @@ export class ShopScene extends Phaser.Scene {
     swatch.setStrokeStyle(2, 0xffffff, 0.35);
 
     const nameText = this.add.text(-rowW / 2 + 52, equipped ? -7 : 0, c.label, {
-      fontFamily: 'Orbitron, monospace',
-      fontSize: '15px',
-      color: equipped ? cssHex(PAL.accent) : '#e8eefc',
-      fontStyle: 'bold',
+      ...orbitronStyle(14, equipped ? cssHex(PAL.accent) : '#e8eefc', { fontStyle: 'bold' }),
     }).setOrigin(0, 0.5);
+    fitTextWidth(nameText, rowW - uiPx(100, { min: 80, max: 110 }), 10);
 
     const parts = [bg, swatch, nameText];
 
@@ -225,48 +217,45 @@ export class ShopScene extends Phaser.Scene {
       fontStyle: owned && !equipped ? 'bold' : 'normal',
     }).setOrigin(1, 0.5));
 
-    const zone = this.add.zone(0, 0, rowW, ROW_H);
-    zone.setInteractive({ useHandCursor: true });
-    zone.on('pointerover', () => drawBg(true));
-    zone.on('pointerout', () => drawBg(false));
-    zone.on('pointerup', () => {
-      if (this._didDrag) return;
-      this.selectCosmetic(c, kind);
-    });
-    parts.push(zone);
-
     row.add(parts);
     this.scrollLayer.add(row);
-    return y + ROW_H + ROW_GAP;
+    this._hitRows.push({ top: y, bottom: y + this._rowH, c, kind });
+    return y + this._rowH + this._rowGap;
   }
 
   addSupportRow(y) {
     const rowW = this.contentWidth - 8;
-    const gap = 12;
+    const gap = uiPx(12, { min: 8, max: 12 });
     const btnW = (rowW - gap) / 2;
-    const row = this.add.container(0, y + 28);
+    const btnH = uiPx(44, { min: 40, max: 48 });
+    const rowTop = y + uiPx(8, { min: 6, max: 10 });
+    const row = this.add.container(0, rowTop + btnH / 2);
 
-    const coinsBtn = makeButton(this, 0, 0, 'GEMS +50', async () => {
-      const res = await Monetization.purchase('coins_small');
-      if (res?.success) this.updateTreasury();
-    }, { width: btnW, height: 48, fontSize: '14px', primary: false, depth: DEPTH + 1 });
+    const guard = (fn) => () => {
+      if (this._purchasing || this._scroll?.isDragGesture()) return;
+      fn();
+    };
+
+    const gemPrice = Monetization.formatPrice('coins_small') || '$0.99';
+    const premPrice = Monetization.formatPrice('premium') || '$4.99';
+
+    const coinsBtn = makeButton(this, 0, 0, `GEM PACK\n${gemPrice}`, guard(() => {
+      this.buyStoreProduct('coins_small');
+    }), { width: btnW, height: btnH, fontSize: '12px', primary: false, depth: this._depth + 1, fitLabel: false });
     coinsBtn.setPosition(-btnW / 2 - gap / 2, 0);
 
-    const premBtn = makeButton(this, 0, 0, 'PREMIUM', async () => {
-      const res = await Monetization.purchase('premium');
-      if (res?.success) {
-        MetaProgress.setPremium(true);
-        this.refresh();
-      }
-    }, { width: btnW, height: 48, fontSize: '14px', primary: false, depth: DEPTH + 1 });
+    const premBtn = makeButton(this, 0, 0, `PREMIUM\n${premPrice}`, guard(() => {
+      this.buyStoreProduct('premium');
+    }), { width: btnW, height: btnH, fontSize: '12px', primary: false, depth: this._depth + 1, fitLabel: false });
     premBtn.setPosition(btnW / 2 + gap / 2, 0);
 
     row.add([coinsBtn, premBtn]);
     this.scrollLayer.add(row);
-    return y + 64;
+    return y + btnH + uiPx(24, { min: 20, max: 28 });
   }
 
   selectCosmetic(c, kind) {
+    if (this._purchasing || this.scene.isActive(SCENES.PURCHASE)) return;
     const owned = MetaProgress.ownsCosmetic(kind, c.id);
     if (owned) {
       MetaProgress.equipCosmetic(kind, c.id);
@@ -275,7 +264,7 @@ export class ShopScene extends Phaser.Scene {
       return;
     }
     if (c.premium && !MetaProgress.isPremium()) {
-      this.status.setText('Requires Premium pass');
+      this.status.setText('Requires Premium — tap PREMIUM below');
       this.status.setColor(cssHex(PAL.gold));
       return;
     }
@@ -293,6 +282,39 @@ export class ShopScene extends Phaser.Scene {
   updateTreasury() {
     this.status.setText(`💎  ${MetaProgress.getGems()}`);
     this.status.setColor(cssHex(PAL.accent2));
+  }
+
+  async buyStoreProduct(productId) {
+    if (this._purchasing || !Monetization.isStoreAvailable()) {
+      if (!Monetization.isStoreAvailable()) {
+        this.status.setText('Store unavailable in this build');
+        this.status.setColor('#ff8899');
+      }
+      return;
+    }
+    this._purchasing = true;
+    this.status.setText('Opening checkout…');
+    this.status.setColor(cssHex(PAL.accent2));
+    try {
+      const res = await Monetization.purchase(productId);
+      if (res?.success) {
+        if (productId === 'coins_small') {
+          this.updateTreasury();
+          this.status.setText(`Purchase complete · ${MetaProgress.getGems()} 💎`);
+        } else {
+          this.refresh();
+        }
+        return;
+      }
+      if (res?.cancelled) {
+        this.status.setText('');
+        return;
+      }
+      this.status.setText(Monetization.purchaseErrorMessage(res));
+      this.status.setColor('#ff8899');
+    } finally {
+      this._purchasing = false;
+    }
   }
 
   scrollBy(dy) {
@@ -314,9 +336,8 @@ export class ShopScene extends Phaser.Scene {
   }
 
   close() {
-    this.input.off('pointerdown', this._onPtrDown);
-    this.input.off('pointermove', this._onPtrMove);
-    this.input.off('pointerup', this._onPtrUp);
+    this._scroll?.destroy();
+    this.input.off('pointerup', this._onRowTap);
     if (this._bannerWasVisible) Monetization.showBanner();
     InputRouter.onOverlayClose(this.from === SCENES.MENU);
     this.scene.stop();

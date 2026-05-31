@@ -1,10 +1,11 @@
 import { GAME } from '../config/Constants.js';
 import {
-  POWERS, categoryColor, powerFillColor, powerBadgeTextColor,
+  POWERS, categoryColor, powerFillColor, powerBadgeTextColor, powerPillLabel,
 } from '../config/PowerUps.js';
 import { PAL } from '../config/Palette.js';
 import { iconTextureKey } from '../utils/IconTextures.js';
 import { rand } from '../utils/Helpers.js';
+import { fitTextWidth } from '../utils/Typography.js';
 
 /** Falling seed capsule — Arkanoid-style letter on a color-coded pill. */
 export class PowerUp {
@@ -16,9 +17,9 @@ export class PowerUp {
     this.color = powerFillColor(key);
     this.catColor = categoryColor(def?.category);
     this.polarity = def?.polarity ?? 'pos';
-    this.short = def?.short ?? '??';
-    this.w = Math.max(68, GAME.WIDTH * 0.064);
-    this.h = this.w * 0.4;
+    this.label = powerPillLabel(key);
+    this.w = Math.max(82, GAME.WIDTH * 0.078);
+    this.h = this.w * 0.38;
     this.x = x;
     this.y = y;
     this.dead = false;
@@ -52,22 +53,25 @@ export class PowerUp {
     }
 
     const letterColor = powerBadgeTextColor(this.polarity);
-    this.letter = scene.add.text(0, 1, this.short, {
+    const fontSize = Math.max(9, Math.round(this.h * 0.28));
+    this.letter = scene.add.text(0, 1, this.label, {
       fontFamily: 'Orbitron, monospace',
-      fontSize: Math.max(11, Math.round(this.h * 0.34)) + 'px',
+      fontSize: fontSize + 'px',
       fontStyle: '900',
       color: letterColor,
     }).setOrigin(0.5);
+    fitTextWidth(this.letter, this.w * 0.72, 8);
     if (letterColor === '#ffffff') {
       this.letter.setStroke('#120818', 2);
     }
     this.container.add(this.letter);
 
     const iconKey = iconTextureKey(key);
-    if (scene.textures.exists(iconKey)) {
-      this.icon = scene.add.image(this.w * 0.22, 0, iconKey)
-        .setDisplaySize(this.h * 0.36, this.h * 0.36)
-        .setTint(0xffffff).setAlpha(0.9);
+    const showIcon = this.label.length <= 8;
+    if (showIcon && scene.textures.exists(iconKey)) {
+      this.icon = scene.add.image(-this.w * 0.28, 0, iconKey)
+        .setDisplaySize(this.h * 0.34, this.h * 0.34)
+        .setTint(0xffffff).setAlpha(0.85);
       this.container.add(this.icon);
     } else {
       this.icon = null;

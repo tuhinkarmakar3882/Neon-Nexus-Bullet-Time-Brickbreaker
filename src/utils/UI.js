@@ -2,12 +2,14 @@ import Phaser from 'phaser';
 import { GAME } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { audio } from '../systems/AudioManager.js';
+import { clamp } from './Helpers.js';
+import { fitButtonLabel, parseDesignPx, uiFont, uiPx, overlayType } from './Typography.js';
 
 // Robust button with padded hit areas, tap validation, ripples, and depth 1000+.
 export function makeButton(scene, x, y, label, onClick, opts = {}) {
   const w = opts.width ?? 320;
   let h = opts.height ?? 76;
-  h = Math.max(h, 48);
+  if (!opts.compact) h = Math.max(h, 48);
   const color = opts.color ?? PAL.accent;
   const primary = opts.primary !== false;
   const hitPad = opts.hitPad ?? 14;
@@ -32,13 +34,15 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
   };
   drawBg(false);
 
+  const designFs = parseDesignPx(opts.fontSize, Math.round(h * 0.38));
   const text = scene.add.text(0, 0, label, {
     fontFamily: 'Orbitron, monospace',
-    fontSize: opts.fontSize ?? '30px',
+    fontSize: opts.rawFont ? `${designFs}px` : uiFont(designFs, { min: 9, max: designFs }),
     fontStyle: 'bold',
     color: primary ? PAL.textDark : cssHex(color),
   }).setOrigin(0.5);
   if (disabled) text.setAlpha(0.4);
+  if (label && opts.fitLabel !== false) fitButtonLabel(text, w, 9);
 
   container.add([bg, text]);
 
@@ -99,12 +103,12 @@ export function makeVolumeSlider(scene, x, y, label, value, onChange, opts = {})
   const depth = opts.depth ?? 1001;
   const c = scene.add.container(x, y).setDepth(depth);
   scene.add.text(-260, 0, label, {
-    fontFamily: 'Orbitron, monospace', fontSize: '22px', color: '#cfe9ff',
+    fontFamily: 'Orbitron, monospace', fontSize: uiFont(22), color: '#cfe9ff',
   }).setOrigin(0, 0.5).setDepth(depth);
 
   let vol = Math.max(0, Math.min(100, value ?? 100));
   const valText = scene.add.text(120, 0, `${vol}%`, {
-    fontFamily: 'Orbitron, monospace', fontSize: '22px', color: cssHex(PAL.accent),
+    fontFamily: 'Orbitron, monospace', fontSize: uiFont(22), color: cssHex(PAL.accent),
   }).setOrigin(0.5).setDepth(depth);
 
   const update = (v) => {
@@ -175,6 +179,160 @@ export function makeOverlayPanel(scene, opts = {}) {
   return { root, cx, cy, cardW, cardH, dim };
 }
 
+/** Overlay panel sized to safe viewport — works on portrait phones and desktop. */
+export function makeResponsiveOverlayPanel(scene, opts = {}) {
+  const W = GAME.WIDTH;
+  const H = GAME.HEIGHT;
+  const topPad = GAME.SAFE_TOP + uiPx(6, { min: 4, max: 10 });
+  const bottomPad = GAME.SAFE_BOTTOM + uiPx(8, { min: 6, max: 12 });
+  const sidePad = Math.max(GAME.SAFE_LEFT, GAME.SAFE_RIGHT, uiPx(4, { min: 2, max: 8 }));
+  const usableH = H - topPad - bottomPad;
+  const usableW = W - sidePad * 2;
+  const cardW = opts.cardW ?? Math.min(usableW * 0.96, opts.maxCardW ?? 720);
+  const heightRatio = opts.heightRatio ?? (GAME.IS_PORTRAIT ? 0.94 : 0.9);
+  const cardH = opts.cardH ?? Math.min(usableH * heightRatio, usableH);
+  const cy = opts.y ?? (topPad + usableH / 2);
+  return makeOverlayPanel(scene, {
+    gameW: W,
+    gameH: H,
+    x: W / 2,
+    y: cy,
+    cardW,
+    cardH,
+    dimAlpha: opts.dimAlpha,
+    depth: opts.depth,
+  });
+}
+
+/** Content bounds inside an overlay card (header / scroll / footer regions). */
+export function overlayFrame(panel, opts = {}) {
+  const cardTop = panel.cy - panel.cardH / 2;
+  const cardBot = panel.cy + panel.cardH / 2;
+  const pad = uiPx(16, { min: 12, max: 20 });
+  const footerReserve = opts.footerReserve ?? uiPx(68, { min: 56, max: 72 });
+  const headerReserve = opts.headerReserve ?? uiPx(72, { min: 56, max: 80 });
+  const t = overlayType(panel);
+  const btnH = uiPx(opts.btnH ?? 48, { min: 42, max: 52 });
+  const btnGap = uiPx(opts.btnGap ?? 10, { min: 8, max: 12 });
+  const contentTop = cardTop + headerReserve;
+  const contentBottom = cardBot - footerReserve;
+  return {
+    cx: panel.cx,
+    cardTop,
+    cardBot,
+    pad,
+    wrap: t.wrap,
+    t,
+    btnW: Math.min(panel.cardW * 0.88, t.btnW),
+    btnH,
+    btnGap,
+    contentTop,
+    contentBottom,
+    contentH: Math.max(48, contentBottom - contentTop),
+    titleY: cardTop + uiPx(32, { min: 24, max: 40 }),
+    footerY: cardBot - footerReserve / 2,
+  };
+}
+
+/** Bottom-anchored button column — shrinks height/gap on short screens. */
+export function anchorButtonStack(scene, panel, items, opts = {}) {
+  const frame = overlayFrame(panel, { footerReserve: 0, ...opts });
+  let btnH = opts.btnHeight ?? frame.btnH;
+  let gap = opts.gap ?? frame.btnGap;
+  const btnW = opts.width ?? frame.btnW;
+  const n = items.length;
+  const footerPad = uiPx(14, { min: 10, max: 16 });
+  const minTop = opts.minTop ?? frame.titleY + uiPx(72, { min: 56, max: 72 });
+  const maxStackH = Math.max(btnH, frame.cardBot - footerPad - minTop);
+
+  let stackH = n * btnH + Math.max(0, n - 1) * gap;
+  while (stackH > maxStackH && btnH > 38) {
+    btnH -= 2;
+    stackH = n * btnH + Math.max(0, n - 1) * gap;
+  }
+  while (stackH > maxStackH && gap > 6) {
+    gap -= 2;
+    stackH = n * btnH + Math.max(0, n - 1) * gap;
+  }
+
+  let y = frame.cardBot - footerPad - stackH + btnH / 2;
+  const buttons = [];
+  items.forEach((item) => {
+    const { label, onClick, height, ...rest } = item;
+    const h = height ?? btnH;
+    buttons.push(makeButton(scene, frame.cx, y, label, onClick, { width: btnW, height: h, ...rest }));
+    y += h + gap;
+  });
+  return { buttons, stackTop: y - btnH / 2 - (n > 0 ? 0 : 0), btnH, frame };
+}
+
+/**
+ * Touch/wheel scroll for overlay lists — scene-level tracking so rows/buttons
+ * underneath remain tappable when the gesture is a tap (not a drag).
+ */
+export function attachOverlayScroll(scene, opts = {}) {
+  const {
+    left, top, width, height,
+    getScroll = () => 0,
+    setScroll = () => {},
+    getMaxScroll = () => 0,
+    dragThreshold = 8,
+    wheelFactor = 0.35,
+  } = opts;
+
+  let tracking = false;
+  let gestureDragged = false;
+  let startY = 0;
+  let scrollStart = 0;
+
+  const inBounds = (x, y) => x >= left && x <= left + width && y >= top && y <= top + height;
+
+  const onDown = (pointer) => {
+    if (!inBounds(pointer.x, pointer.y)) return;
+    tracking = true;
+    gestureDragged = false;
+    startY = pointer.y;
+    scrollStart = getScroll();
+  };
+
+  const onMove = (pointer) => {
+    if (!tracking || !pointer.isDown) return;
+    const dy = pointer.y - startY;
+    if (!gestureDragged && Math.abs(dy) < dragThreshold) return;
+    gestureDragged = true;
+    setScroll(clamp(scrollStart - dy, 0, getMaxScroll()));
+  };
+
+  const onUp = () => {
+    tracking = false;
+  };
+
+  const onWheel = (_p, _gos, _dx, dy) => {
+    if (getMaxScroll() <= 0) return;
+    const ptr = scene.input.activePointer;
+    if (!inBounds(ptr.x, ptr.y)) return;
+    setScroll(clamp(getScroll() - dy * wheelFactor, 0, getMaxScroll()));
+  };
+
+  scene.input.on('pointerdown', onDown);
+  scene.input.on('pointermove', onMove);
+  scene.input.on('pointerup', onUp);
+  scene.input.on('pointerupoutside', onUp);
+  scene.input.on('wheel', onWheel);
+
+  return {
+    isDragGesture: () => gestureDragged,
+    resetGesture: () => { gestureDragged = false; },
+    destroy() {
+      scene.input.off('pointerdown', onDown);
+      scene.input.off('pointermove', onMove);
+      scene.input.off('pointerup', onUp);
+      scene.input.off('pointerupoutside', onUp);
+      scene.input.off('wheel', onWheel);
+    },
+  };
+}
+
 /** Stack overlay buttons inside a panel card — avoids %Y drift on tall canvases. */
 export function layoutButtonStack(scene, panel, items, opts = {}) {
   const { cx, cy } = panel;
@@ -209,21 +367,28 @@ export function layoutButtonStack(scene, panel, items, opts = {}) {
 
 // Animated pill toggle — updates graphics in place (no removeAll).
 export function makeToggle(scene, x, y, value, onChange, opts = {}) {
+  const trackW = opts.width ?? uiPx(72, { min: 48, max: 88 });
+  const trackH = opts.height ?? uiPx(36, { min: 28, max: 40 });
+  const radius = Math.round(trackH / 2);
+  const knobR = Math.max(6, Math.round(trackH * 0.36));
+  const pad = Math.max(2, Math.round(trackH * 0.08));
+  const travel = Math.max(4, trackW / 2 - knobR - pad);
+
   const c = scene.add.container(x, y).setDepth(opts.depth ?? 1100);
   const g = scene.add.graphics();
-  const knob = scene.add.circle(0, 0, 20, 0xffffff);
+  const knob = scene.add.circle(0, 0, knobR, 0xffffff);
   c.add([g, knob]);
 
   let on = !!value;
   const draw = (animate = false) => {
     g.clear();
     g.fillStyle(on ? PAL.accent : 0x333a44, 1);
-    g.fillRoundedRect(-56, -26, 112, 52, 26);
+    g.fillRoundedRect(-trackW / 2, -trackH / 2, trackW, trackH, radius);
     if (on) {
-      g.lineStyle(2, PAL.accent, 0.6);
-      g.strokeRoundedRect(-56, -26, 112, 52, 26);
+      g.lineStyle(Math.max(1, Math.round(trackH * 0.05)), PAL.accent, 0.6);
+      g.strokeRoundedRect(-trackW / 2, -trackH / 2, trackW, trackH, radius);
     }
-    const targetX = on ? 30 : -30;
+    const targetX = on ? travel : -travel;
     if (animate) {
       scene.tweens.add({ targets: knob, x: targetX, duration: 200, ease: 'Cubic.easeOut' });
     } else {
@@ -232,7 +397,7 @@ export function makeToggle(scene, x, y, value, onChange, opts = {}) {
   };
   draw(false);
 
-  const zone = scene.add.zone(0, 0, 112, 52).setOrigin(0.5, 0.5);
+  const zone = scene.add.zone(0, 0, trackW, trackH).setOrigin(0.5, 0.5);
   c.add(zone);
   zone.setInteractive({ useHandCursor: true });
 
@@ -251,6 +416,8 @@ export function makeToggle(scene, x, y, value, onChange, opts = {}) {
 
   return {
     container: c,
+    trackW,
+    trackH,
     setValue(v) { on = !!v; draw(false); },
     getValue: () => on,
   };

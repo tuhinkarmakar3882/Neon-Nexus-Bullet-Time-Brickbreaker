@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
-import { GAME, SCENES } from '../config/Constants.js';
+import { SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
-import { makeOverlayPanel, spawnConfetti, makeButton } from '../utils/UI.js';
+import { makeResponsiveOverlayPanel, spawnConfetti, makeButton, overlayFrame } from '../utils/UI.js';
 import { InputRouter } from '../systems/InputRouter.js';
 import { Monetization } from '../systems/Monetization.js';
+import { isAdSurfaceEnabled } from '../config/AdsConfig.js';
 import { shareProgressScreenshot } from '../systems/ShareProgress.js';
 import { audio } from '../systems/AudioManager.js';
+import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 
 export class LevelCompleteScene extends Phaser.Scene {
   constructor() { super(SCENES.LEVEL_COMPLETE); }
@@ -14,76 +16,97 @@ export class LevelCompleteScene extends Phaser.Scene {
   create() {
     InputRouter.onOverlayOpen(SCENES.LEVEL_COMPLETE);
     this.input.setTopOnly(true);
-    const W = GAME.WIDTH, H = GAME.HEIGHT;
     const d = this.d;
-    const panel = makeOverlayPanel(this);
+    const panel = makeResponsiveOverlayPanel(this, { maxCardW: 680 });
+    const frame = overlayFrame(panel, { footerReserve: uiPx(130, { min: 110, max: 140 }) });
+    const showAdBtn = !Monetization.removeAds && isAdSurfaceEnabled('rewarded');
+    const btnW = showAdBtn
+      ? Math.min(frame.btnW / 2 - uiPx(6, { min: 4, max: 8 }), uiPx(160, { max: 180 }))
+      : Math.min(frame.btnW, uiPx(200, { max: 220 }));
+    const btnH = uiPx(44, { min: 40, max: 48 });
+    const btnGap = uiPx(12, { min: 8, max: 14 });
+    const actionsY = frame.cardBot - uiPx(72, { min: 64, max: 80 });
+    const game = this.scene.get(SCENES.GAME);
+    let doubled = false;
 
-    const title = this.add.text(panel.cx, panel.cy - panel.cardH / 2 + 120, `LEVEL ${d.level ?? 1}\nCLEARED`, {
-      fontFamily: 'Orbitron, monospace', fontSize: '64px', fontStyle: '900', color: cssHex(PAL.accent), align: 'center',
-    }).setOrigin(0.5).setDepth(1001).setShadow(0, 0, cssHex(PAL.accent), 24, true, true).setScale(0.5).setAlpha(0);
+    let y = frame.titleY;
+    const title = this.add.text(frame.cx, y, `LEVEL ${d.level ?? 1}\nCLEARED`, {
+      ...orbitronStyle(40, cssHex(PAL.accent), { fontStyle: '900', align: 'center', wordWrap: { width: frame.wrap } }),
+    }).setOrigin(0.5, 0).setDepth(1001).setShadow(0, 0, cssHex(PAL.accent), 20, true, true).setScale(0.5).setAlpha(0);
+    fitTextWidth(title, frame.wrap, uiPx(26, { min: 22, max: 32 }));
+    y += uiPx(62, { min: 48, max: 68 });
 
-    spawnConfetti(this, panel.cx, panel.cy - panel.cardH / 2 + 120, 48);
+    spawnConfetti(this, frame.cx, frame.cardTop + uiPx(44, { min: 32, max: 48 }), 40);
 
-    this.add.text(panel.cx, panel.cy - 20, d.message || '', {
-      fontFamily: 'Orbitron, monospace', fontSize: '24px', color: PAL.text, align: 'center', wordWrap: { width: panel.cardW * 0.9 },
-    }).setOrigin(0.5).setDepth(1001);
+    const lineGap = uiPx(24, { min: 18, max: 28 });
+    const addLine = (text, style, minPx) => {
+      if (y > frame.contentBottom - uiPx(100, { min: 88, max: 110 })) return;
+      const t = this.add.text(frame.cx, y, text, {
+        ...style, align: 'center', wordWrap: { width: frame.wrap },
+      }).setOrigin(0.5, 0).setDepth(1001);
+      fitTextWidth(t, frame.wrap, minPx);
+      y += t.height + lineGap * 0.65;
+    };
 
-    this.bonusText = this.add.text(panel.cx, panel.cy + 40, `CLEAR BONUS  +${d.bonus ?? 0}`, {
-      fontFamily: 'Orbitron, monospace', fontSize: '28px', fontStyle: 'bold', color: cssHex(PAL.accent3),
-    }).setOrigin(0.5).setDepth(1001);
-    this.scoreText = this.add.text(panel.cx, panel.cy + 90, `SCORE  ${d.score ?? 0}`, {
-      fontFamily: 'Orbitron, monospace', fontSize: '24px', color: PAL.textMuted,
-    }).setOrigin(0.5).setDepth(1001);
+    addLine(d.message || '', orbitronStyle(16, PAL.text), uiPx(12, { min: 11, max: 14 }));
+
+    this.bonusText = this.add.text(frame.cx, y, `CLEAR BONUS  +${d.bonus ?? 0}`, {
+      ...orbitronStyle(22, cssHex(PAL.accent3), { fontStyle: 'bold', align: 'center' }),
+    }).setOrigin(0.5, 0).setDepth(1001);
+    fitTextWidth(this.bonusText, frame.wrap, uiPx(16, { min: 14, max: 20 }));
+    y += this.bonusText.height + lineGap * 0.5;
+
+    this.scoreText = this.add.text(frame.cx, y, `SCORE  ${(d.score ?? 0).toLocaleString()}`, {
+      ...orbitronStyle(18, PAL.textMuted, { align: 'center' }),
+    }).setOrigin(0.5, 0).setDepth(1001);
+    y += uiPx(24, { min: 20, max: 26 });
 
     const stars = d.stars ?? 1;
-    this.add.text(panel.cx, panel.cy + 130, '★'.repeat(stars) + '☆'.repeat(3 - stars), {
-      fontFamily: 'Orbitron, monospace', fontSize: '36px', color: cssHex(PAL.gold),
-    }).setOrigin(0.5).setDepth(1001);
+    this.add.text(frame.cx, y, '★'.repeat(stars) + '☆'.repeat(3 - stars), {
+      ...orbitronStyle(28, cssHex(PAL.gold), { align: 'center' }),
+    }).setOrigin(0.5, 0).setDepth(1001);
+    y += uiPx(28, { min: 24, max: 30 });
 
     if (d.gemsEarned != null) {
-      this.add.text(panel.cx, panel.cy + 172, `+${d.gemsEarned} 💎 GEMS`, {
-        fontFamily: 'Orbitron, monospace', fontSize: '22px', fontStyle: 'bold', color: cssHex(PAL.info),
-      }).setOrigin(0.5).setDepth(1001);
-      this.add.text(panel.cx, panel.cy + 202, `TOTAL  ${d.gems ?? 0} 💎`, {
-        fontFamily: 'Orbitron, monospace', fontSize: '16px', color: cssHex(PAL.accent2),
-      }).setOrigin(0.5).setDepth(1001);
+      addLine(`+${d.gemsEarned} 💎 GEMS`, orbitronStyle(18, cssHex(PAL.info), { fontStyle: 'bold' }), uiPx(14, { min: 12, max: 16 }));
+      addLine(`TOTAL  ${(d.gems ?? 0).toLocaleString()} 💎`, orbitronStyle(14, cssHex(PAL.accent2)), uiPx(11, { min: 10, max: 13 }));
     }
 
     if (d.goal) {
-      this.add.text(panel.cx, panel.cy + 232, d.goal, {
-        fontFamily: 'Orbitron, monospace', fontSize: '16px', color: cssHex(PAL.accent3),
-      }).setOrigin(0.5).setDepth(1001);
+      addLine(d.goal, orbitronStyle(13, cssHex(PAL.accent3)), uiPx(10, { min: 9, max: 12 }));
     }
 
-    this.doubleStatus = this.add.text(panel.cx, panel.cy + 260, '', {
-      fontFamily: 'Orbitron, monospace', fontSize: '16px', color: cssHex(PAL.accent3),
-    }).setOrigin(0.5).setDepth(1001);
+    this.doubleStatus = this.add.text(frame.cx, Math.min(y, actionsY - btnH - uiPx(36, { min: 28, max: 40 })), '', {
+      ...orbitronStyle(12, cssHex(PAL.accent3), { align: 'center', wordWrap: { width: frame.wrap } }),
+    }).setOrigin(0.5, 0).setDepth(1001);
 
-    const game = this.scene.get(SCENES.GAME);
-    let doubled = false;
-    if (!Monetization.removeAds) {
-      makeButton(this, panel.cx - 100, panel.cy + 300, '🎬 2× BONUS', async () => {
+    this.shareStatus = this.add.text(frame.cx, actionsY + btnH / 2 + uiPx(8, { min: 6, max: 10 }), '', {
+      ...orbitronStyle(11, PAL.textMuted, { align: 'center', wordWrap: { width: frame.wrap } }),
+    }).setOrigin(0.5, 0).setDepth(1001);
+
+    const rowW = showAdBtn ? btnW * 2 + btnGap : btnW;
+    const leftX = frame.cx - rowW / 2 + btnW / 2;
+    const rightX = frame.cx + rowW / 2 - btnW / 2;
+
+    if (showAdBtn) {
+      makeButton(this, leftX, actionsY, '2× BONUS', async () => {
         if (doubled) return;
         this.doubleStatus.setText('Loading ad…');
         const granted = await Monetization.offerRewardedDoubleBonus();
         if (granted && game.applyLevelBonusDouble()) {
           doubled = true;
           this.bonusText.setText(`CLEAR BONUS  +${(d.bonus ?? 0) * 2}  (DOUBLED!)`);
-          this.scoreText.setText(`SCORE  ${game.score}`);
-          this.doubleStatus.setText('Bonus doubled — thank you!');
+          this.scoreText.setText(`SCORE  ${game.score.toLocaleString()}`);
+          this.doubleStatus.setText('Bonus doubled!');
           audio.blip(880);
         } else {
-          this.doubleStatus.setText('Ad unavailable — try again');
+          this.doubleStatus.setText('Ad unavailable');
           audio.blip(220);
         }
-      }, { width: 200, height: 44, fontSize: '14px', primary: false });
+      }, { width: btnW, height: btnH, fontSize: '13px', primary: false });
     }
 
-    this.shareStatus = this.add.text(panel.cx, panel.cy + 348, '', {
-      fontFamily: 'Orbitron, monospace', fontSize: '14px', color: PAL.textMuted,
-    }).setOrigin(0.5).setDepth(1001);
-
-    makeButton(this, panel.cx + (Monetization.removeAds ? 0 : 100), panel.cy + 300, '📸 SHARE', async () => {
+    makeButton(this, showAdBtn ? rightX : frame.cx, actionsY, 'SHARE', async () => {
       this.shareStatus.setText('Preparing screenshot…');
       const res = await shareProgressScreenshot(this.game, {
         kind: 'levelComplete',
@@ -102,15 +125,17 @@ export class LevelCompleteScene extends Phaser.Scene {
       this.shareStatus.setText(res.ok
         ? (res.method === 'download+clipboard' ? 'Saved! Message copied.' : res.method === 'download' ? 'Screenshot saved!' : 'Shared!')
         : 'Share cancelled');
-    }, { width: 200, height: 44, fontSize: '14px', primary: false, color: PAL.accent3 });
+    }, { width: btnW, height: btnH, fontSize: '13px', primary: false, color: PAL.accent3 });
 
-    const hint = this.add.text(panel.cx, panel.cy + panel.cardH / 2 - 48, 'tap to continue', { fontFamily: 'Orbitron, monospace', fontSize: '20px', color: PAL.textMuted }).setOrigin(0.5).setAlpha(0).setDepth(1001);
-    this.time.delayedCall(1200, () => {
-      hint.setAlpha(0.7);
-      this.tweens.add({ targets: hint, alpha: 0.2, yoyo: true, repeat: -1, duration: 700 });
-    });
+    const hint = this.add.text(frame.cx, frame.cardBot - uiPx(14, { min: 10, max: 16 }), 'tap to continue', {
+      ...orbitronStyle(14, PAL.textMuted, { align: 'center' }),
+    }).setOrigin(0.5, 1).setAlpha(0).setDepth(1002);
 
     this.tweens.add({ targets: title, scale: 1, alpha: 1, duration: 420, ease: 'Back.easeOut' });
+    this.time.delayedCall(1200, () => {
+      hint.setAlpha(0.7);
+      this.tweens.add({ targets: hint, alpha: 0.25, yoyo: true, repeat: -1, duration: 700 });
+    });
 
     let advanced = false;
     const advance = () => {

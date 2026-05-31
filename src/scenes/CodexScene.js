@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME, SCENES } from '../config/Constants.js';
+import { SCENES } from '../config/Constants.js';
 import { HOW_TO_PLAY } from '../config/HowToPlay.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import {
@@ -7,11 +7,12 @@ import {
   categoryColor, powerDisplayName,
 } from '../config/PowerUps.js';
 import { iconTextureKey } from '../utils/IconTextures.js';
-import { makeButton, makeOverlayPanel } from '../utils/UI.js';
+import { makeButton, makeResponsiveOverlayPanel, overlayFrame, attachOverlayScroll } from '../utils/UI.js';
 import { InputRouter } from '../systems/InputRouter.js';
 import { clamp } from '../utils/Helpers.js';
 import { MetaProgress } from '../systems/MetaProgress.js';
 import { GNOME_TIERS } from '../config/GnomeTiers.js';
+import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 
 const DEPTH = 1001;
 
@@ -31,40 +32,45 @@ export class CodexScene extends Phaser.Scene {
     this.scrollY = 0;
     this.maxScroll = 0;
 
-    const W = GAME.WIDTH;
-    const H = GAME.HEIGHT;
-    const panel = makeOverlayPanel(this, { dimAlpha: 0.86, cardW: Math.min(W * 0.92, 820), cardH: H * 0.9 });
+    const panel = makeResponsiveOverlayPanel(this, {
+      dimAlpha: 0.86,
+      maxCardW: 820,
+    });
     this.panel = panel;
+    const frame = overlayFrame(panel, {
+      footerReserve: uiPx(56, { min: 48, max: 64 }),
+      headerReserve: uiPx(118, { min: 100, max: 124 }),
+    });
 
     this.drawTwilightCard(panel);
 
-    const titleY = panel.cy - panel.cardH / 2 + 44;
-    this.add.text(panel.cx, titleY, HOW_TO_PLAY.title, {
-      fontFamily: 'Syne, Orbitron, monospace',
-      fontSize: clamp(Math.round(W * 0.034), 28, 38) + 'px',
-      fontStyle: '800',
-      color: cssHex(PAL.accent),
-    }).setOrigin(0.5).setDepth(DEPTH).setShadow(0, 0, cssHex(PAL.accent), 12, true, true);
+    const cardTop = frame.cardTop;
+    const cardPad = frame.pad;
+    let headerY = frame.titleY;
 
-    this.add.text(panel.cx, titleY + 32, HOW_TO_PLAY.subtitle, {
-      fontFamily: 'Orbitron, monospace',
-      fontSize: '13px',
-      color: cssHex(PAL.accent2),
-      letterSpacing: '0.18em',
-    }).setOrigin(0.5).setDepth(DEPTH);
+    const title = this.add.text(panel.cx, headerY, HOW_TO_PLAY.title, {
+      ...orbitronStyle(28, cssHex(PAL.accent), { fontStyle: '800', align: 'center', wordWrap: { width: panel.cardW - cardPad * 2 } }),
+    }).setOrigin(0.5, 0).setDepth(DEPTH).setShadow(0, 0, cssHex(PAL.accent), 12, true, true);
+    fitTextWidth(title, panel.cardW - cardPad * 2, uiPx(16, { min: 14, max: 20 }));
+    headerY += title.height + uiPx(6, { min: 4, max: 8 });
 
-    const tabY = titleY + 62;
-    this.tabGuideBtn = this.makeTab(panel.cx - 210, tabY, 'GUIDE', () => this.setTab('guide'));
-    this.tabPowerBtn = this.makeTab(panel.cx - 70, tabY, 'POWERS', () => this.setTab('powers'));
-    this.tabBestBtn = this.makeTab(panel.cx + 70, tabY, 'GNOMES', () => this.setTab('bestiary'));
-    this.tabJournalBtn = this.makeTab(panel.cx + 210, tabY, 'JOURNAL', () => this.setTab('journal'));
+    const subtitle = this.add.text(panel.cx, headerY, HOW_TO_PLAY.subtitle, {
+      ...orbitronStyle(11, cssHex(PAL.accent2), {
+        align: 'center',
+        wordWrap: { width: panel.cardW - cardPad * 2 },
+        letterSpacing: '0.1em',
+      }),
+    }).setOrigin(0.5, 0).setDepth(DEPTH);
+    fitTextWidth(subtitle, panel.cardW - cardPad * 2, 9);
+    headerY += subtitle.height + uiPx(10, { min: 8, max: 12 });
 
-    const contentTop = tabY + 38;
-    const contentBottom = panel.cy + panel.cardH / 2 - 78;
+    const tabY = headerY;
+    const contentTop = this.layoutTabs(panel, tabY);
+    const contentBottom = frame.footerY - uiPx(30, { min: 26, max: 34 });
     this.contentTop = contentTop;
-    this.contentH = contentBottom - contentTop;
-    this.contentLeft = panel.cx - panel.cardW / 2 + 20;
-    this.contentWidth = panel.cardW - 40;
+    this.contentH = Math.max(80, contentBottom - contentTop);
+    this.contentWidth = panel.cardW - cardPad * 2;
+    this.contentLeft = frame.cx - this.contentWidth / 2;
 
     this.guideLayer = this.add.container(panel.cx, contentTop).setDepth(DEPTH);
     this.powerLayer = this.add.container(panel.cx, contentTop).setDepth(DEPTH).setVisible(false);
@@ -84,33 +90,31 @@ export class CodexScene extends Phaser.Scene {
     this.bestiaryLayer.setMask(mask);
     this.journalLayer.setMask(mask);
 
-    this.scrollHit = this.add.rectangle(
-      panel.cx, contentTop + this.contentH / 2,
-      this.contentWidth, this.contentH, 0x000000, 0,
-    ).setDepth(DEPTH + 5).setInteractive({ draggable: true });
-    this.scrollHit.on('wheel', (_p, _dx, _dy, dz) => {
-      this.scrollBy(dz * 0.35);
-    });
-    this.scrollHit.on('drag', (_p, _dx, dragY) => {
-      if (this._dragStartY == null) {
-        this._dragStartY = dragY;
-        this._scrollStart = this.scrollY;
-      }
-      this.scrollY = clamp(this._scrollStart + (dragY - this._dragStartY), 0, this.maxScroll);
-      this.activeLayer().y = this.contentTop - this.scrollY;
-    });
-    this.scrollHit.on('dragstart', () => {
-      this._dragStartY = null;
-    });
-    this.scrollHit.on('dragend', () => {
-      this._dragStartY = null;
+    this._scroll = attachOverlayScroll(this, {
+      left: this.contentLeft,
+      top: this.contentTop,
+      width: this.contentWidth,
+      height: this.contentH,
+      getScroll: () => this.scrollY,
+      setScroll: (v) => {
+        this.scrollY = v;
+        this.activeLayer().y = this.contentTop - this.scrollY;
+      },
+      getMaxScroll: () => this.maxScroll,
     });
 
-    makeButton(this, panel.cx, panel.cy + panel.cardH / 2 - 44, 'BACK', () => this.close(), {
-      width: 240, height: 52, primary: false, fontSize: '20px', color: PAL.accent, depth: DEPTH + 10,
+    makeButton(this, frame.cx, frame.footerY, 'BACK', () => this.close(), {
+      width: Math.min(panel.cardW * 0.62, uiPx(240, { max: 240 })),
+      height: uiPx(46, { min: 40, max: 50 }),
+      primary: false,
+      fontSize: '16px',
+      color: PAL.accent,
+      depth: DEPTH + 10,
+      compact: true,
     });
 
     this.setTab('guide');
+    this.events.once('shutdown', () => this._scroll?.destroy());
   }
 
   drawTwilightCard(panel) {
@@ -124,9 +128,46 @@ export class CodexScene extends Phaser.Scene {
     g.strokeRoundedRect(cx - cardW / 2 + 6, cy - cardH / 2 + 6, cardW - 12, cardH - 12, 14);
   }
 
-  makeTab(x, y, label, onClick) {
+  layoutTabs(panel, tabY) {
+    const defs = [
+      { key: 'guide', label: 'GUIDE', prop: 'tabGuideBtn' },
+      { key: 'powers', label: 'POWERS', prop: 'tabPowerBtn' },
+      { key: 'bestiary', label: 'GNOMES', prop: 'tabBestBtn' },
+      { key: 'journal', label: 'JOURNAL', prop: 'tabJournalBtn' },
+    ];
+    const gap = uiPx(6, { min: 4, max: 8 });
+    const pad = uiPx(12, { min: 10, max: 16 });
+    const n = defs.length;
+    let tabW = Math.floor((panel.cardW - pad * 2 - gap * (n - 1)) / n);
+    tabW = clamp(tabW, 52, 168);
+    const tabH = uiPx(36, { min: 30, max: 40 });
+    const fontSize = tabW < 64 ? '9px' : tabW < 80 ? '10px' : tabW < 100 ? '11px' : '13px';
+    const totalW = n * tabW + gap * (n - 1);
+    let x = panel.cx - totalW / 2 + tabW / 2;
+    const tabCenterY = tabY + tabH / 2;
+
+    defs.forEach((def) => {
+      this[def.prop] = this.makeTab(x, tabCenterY, def.label, () => this.setTab(def.key), {
+        width: tabW,
+        height: tabH,
+        fontSize,
+      });
+      this[def.prop]._tabKey = def.key;
+      x += tabW + gap;
+    });
+
+    return tabCenterY + tabH / 2 + uiPx(8, { min: 6, max: 10 });
+  }
+
+  makeTab(x, y, label, onClick, opts = {}) {
     const btn = makeButton(this, x, y, label, onClick, {
-      width: 168, height: 40, fontSize: '15px', primary: false, color: PAL.accent3, depth: DEPTH + 2,
+      width: opts.width ?? 168,
+      height: opts.height ?? 40,
+      fontSize: opts.fontSize ?? '15px',
+      primary: false,
+      color: PAL.accent3,
+      depth: DEPTH + 2,
+      compact: true,
     });
     btn._tabLabel = label;
     return btn;
@@ -159,12 +200,9 @@ export class CodexScene extends Phaser.Scene {
 
   refreshTabStyles() {
     [this.tabGuideBtn, this.tabPowerBtn, this.tabBestBtn, this.tabJournalBtn].forEach((btn) => {
-      const active = (btn._tabLabel === 'GUIDE' && this.tab === 'guide')
-        || (btn._tabLabel === 'POWERS' && this.tab === 'powers')
-        || (btn._tabLabel === 'GNOMES' && this.tab === 'bestiary')
-        || (btn._tabLabel === 'JOURNAL' && this.tab === 'journal');
+      const active = btn._tabKey === this.tab;
       btn.setAlpha(active ? 1 : 0.55);
-      btn.setScale(active ? 1.04 : 1);
+      btn.setScale(active ? 1.02 : 1);
     });
   }
 
@@ -173,7 +211,7 @@ export class CodexScene extends Phaser.Scene {
     c.removeAll(true);
     let y = 8;
     const wrap = this.contentWidth - 16;
-    const body = { fontFamily: 'Orbitron, monospace', fontSize: '13px', color: PAL.text, wordWrap: { width: wrap }, lineSpacing: 4 };
+    const body = { ...orbitronStyle(12, PAL.text, { wordWrap: { width: wrap }, lineSpacing: 4 }) };
     const bullet = { ...body, color: PAL.textMuted };
 
     HOW_TO_PLAY.basics.forEach((line) => {
@@ -223,8 +261,8 @@ export class CodexScene extends Phaser.Scene {
     c.removeAll(true);
     let y = 4;
     const wrap = this.contentWidth - 24;
-    const rowH = 58;
-    const gap = 6;
+    const rowH = uiPx(56, { min: 48, max: 58 });
+    const gap = uiPx(6, { min: 4, max: 8 });
 
     CATEGORY_ORDER.forEach((catId) => {
       const keys = POWER_KEYS.filter((k) => POWERS[k].category === catId);
@@ -254,7 +292,6 @@ export class CodexScene extends Phaser.Scene {
     });
 
     this.powerScrollMax = Math.max(0, y - this.contentH + 12);
-    this.maxScroll = this.guideScrollMax;
   }
 
   makePowerRow(key, x, y, w, h, catColor) {
@@ -298,14 +335,14 @@ export class CodexScene extends Phaser.Scene {
 
     container.add(this.add.text(54, 12, powerDisplayName(key), {
       fontFamily: 'Syne, Orbitron, monospace',
-      fontSize: '13px',
+      fontSize: uiPx(12, { min: 11, max: 13 }) + 'px',
       fontStyle: '700',
       color: PAL.text,
     }).setOrigin(0, 0));
 
     container.add(this.add.text(54, 30, def.desc, {
       fontFamily: 'Orbitron, monospace',
-      fontSize: '11px',
+      fontSize: uiPx(10, { min: 9, max: 11 }) + 'px',
       color: PAL.textMuted,
       wordWrap: { width: w - 68 },
       lineSpacing: 2,
@@ -388,6 +425,7 @@ export class CodexScene extends Phaser.Scene {
   }
 
   close() {
+    this._scroll?.destroy();
     InputRouter.onOverlayClose(this.from === SCENES.GAME || this.from === SCENES.PAUSE);
     this.scene.stop();
     if (this.scene.isSleeping(this.from)) this.scene.wake(this.from);

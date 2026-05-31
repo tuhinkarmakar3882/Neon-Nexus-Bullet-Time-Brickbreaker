@@ -237,8 +237,18 @@ export function createGoogleAdProvider(game) {
       return { rewarded: false, placement };
     },
 
-    purchase: async () => ({ success: false }),
-    restore: async () => ({ success: false }),
+    purchase: async (productId) => {
+      if (typeof window.__nativePurchase === 'function') {
+        return window.__nativePurchase(productId);
+      }
+      return { success: false, reason: 'store_unavailable' };
+    },
+    restore: async () => {
+      if (typeof window.__nativeRestore === 'function') {
+        return window.__nativeRestore();
+      }
+      return { success: false, reason: 'store_unavailable' };
+    },
 
     showBanner: async () => {
       if (!AdsConfig.banner.enabled || !isAdSurfaceEnabled('banner')) return;

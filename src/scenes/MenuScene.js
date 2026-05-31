@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { GAME, SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { Background } from '../objects/Background.js';
-import { makeButton, makeOverlayPanel, layoutButtonStack, staggerButtons, addCameraFx } from '../utils/UI.js';
+import { makeButton, makeResponsiveOverlayPanel, layoutButtonStack, staggerButtons, addCameraFx } from '../utils/UI.js';
 import { audio } from '../systems/AudioManager.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { RunPersistence } from '../systems/RunPersistence.js';
@@ -13,6 +13,7 @@ import { syncSceneCameras } from '../systems/LayoutManager.js';
 import { requestGameFullscreen } from '../systems/Fullscreen.js';
 import { resolveSettings } from '../config/VfxQuality.js';
 import { shareProgressScreenshot } from '../systems/ShareProgress.js';
+import { orbitronStyle, uiPx, wrapWidth } from '../utils/Typography.js';
 
 const AD_BANNER_H = 50;
 
@@ -32,12 +33,12 @@ export class MenuScene extends Phaser.Scene {
     const cx = W / 2;
     const bottomPad = GAME.SAFE_BOTTOM + AD_BANNER_H + 12;
     const topPad = GAME.SAFE_TOP + 8;
-    const panel = makeOverlayPanel(this, {
-      gameW: W,
-      gameH: H,
-      cardW: Math.min(W * 0.92, 720),
-      cardH: H - topPad - bottomPad,
-      y: topPad + (H - topPad - bottomPad) / 2,
+    const usableH = H - topPad - bottomPad;
+    const panel = makeResponsiveOverlayPanel(this, {
+      maxCardW: 720,
+      cardH: usableH,
+      heightRatio: 1,
+      y: topPad + usableH / 2,
     });
 
     const cardTop = panel.cy - panel.cardH / 2;
@@ -66,29 +67,21 @@ export class MenuScene extends Phaser.Scene {
     const gems = MetaProgress.getGems();
     const highScore = SaveManager.getHighScore();
     this.add.text(cx, y, `HIGH SCORE  ${highScore.toLocaleString()}  ·  💎 ${gems.toLocaleString()}`, {
-      fontFamily: 'Orbitron, monospace',
-      fontSize: portrait ? '13px' : '16px',
-      color: PAL.text,
-      align: 'center',
-      wordWrap: { width: panel.cardW - 24 },
+      ...orbitronStyle(16, PAL.text, { align: 'center', wordWrap: { width: panel.cardW - 24 } }),
     }).setOrigin(0.5, 0).setAlpha(0.85).setDepth(1001);
-    y += portrait ? 28 : 32;
+    y += uiPx(portrait ? 28 : 32, { min: 24, max: 32 });
 
     this.snapshot = RunPersistence.loadRun();
     if (this.snapshot) {
       this.add.text(cx, y, `Level ${this.snapshot.level}  ·  ${this.snapshot.score.toLocaleString()} pts  ·  ${this.snapshot.lives} lives`, {
-        fontFamily: 'Orbitron, monospace',
-        fontSize: portrait ? '14px' : '17px',
-        color: cssHex(PAL.accent3),
-        align: 'center',
-        wordWrap: { width: panel.cardW - 24 },
+        ...orbitronStyle(17, cssHex(PAL.accent3), { align: 'center', wordWrap: { width: panel.cardW - 24 } }),
       }).setOrigin(0.5, 0).setDepth(1001);
-      y += portrait ? 26 : 30;
+      y += uiPx(portrait ? 26 : 30, { min: 22, max: 30 });
     }
 
-    const btnPrimary = portrait ? 58 : 72;
-    const btnSecondary = portrait ? 46 : 56;
-    const btnShare = portrait ? 44 : 50;
+    const btnPrimary = uiPx(portrait ? 58 : 72, { min: 48, max: 72 });
+    const btnSecondary = uiPx(portrait ? 46 : 56, { min: 40, max: 56 });
+    const btnShare = uiPx(portrait ? 44 : 50, { min: 40, max: 50 });
 
     const items = [];
     if (this.snapshot) {
@@ -141,24 +134,19 @@ export class MenuScene extends Phaser.Scene {
 
     const lastBtn = this.buttons[this.buttons.length - 1];
     this.shareHint = this.add.text(cx, lastBtn.y + btnShare / 2 + 10, '', {
-      fontFamily: 'Orbitron, monospace', fontSize: '11px', color: PAL.textMuted, align: 'center',
-      wordWrap: { width: btnW },
+      ...orbitronStyle(11, PAL.textMuted, { align: 'center', wordWrap: { width: btnW } }),
     }).setOrigin(0.5, 0).setDepth(1001);
 
-    const hintY = H - bottomPad - 38;
-    const hintMinY = lastBtn.y + btnShare / 2 + 28;
+    const hintY = H - bottomPad - uiPx(38, { min: 28, max: 38 });
+    const hintMinY = lastBtn.y + btnShare / 2 + uiPx(28, { min: 22, max: 28 });
     if (hintY > hintMinY) {
       this.add.text(cx, hintY, 'Double-tap in-game: spend Nexus  ·  Full meter: Nexus Burst', {
-        fontFamily: 'Orbitron, monospace',
-        fontSize: portrait ? '10px' : '12px',
-        color: PAL.textMuted,
-        align: 'center',
-        wordWrap: { width: W * 0.88 },
+        ...orbitronStyle(12, PAL.textMuted, { align: 'center', wordWrap: { width: wrapWidth(0.88) } }),
       }).setOrigin(0.5).setAlpha(0.65).setDepth(1001);
     }
 
-    this.add.text(cx, H - bottomPad - 14, 'Made with ♥ by Tuhin Karmakar', {
-      fontFamily: 'Orbitron, monospace', fontSize: portrait ? '10px' : '12px', color: '#5f7088',
+    this.add.text(cx, H - bottomPad - uiPx(14, { min: 10, max: 14 }), 'Made with ♥ by Tuhin Karmakar', {
+      ...orbitronStyle(12, '#5f7088'),
     }).setOrigin(0.5, 1).setDepth(1001);
 
     staggerButtons(this, this.buttons);

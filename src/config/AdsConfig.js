@@ -117,9 +117,27 @@ export const AdsConfig = {
   },
 
   products: {
-    remove_ads: { id: 'remove_ads', price: '$2.99', type: 'nonconsumable' },
-    coins_small: { id: 'coins_small', price: '$0.99', type: 'consumable' },
-    premium: { id: 'premium', price: '$4.99', type: 'nonconsumable' },
+    remove_ads: {
+      id: 'remove_ads',
+      price: '$2.99',
+      type: 'nonconsumable',
+      title: 'Remove Ads',
+      blurb: 'Hide banner and interstitial ads forever.',
+    },
+    coins_small: {
+      id: 'coins_small',
+      price: '$0.99',
+      type: 'consumable',
+      title: 'Gem Pack',
+      blurb: '+50 gems for the Garden Shop.',
+    },
+    premium: {
+      id: 'premium',
+      price: '$4.99',
+      type: 'nonconsumable',
+      title: 'Premium Pass',
+      blurb: 'Unlock premium paddle, trail, and garden cosmetics.',
+    },
   },
 };
 
