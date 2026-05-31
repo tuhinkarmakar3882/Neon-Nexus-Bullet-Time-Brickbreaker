@@ -147,10 +147,17 @@ export function buildLevel(level, campaignSeed = 12345) {
   ensurePlayable(bricks, theme, rng);
   applyTwist(bricks, twist, cols, bw, bh, arenaLeft, top, rng, level);
   placePortals(bricks, rng, level);
-  fixPortalPairs(bricks, rng);
-  ensureOneExplosive(bricks, rng);
   clusterExplosives(bricks, rng, level);
   linkBrickPairs(bricks, rng);
+  finalizeLevel(bricks, {
+    theme,
+    rng,
+    layout: { bw, bh, arenaLeft, top, cols },
+    level,
+    isBoss,
+    goal,
+    mutators,
+  });
 
   const layoutLabel = patternNames.join(' + ');
   const twistLabel = TWIST_LABELS[twist] ?? null;
@@ -337,11 +344,342 @@ function fillZone(bricks, ctx) {
 }
 
 function ensurePlayable(bricks, theme, rng) {
-  const destructible = bricks.filter((b) => b.type !== 'gold' && b.type !== 'steel');
+  const destructible = bricks.filter((b) => isDestructibleType(b.type) && b.type !== 'hostage');
   if (destructible.length > 0) return;
-  bricks.forEach((b) => {
-    if (rng() < 0.45) { b.type = 'normal'; b.color = theme.bricks[0]; b.moving = false; }
-  });
+  if (!bricks.length) return;
+  for (const b of bricks) {
+    if (WALL_TYPES.has(b.type)) {
+      b.type = 'normal';
+      b.color = theme.bricks[0];
+      b.moving = false;
+      return;
+    }
+  }
+  bricks[0].type = 'normal';
+  bricks[0].color = theme.bricks[0];
+  bricks[0].moving = false;
+}
+
+const WALL_TYPES = new Set(['gold', 'steel']);
+const NON_BALL_TYPES = new Set(['gold', 'steel', 'hostage']);
+
+function isDestructibleType(type) {
+  return !WALL_TYPES.has(type);
+}
+
+function isBallClearableType(type, cannonsOnly = false) {
+  if (!isDestructibleType(type)) return false;
+  if (type === 'hostage') return false;
+  if (cannonsOnly && type === 'silver') return false;
+  return true;
+}
+
+function isColumnBlocker(type) {
+  return WALL_TYPES.has(type) || type === 'hostage';
+}
+
+function brickColumnIndex(b, arenaLeft, cellW) {
+  return Math.round((b.x + b.w / 2 - arenaLeft) / cellW);
+}
+
+function groupBricksByColumn(bricks, arenaLeft, cellW) {
+  const map = new Map();
+  for (const b of bricks) {
+    const c = brickColumnIndex(b, arenaLeft, cellW);
+    if (!map.has(c)) map.set(c, []);
+    map.get(c).push(b);
+  }
+  return map;
+}
+
+function demoteWallBrick(b, theme, rng) {
+  b.type = rng() < 0.3 ? 'explosive' : 'reinforced';
+  b.color = b.type === 'explosive'
+    ? PAL.explosive
+    : theme.bricks[(b.zoneRow ?? 0) % theme.bricks.length];
+  delete b.portalId;
+  delete b.portalLinkIndex;
+}
+
+function demoteToNormal(b, theme, rng, preferExplosive = false) {
+  if (preferExplosive && rng() < 0.35) {
+    b.type = 'explosive';
+    b.color = PAL.explosive;
+  } else {
+    b.type = 'normal';
+    b.color = theme.bricks[(b.zoneRow ?? 0) % theme.bricks.length];
+  }
+  b.moving = false;
+  delete b.portalId;
+  delete b.portalLinkIndex;
+  delete b.linkedPartnerIndex;
+}
+
+function bottomBand(bricks, bh) {
+  if (!bricks.length) return [];
+  const maxY = Math.max(...bricks.map((b) => b.y));
+  return bricks.filter((b) => b.y >= maxY - bh * 0.45);
+}
+
+/** True if a normal ball can eventually break this brick (ignores cannons-only silver). */
+function hasReachableDestructible(bricks, arenaLeft, cellW, cannonsOnly = false) {
+  for (const col of groupBricksByColumn(bricks, arenaLeft, cellW).values()) {
+    col.sort((a, b) => b.y - a.y);
+    for (const b of col) {
+      if (!isBallClearableType(b.type, cannonsOnly)) continue;
+      const blockedBelow = col.some(
+        (x) => x.y > b.y + b.h * 0.15 && isColumnBlocker(x.type),
+      );
+      if (!blockedBelow) return true;
+    }
+  }
+  return false;
+}
+
+function countBallClearable(bricks, cannonsOnly = false) {
+  return bricks.filter((b) => isBallClearableType(b.type, cannonsOnly)).length;
+}
+
+function ensureClearPath(bricks, theme, rng, layout, cannonsOnly = false) {
+  if (!bricks.length) return;
+  const { bw, bh, arenaLeft } = layout;
+  const cellW = bw + BRICK.GAP;
+
+  for (const col of groupBricksByColumn(bricks, arenaLeft, cellW).values()) {
+    col.sort((a, b) => b.y - a.y);
+    for (let i = 0; i < col.length; i++) {
+      const b = col[i];
+      if (!isColumnBlocker(b.type)) continue;
+      const hasAbove = col.slice(i + 1).some((x) => isDestructibleType(x.type));
+      if (hasAbove) demoteWallBrick(b, theme, rng);
+    }
+  }
+
+  const band = bottomBand(bricks, bh);
+  const breakableBottom = band.filter((b) => isBallClearableType(b.type, cannonsOnly));
+  const minBottom = Math.max(2, Math.ceil(band.length * 0.22));
+  if (breakableBottom.length < minBottom) {
+    let need = minBottom - breakableBottom.length;
+    for (const b of band.filter((x) => isColumnBlocker(x.type) || (cannonsOnly && x.type === 'silver'))) {
+      if (need <= 0) break;
+      demoteToNormal(b, theme, rng, true);
+      need--;
+    }
+  }
+
+  if (!hasReachableDestructible(bricks, arenaLeft, cellW, cannonsOnly)) {
+    for (const col of groupBricksByColumn(bricks, arenaLeft, cellW).values()) {
+      col.sort((a, b) => b.y - a.y);
+      if (!col.some((b) => isBallClearableType(b.type, cannonsOnly))) continue;
+      for (const b of col) {
+        if (isColumnBlocker(b.type) || (cannonsOnly && b.type === 'silver')) {
+          demoteToNormal(b, theme, rng, true);
+        }
+        if (hasReachableDestructible(bricks, arenaLeft, cellW, cannonsOnly)) break;
+      }
+      if (hasReachableDestructible(bricks, arenaLeft, cellW, cannonsOnly)) break;
+    }
+  }
+
+  if (!hasReachableDestructible(bricks, arenaLeft, cellW, cannonsOnly)) {
+    const maxY = Math.max(...bricks.map((b) => b.y));
+    const fallback = bricks
+      .filter((b) => isDestructibleType(b.type))
+      .sort((a, b) => b.y - a.y)[0];
+    if (fallback) {
+      demoteToNormal(fallback, theme, rng, true);
+      fallback.y = maxY;
+    } else if (bricks[0]) {
+      demoteToNormal(bricks[0], theme, rng, true);
+    }
+  }
+}
+
+function ensureCannonsOnlyReachable(bricks, theme, rng, layout) {
+  if (hasReachableDestructible(bricks, layout.arenaLeft, layout.bw + BRICK.GAP, true)) return;
+  const silvers = bricks.filter((b) => b.type === 'silver');
+  const convert = Math.max(2, Math.ceil(silvers.length * 0.4));
+  for (let i = 0; i < convert && i < silvers.length; i++) {
+    demoteToNormal(silvers[i], theme, rng);
+  }
+  ensureClearPath(bricks, theme, rng, layout, true);
+}
+
+function ensureMinBricks(bricks, layout, theme, rng, min = 12) {
+  if (bricks.length >= min) return;
+  const { arenaLeft, top, bw, bh, cols } = layout;
+  let row = 0;
+  while (bricks.length < min && row < 10) {
+    for (let c = 0; c < cols && bricks.length < min; c++) {
+      bricks.push({
+        x: arenaLeft + c * (bw + BRICK.GAP),
+        y: top + row * (bh + BRICK.GAP),
+        w: bw,
+        h: bh,
+        type: 'normal',
+        color: theme.bricks[c % theme.bricks.length],
+        moving: false,
+        zoneRow: row,
+      });
+    }
+    row++;
+  }
+}
+
+function ensureDestructibleQuota(bricks, theme, rng, min = 8) {
+  let count = bricks.filter((b) => isBallClearableType(b.type, false)).length;
+  if (count >= min) return;
+  for (const b of [...bricks].sort((a, b) => b.y - a.y)) {
+    if (count >= min) break;
+    if (!isBallClearableType(b.type, false) && b.type !== 'boss') {
+      demoteToNormal(b, theme, rng);
+      count++;
+    }
+  }
+}
+
+function ensureBossPresent(bricks, theme) {
+  if (bricks.some((b) => b.type === 'boss')) return;
+  const pick = bricks.find((b) => b.type === 'reinforced')
+    ?? bricks[Math.floor(bricks.length / 2)]
+    ?? bricks[0];
+  if (!pick) return;
+  pick.type = 'boss';
+  pick.color = 0xffc8a0;
+  pick.moving = false;
+}
+
+function ensureGoalBricks(bricks, goal, theme, rng) {
+  if (!goal || !bricks.length) return;
+  if (goal.type === 'nestHunt' && !bricks.some((b) => b.type === 'nest')) {
+    const pick = bricks.find((b) => b.type === 'normal') ?? bricks[0];
+    if (pick) {
+      pick.type = 'nest';
+      pick.color = theme.bricks[(pick.zoneRow ?? 0) % theme.bricks.length];
+    }
+  }
+  if (goal.type === 'escort') {
+    const candidates = bricks.filter((b) => b.type === 'normal' || b.type === 'reinforced');
+    if (!candidates.length) {
+      const pick = bricks.find((b) => isBallClearableType(b.type, false)) ?? bricks[0];
+      if (pick) demoteToNormal(pick, theme, rng);
+    }
+  }
+}
+
+function fixLinkedOrphans(bricks, theme) {
+  const linked = bricks.filter((b) => b.type === 'linked');
+  for (let i = 0; i < linked.length; i += 2) {
+    if (i + 1 < linked.length) continue;
+    const orphan = linked[i];
+    orphan.type = 'normal';
+    orphan.color = theme.bricks[(orphan.zoneRow ?? 0) % theme.bricks.length];
+    orphan.linkedPartnerIndex = null;
+  }
+  for (let i = 0; i + 1 < linked.length; i += 2) {
+    const a = linked[i];
+    const b = linked[i + 1];
+    a.linkedPartnerIndex = bricks.indexOf(b);
+    b.linkedPartnerIndex = bricks.indexOf(a);
+  }
+}
+
+function fixPortalLinks(bricks, theme, rng) {
+  fixPortalPairs(bricks, rng);
+  for (const b of bricks) {
+    if (b.type !== 'portal') continue;
+    const partner = b.portalLinkIndex != null ? bricks[b.portalLinkIndex] : null;
+    const valid = partner
+      && partner.type === 'portal'
+      && partner.portalId === b.portalId
+      && partner !== b;
+    if (!valid) {
+      demoteToNormal(b, theme, rng);
+    }
+  }
+  fixPortalPairs(bricks, rng);
+}
+
+function sanitizeHostagePlacement(bricks, theme, rng, layout) {
+  const { bh } = layout;
+  const band = bottomBand(bricks, bh);
+  for (const b of band) {
+    if (b.type !== 'hostage') continue;
+    const col = groupBricksByColumn(bricks, layout.arenaLeft, layout.bw + BRICK.GAP)
+      .get(brickColumnIndex(b, layout.arenaLeft, layout.bw + BRICK.GAP)) ?? [];
+    const hasAbove = col.some((x) => x !== b && x.y < b.y - bh * 0.2 && isDestructibleType(x.type));
+    if (hasAbove) demoteToNormal(b, theme, rng);
+  }
+}
+
+/** Run all post-generation validation/repair passes until the layout is playable. */
+function finalizeLevel(bricks, opts) {
+  const { theme, rng, layout, isBoss, goal, mutators } = opts;
+  const cannonsOnly = mutators?.includes('CannonsOnly');
+  const cellW = layout.bw + BRICK.GAP;
+
+  for (let pass = 0; pass < 5; pass++) {
+    ensureMinBricks(bricks, layout, theme, rng);
+    ensureDestructibleQuota(bricks, theme, rng, Math.max(8, Math.floor(layout.cols * 1.2)));
+    ensurePlayable(bricks, theme, rng);
+    if (isBoss) ensureBossPresent(bricks, theme);
+    ensureGoalBricks(bricks, goal, theme, rng);
+    sanitizeHostagePlacement(bricks, theme, rng, layout);
+    fixPortalLinks(bricks, theme, rng);
+    fixLinkedOrphans(bricks, theme);
+    ensureOneExplosive(bricks, rng);
+    ensureClearPath(bricks, theme, rng, layout, false);
+    if (cannonsOnly) ensureCannonsOnlyReachable(bricks, theme, rng, layout);
+
+    const valid = validateLevel(bricks, { layout, cannonsOnly, isBoss, goal }).valid;
+    if (valid) return;
+  }
+
+  // Last-resort: flatten front row to normals
+  const maxY = Math.max(...bricks.map((b) => b.y), 0);
+  for (const b of bricks.filter((x) => x.y >= maxY - layout.bh * 0.5)) {
+    if (!isBallClearableType(b.type, cannonsOnly)) demoteToNormal(b, theme, rng, true);
+  }
+  ensureClearPath(bricks, theme, rng, layout, cannonsOnly);
+}
+
+/** Exported for tests — returns { valid, issues[] }. */
+export function validateLevel(bricks, opts = {}) {
+  const { layout, cannonsOnly = false, isBoss = false, goal = null } = opts;
+  const issues = [];
+  if (!bricks?.length) {
+    issues.push('empty');
+    return { valid: false, issues };
+  }
+  if (layout) {
+    const cellW = layout.bw + BRICK.GAP;
+    if (!hasReachableDestructible(bricks, layout.arenaLeft, cellW, cannonsOnly)) {
+      issues.push('no_ball_reachable_destructible');
+    }
+    const clearable = countBallClearable(bricks, cannonsOnly);
+    if (clearable < Math.min(6, Math.floor(bricks.length * 0.2))) {
+      issues.push('too_few_clearable');
+    }
+  }
+  if (!bricks.some((b) => isDestructibleType(b.type))) issues.push('no_destructible');
+  if (!bricks.some((b) => b.type === 'explosive')) issues.push('no_explosive');
+  if (isBoss && !bricks.some((b) => b.type === 'boss')) issues.push('missing_boss');
+  if (goal?.type === 'nestHunt' && !bricks.some((b) => b.type === 'nest')) issues.push('missing_nest');
+
+  const portals = bricks.filter((b) => b.type === 'portal');
+  const portalIds = new Map();
+  for (const p of portals) {
+    if (!portalIds.has(p.portalId)) portalIds.set(p.portalId, []);
+    portalIds.get(p.portalId).push(p);
+  }
+  for (const [, group] of portalIds) {
+    if (group.length !== 2) issues.push('orphan_portal');
+  }
+
+  const linked = bricks.filter((b) => b.type === 'linked');
+  if (linked.length % 2 !== 0) issues.push('orphan_linked');
+
+  return { valid: issues.length === 0, issues };
 }
 
 function applyTwist(bricks, twist, cols, bw, bh, arenaLeft, top, rng, level) {

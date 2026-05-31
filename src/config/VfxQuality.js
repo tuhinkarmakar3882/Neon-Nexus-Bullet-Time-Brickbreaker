@@ -1,5 +1,7 @@
 /** VFX quality presets — maps one setting to all derived FX flags. */
 
+import { DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from './Constants.js';
+
 export const VFX_LEVELS = ['low', 'medium', 'high', 'ultra'];
 
 export const VFX_PRESETS = {
@@ -145,8 +147,8 @@ export function resolveSettings(raw = {}) {
     sound,
     music,
     vfxQuality,
-    sfxVolume: raw.sfxVolume ?? 100,
-    musicVolume: raw.musicVolume ?? 10,
+    sfxVolume: raw.sfxVolume ?? DEFAULT_SFX_VOLUME,
+    musicVolume: raw.musicVolume ?? DEFAULT_MUSIC_VOLUME,
     ...preset,
   };
 }

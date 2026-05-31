@@ -269,9 +269,16 @@ export function anchorButtonStack(scene, panel, items, opts = {}) {
   return { buttons, stackTop: y - btnH / 2 - (n > 0 ? 0 : 0), btnH, frame };
 }
 
+/** Clamp scroll offset for overlay lists. */
+export function clampOverlayScroll(scrollY, maxScroll) {
+  return clamp(scrollY, 0, Math.max(0, maxScroll));
+}
+
 /**
  * Touch/wheel scroll for overlay lists — scene-level tracking so rows/buttons
  * underneath remain tappable when the gesture is a tap (not a drag).
+ *
+ * Touch and wheel share one axis: increasing scroll reveals content further down.
  */
 export function attachOverlayScroll(scene, opts = {}) {
   const {
@@ -283,15 +290,38 @@ export function attachOverlayScroll(scene, opts = {}) {
     wheelFactor = 0.35,
   } = opts;
 
+  const resolve = (v) => (typeof v === 'function' ? v() : v);
+
   let tracking = false;
   let gestureDragged = false;
   let startY = 0;
   let scrollStart = 0;
 
-  const inBounds = (x, y) => x >= left && x <= left + width && y >= top && y <= top + height;
+  const bounds = () => ({
+    left: resolve(left),
+    top: resolve(top),
+    width: resolve(width),
+    height: resolve(height),
+  });
+
+  const inBounds = (x, y) => {
+    const b = bounds();
+    return x >= b.left && x <= b.left + b.width && y >= b.top && y <= b.top + b.height;
+  };
+
+  const hasInteractiveTarget = (pointer) => {
+    const hits = scene.input.hitTestPointer?.(pointer) ?? [];
+    return hits.some((go) => go?.input?.enabled);
+  };
+
+  const applyScroll = (next) => {
+    setScroll(clampOverlayScroll(next, getMaxScroll()));
+  };
 
   const onDown = (pointer) => {
     if (!inBounds(pointer.x, pointer.y)) return;
+    if (getMaxScroll() <= 0) return;
+    if (hasInteractiveTarget(pointer)) return;
     tracking = true;
     gestureDragged = false;
     startY = pointer.y;
@@ -300,29 +330,31 @@ export function attachOverlayScroll(scene, opts = {}) {
 
   const onMove = (pointer) => {
     if (!tracking || !pointer.isDown) return;
+    if (getMaxScroll() <= 0) return;
     const dy = pointer.y - startY;
     if (!gestureDragged && Math.abs(dy) < dragThreshold) return;
     gestureDragged = true;
-    // Finger down → content moves down (same direction as native wheel).
-    setScroll(clamp(scrollStart - dy, 0, getMaxScroll()));
+    // Content tracks the finger; swipe up reveals items below (same axis as wheel).
+    applyScroll(scrollStart - dy);
   };
 
   const onUp = () => {
     tracking = false;
   };
 
-  const onWheel = (_p, _gos, _dx, dy) => {
+  const onWheel = (pointer, _gos, _dx, dy) => {
     if (getMaxScroll() <= 0) return;
-    const ptr = scene.input.activePointer;
-    if (!inBounds(ptr.x, ptr.y)) return;
-    // Native wheel: delta down (dy > 0) reveals content below.
-    setScroll(clamp(getScroll() + dy * wheelFactor, 0, getMaxScroll()));
+    const px = pointer?.x ?? scene.input.activePointer.x;
+    const py = pointer?.y ?? scene.input.activePointer.y;
+    if (!inBounds(px, py)) return;
+    applyScroll(getScroll() + dy * wheelFactor);
   };
 
   scene.input.on('pointerdown', onDown);
   scene.input.on('pointermove', onMove);
   scene.input.on('pointerup', onUp);
   scene.input.on('pointerupoutside', onUp);
+  scene.input.on('pointercancel', onUp);
   scene.input.on('wheel', onWheel);
 
   return {
@@ -333,6 +365,7 @@ export function attachOverlayScroll(scene, opts = {}) {
       scene.input.off('pointermove', onMove);
       scene.input.off('pointerup', onUp);
       scene.input.off('pointerupoutside', onUp);
+      scene.input.off('pointercancel', onUp);
       scene.input.off('wheel', onWheel);
     },
   };

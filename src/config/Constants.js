@@ -275,7 +275,7 @@ export const STORAGE = {
 
 /** Default audio mix — SFX loud, music faint background bed. */
 export const DEFAULT_SFX_VOLUME = 100;
-export const DEFAULT_MUSIC_VOLUME = 10;
+export const DEFAULT_MUSIC_VOLUME = 3;
 
 export const SCENES = {
   BOOT: 'Boot',

@@ -7,9 +7,9 @@ import {
   categoryColor, powerDisplayName,
 } from '../config/PowerUps.js';
 import { iconTextureKey } from '../utils/IconTextures.js';
-import { makeButton, makeResponsiveOverlayPanel, overlayFrame, attachOverlayScroll } from '../utils/UI.js';
-import { InputRouter } from '../systems/InputRouter.js';
 import { clamp } from '../utils/Helpers.js';
+import { makeButton, makeResponsiveOverlayPanel, overlayFrame, attachOverlayScroll, clampOverlayScroll } from '../utils/UI.js';
+import { InputRouter } from '../systems/InputRouter.js';
 import { MetaProgress } from '../systems/MetaProgress.js';
 import { GNOME_TIERS } from '../config/GnomeTiers.js';
 import { fitTextWidth, orbitronStyle, bodyStyle, displayStyle, uiPx } from '../utils/Typography.js';
@@ -186,10 +186,11 @@ export class CodexScene extends Phaser.Scene {
       : tab === 'powers' ? this.powerScrollMax
         : tab === 'bestiary' ? this.bestiaryScrollMax
           : this.journalScrollMax;
-    this.guideLayer.y = this.contentTop;
-    this.powerLayer.y = this.contentTop;
-    this.bestiaryLayer.y = this.contentTop;
-    this.journalLayer.y = this.contentTop;
+    const layerY = this.contentTop - this.scrollY;
+    this.guideLayer.y = layerY;
+    this.powerLayer.y = layerY;
+    this.bestiaryLayer.y = layerY;
+    this.journalLayer.y = layerY;
     this.refreshTabStyles();
   }
 
@@ -402,7 +403,7 @@ export class CodexScene extends Phaser.Scene {
   }
 
   scrollBy(dy) {
-    this.scrollY = clamp(this.scrollY + dy, 0, this.maxScroll);
+    this.scrollY = clampOverlayScroll(this.scrollY + dy, this.maxScroll);
     this.activeLayer().y = this.contentTop - this.scrollY;
   }
 

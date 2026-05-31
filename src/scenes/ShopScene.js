@@ -2,11 +2,10 @@ import Phaser from 'phaser';
 import { GAME, SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { PADDLE_HULLS, BALL_TRAILS, GARDEN_THEMES } from '../config/Cosmetics.js';
-import { makeButton, makeResponsiveOverlayPanel, overlayFrame, attachOverlayScroll } from '../utils/UI.js';
+import { makeButton, makeResponsiveOverlayPanel, overlayFrame, attachOverlayScroll, clampOverlayScroll } from '../utils/UI.js';
 import { MetaProgress } from '../systems/MetaProgress.js';
 import { Monetization } from '../systems/Monetization.js';
 import { InputRouter } from '../systems/InputRouter.js';
-import { clamp } from '../utils/Helpers.js';
 import { audio } from '../systems/AudioManager.js';
 import { fitTextWidth, orbitronStyle, displayStyle, bodyStyle, uiPx } from '../utils/Typography.js';
 
@@ -315,7 +314,7 @@ export class ShopScene extends Phaser.Scene {
 
   scrollBy(dy) {
     if (this.maxScroll <= 0) return;
-    this.scrollY = clamp(this.scrollY + dy, 0, this.maxScroll);
+    this.scrollY = clampOverlayScroll(this.scrollY + dy, this.maxScroll);
     this.scrollLayer.y = this.contentTop - this.scrollY;
     this.updateScrollFade();
   }

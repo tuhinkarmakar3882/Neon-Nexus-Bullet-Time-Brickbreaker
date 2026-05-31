@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME, GAME, SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { VFX_LEVELS, resolveSettings } from '../config/VfxQuality.js';
-import { makeButton, makeResponsiveOverlayPanel, makeToggle, overlayFrame } from '../utils/UI.js';
+import { makeButton, makeResponsiveOverlayPanel, makeToggle, overlayFrame, attachOverlayScroll } from '../utils/UI.js';
 import { applySceneVfx } from '../utils/SceneVfx.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { Monetization } from '../systems/Monetization.js';
@@ -34,10 +34,7 @@ export class SettingsScene extends Phaser.Scene {
       headerReserve: uiPx(compact ? 64 : 72, { min: 56, max: 80 }),
     });
     const rowW = Math.min(panel.cardW * 0.9, uiPx(480, { max: 520 }));
-    const labelX = frame.cx - rowW / 2;
-    const toggleW = uiPx(72, { min: 48, max: 88 });
     const toggleH = uiPx(36, { min: 28, max: 40 });
-    const toggleX = frame.cx + rowW / 2 - toggleW / 2;
     const shopBtnW = Math.min(rowW, uiPx(400, { max: 420 }));
     const rowGap = toggleH + uiPx(18, { min: 14, max: 22 });
 
@@ -46,11 +43,25 @@ export class SettingsScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setDepth(1001).setShadow(0, 0, cssHex(PAL.accent), 16, true, true);
     fitTextWidth(title, frame.wrap, uiPx(26, { min: 22, max: 32 }));
 
-    let y = frame.contentTop;
+    this.scrollY = 0;
+    this.contentTop = frame.contentTop;
+    this.contentH = Math.max(80, frame.contentBottom - frame.contentTop);
+    this.contentWidth = panel.cardW - frame.pad * 2;
+    this.contentLeft = frame.cx - this.contentWidth / 2;
+    this.scrollLayer = this.add.container(frame.cx, frame.contentTop).setDepth(1001);
 
-    this.add.text(frame.cx, y, 'VFX QUALITY', {
+    const addScroll = (obj) => {
+      this.scrollLayer.add(obj);
+      return obj;
+    };
+
+    let y = 0;
+    const lx = -rowW / 2;
+    const tx = rowW / 2 - toggleW / 2;
+
+    addScroll(this.add.text(0, y, 'VFX QUALITY', {
       ...orbitronStyle(12, PAL.textMuted, { letterSpacing: '0.18em', align: 'center' }),
-    }).setOrigin(0.5, 0).setDepth(1001);
+    }).setOrigin(0.5, 0));
     y += uiPx(22, { min: 18, max: 24 });
 
     const qualBtnH = uiPx(40, { min: 36, max: 44 });
@@ -59,8 +70,8 @@ export class SettingsScene extends Phaser.Scene {
     const qualityLabels = { low: 'LOW', medium: 'MED', high: 'HIGH', ultra: 'ULTRA' };
     this.qualityBtns = [];
     VFX_LEVELS.forEach((q, i) => {
-      const x = frame.cx - (VFX_LEVELS.length * (btnW + 8)) / 2 + i * (btnW + 8) + btnW / 2;
-      const btn = makeButton(this, x, qualRowY, qualityLabels[q], () => {
+      const x = -(VFX_LEVELS.length * (btnW + 8)) / 2 + i * (btnW + 8) + btnW / 2;
+      const btn = makeButton(this, frame.cx + x, frame.contentTop + qualRowY, qualityLabels[q], () => {
         this.settings.vfxQuality = q;
         this.refreshQualityButtons();
         this.applyVfxQuality();
@@ -74,22 +85,26 @@ export class SettingsScene extends Phaser.Scene {
         compact: true,
       });
       btn.setDepth(1001);
+      this.scrollLayer.add(btn);
+      btn.setPosition(x, qualRowY);
       this.qualityBtns.push({ q, btn });
     });
     this.refreshQualityButtons();
     y = qualRowY + qualBtnH / 2 + uiPx(16, { min: 12, max: 20 }) + toggleH / 2;
 
     const row = (key, label, yy) => {
-      const labelText = this.add.text(labelX, yy, label, {
+      const labelText = addScroll(this.add.text(lx, yy, label, {
         ...orbitronStyle(20, '#cfe9ff'),
-      }).setOrigin(0, 0.5).setDepth(1001);
+      }).setOrigin(0, 0.5));
       fitTextWidth(labelText, rowW - uiPx(130, { min: 100, max: 130 }), uiPx(13, { min: 12, max: 16 }));
-      makeToggle(this, toggleX, yy, this.settings[key], (on) => {
+      const toggle = makeToggle(this, frame.cx + tx, frame.contentTop + yy, this.settings[key], (on) => {
         this.settings[key] = on;
         audio.init();
         if (key === 'sound') { audio.setSoundEnabled(on); audio.blip(720); }
         if (key === 'music') audio.setMusicEnabled(on);
       }, { width: toggleW, height: toggleH, depth: 1001 });
+      this.scrollLayer.add(toggle.container);
+      toggle.container.setPosition(tx, yy);
     };
 
     row('sound', 'SOUND FX', y);
@@ -98,14 +113,14 @@ export class SettingsScene extends Phaser.Scene {
     y += rowGap;
 
     const volRow = (label, key, yy) => {
-      this.add.text(labelX, yy, label, {
+      addScroll(this.add.text(lx, yy, label, {
         ...orbitronStyle(18, '#cfe9ff'),
-      }).setOrigin(0, 0.5).setDepth(1001);
+      }).setOrigin(0, 0.5));
       const defaultVol = key === 'musicVolume' ? DEFAULT_MUSIC_VOLUME : DEFAULT_SFX_VOLUME;
       const val = this.settings[key] ?? defaultVol;
-      const valText = this.add.text(toggleX, yy, `${val}%`, {
+      const valText = addScroll(this.add.text(tx, yy, `${val}%`, {
         ...orbitronStyle(18, cssHex(PAL.accent)),
-      }).setOrigin(0.5).setDepth(1001);
+      }).setOrigin(0.5));
       const bump = (delta) => {
         const base = key === 'musicVolume' ? DEFAULT_MUSIC_VOLUME : DEFAULT_SFX_VOLUME;
         this.settings[key] = Math.max(0, Math.min(100, (this.settings[key] ?? base) + delta));
@@ -118,12 +133,16 @@ export class SettingsScene extends Phaser.Scene {
         audio.init();
         audio.blip(720);
       };
-      makeButton(this, toggleX - uiPx(52, { max: 52 }), yy, '−', () => bump(-10), {
+      const minus = makeButton(this, frame.cx + tx - uiPx(52, { max: 52 }), frame.contentTop + yy, '−', () => bump(-10), {
         width: uiPx(44, { min: 40, max: 44 }), height: uiPx(36, { min: 32, max: 36 }), fontSize: '18px', primary: false, compact: true, depth: 1001,
       });
-      makeButton(this, toggleX + uiPx(52, { max: 52 }), yy, '+', () => bump(10), {
+      this.scrollLayer.add(minus);
+      minus.setPosition(tx - uiPx(52, { max: 52 }), yy);
+      const plus = makeButton(this, frame.cx + tx + uiPx(52, { max: 52 }), frame.contentTop + yy, '+', () => bump(10), {
         width: uiPx(44, { min: 40, max: 44 }), height: uiPx(36, { min: 32, max: 36 }), fontSize: '18px', primary: false, compact: true, depth: 1001,
       });
+      this.scrollLayer.add(plus);
+      plus.setPosition(tx + uiPx(52, { max: 52 }), yy);
     };
 
     volRow('SFX VOLUME', 'sfxVolume', y);
@@ -131,57 +150,85 @@ export class SettingsScene extends Phaser.Scene {
     volRow('MUSIC VOLUME', 'musicVolume', y);
     y += rowGap + uiPx(4, { min: 2, max: 6 });
 
-    this.shopStatus = this.add.text(frame.cx, y, '', {
+    this.shopStatus = addScroll(this.add.text(0, y, '', {
       ...orbitronStyle(14, cssHex(PAL.accent2), { align: 'center', wordWrap: { width: frame.wrap } }),
-    }).setOrigin(0.5, 0).setDepth(1001);
+    }).setOrigin(0.5, 0));
     y += uiPx(24, { min: 18, max: 24 });
 
     const adsRemoved = SaveManager.getRemoveAds() || Monetization.removeAds;
     if (adsRemoved) {
       this.shopStatus.setText('Ads removed — thank you!');
       y += uiPx(28, { min: 22, max: 28 });
-    } else if (Monetization.isStoreAvailable() && y < frame.contentBottom - uiPx(120, { min: 100, max: 120 })) {
+    } else if (Monetization.isStoreAvailable()) {
       const removeAdsPrice = Monetization.formatPrice('remove_ads') || '$2.99';
-      makeButton(this, frame.cx, y + uiPx(24, { min: 20, max: 24 }), `REMOVE ADS — ${removeAdsPrice}`, () => {
+      const removeBtn = makeButton(this, frame.cx, frame.contentTop + y + uiPx(24, { min: 20, max: 24 }), `REMOVE ADS — ${removeAdsPrice}`, () => {
         this.buyRemoveAds();
       }, { width: shopBtnW, height: uiPx(46, { min: 40, max: 48 }), fontSize: '15px', primary: false });
+      this.scrollLayer.add(removeBtn);
+      removeBtn.setPosition(0, y + uiPx(24, { min: 20, max: 24 }));
       y += uiPx(compact ? 58 : 68, { min: 52, max: 68 });
 
-      if (y < frame.contentBottom - uiPx(168, { min: 140, max: 168 })) {
-        makeButton(this, frame.cx, y + uiPx(20, { min: 16, max: 22 }), 'RESTORE PURCHASES', () => {
-          this.restoreStorePurchases();
-        }, { width: shopBtnW, height: uiPx(40, { min: 36, max: 44 }), fontSize: '13px', primary: false });
-        y += uiPx(52, { min: 44, max: 56 });
-      }
+      const restoreBtn = makeButton(this, frame.cx, frame.contentTop + y + uiPx(20, { min: 16, max: 22 }), 'RESTORE PURCHASES', () => {
+        this.restoreStorePurchases();
+      }, { width: shopBtnW, height: uiPx(40, { min: 36, max: 44 }), fontSize: '13px', primary: false });
+      this.scrollLayer.add(restoreBtn);
+      restoreBtn.setPosition(0, y + uiPx(20, { min: 16, max: 22 }));
+      y += uiPx(52, { min: 44, max: 56 });
 
-      if (isWebStripeEnabled() && y < frame.contentBottom - uiPx(120, { min: 100, max: 120 })) {
-        makeButton(this, frame.cx, y + uiPx(12, { min: 8, max: 14 }), 'REDEEM UNLOCK CODE', () => {
+      if (isWebStripeEnabled()) {
+        const redeemBtn = makeButton(this, frame.cx, frame.contentTop + y + uiPx(12, { min: 8, max: 14 }), 'REDEEM UNLOCK CODE', () => {
           this.redeemWebUnlockCode();
         }, { width: shopBtnW, height: uiPx(40, { min: 36, max: 44 }), fontSize: '13px', primary: false });
+        this.scrollLayer.add(redeemBtn);
+        redeemBtn.setPosition(0, y + uiPx(12, { min: 8, max: 14 }));
         y += uiPx(52, { min: 44, max: 56 });
       }
-    } else if (!Monetization.isStoreAvailable()) {
+    } else {
       this.shopStatus.setText('Store unavailable in this build');
       y += uiPx(22, { min: 18, max: 24 });
     }
 
-    if (y < frame.contentBottom - uiPx(56, { min: 48, max: 56 })) {
-      makeButton(this, frame.cx, y + uiPx(22, { min: 18, max: 22 }), 'GARDEN SHOP', () => {
-        this.scene.pause(SCENES.SETTINGS);
-        this.scene.launch(SCENES.SHOP, { from: SCENES.SETTINGS });
-      }, { width: shopBtnW, height: uiPx(44, { min: 40, max: 48 }), fontSize: '15px', primary: false });
-      y += uiPx(52, { min: 44, max: 56 });
-    }
+    const shopBtn = makeButton(this, frame.cx, frame.contentTop + y + uiPx(22, { min: 18, max: 22 }), 'GARDEN SHOP', () => {
+      this.scene.pause(SCENES.SETTINGS);
+      this.scene.launch(SCENES.SHOP, { from: SCENES.SETTINGS });
+    }, { width: shopBtnW, height: uiPx(44, { min: 40, max: 48 }), fontSize: '15px', primary: false });
+    this.scrollLayer.add(shopBtn);
+    shopBtn.setPosition(0, y + uiPx(22, { min: 18, max: 22 }));
+    y += uiPx(52, { min: 44, max: 56 });
 
-    this.add.text(frame.cx, Math.min(y + uiPx(8, { min: 4, max: 8 }), frame.footerY - uiPx(64, { min: 56, max: 64 })), MUSIC_CREDITS, {
+    addScroll(this.add.text(0, y + uiPx(8, { min: 4, max: 8 }), MUSIC_CREDITS, {
       ...orbitronStyle(10, PAL.textMuted, { align: 'center', wordWrap: { width: frame.wrap } }),
-    }).setOrigin(0.5, 0).setDepth(1001).setAlpha(0.7);
+    }).setOrigin(0.5, 0).setAlpha(0.7));
+    y += uiPx(48, { min: 40, max: 52 });
+
+    this.contentHeight = y + 8;
+    this.maxScroll = Math.max(0, this.contentHeight - this.contentH);
+
+    const maskGfx = this.make.graphics().setDepth(1000);
+    maskGfx.fillStyle(0xffffff);
+    maskGfx.fillRect(this.contentLeft, frame.contentTop, this.contentWidth, this.contentH);
+    this.scrollLayer.setMask(maskGfx.createGeometryMask());
+
+    this._scroll = attachOverlayScroll(this, {
+      left: () => this.contentLeft,
+      top: () => this.contentTop,
+      width: () => this.contentWidth,
+      height: () => this.contentH,
+      getScroll: () => this.scrollY,
+      setScroll: (v) => {
+        this.scrollY = v;
+        this.scrollLayer.y = this.contentTop - this.scrollY;
+      },
+      getMaxScroll: () => this.maxScroll,
+    });
 
     makeButton(this, frame.cx, frame.footerY, 'SAVE & CLOSE', () => this.close(), {
       width: Math.min(frame.btnW, uiPx(340, { max: 360 })),
       height: uiPx(52, { min: 44, max: 56 }),
       fontSize: '18px',
     });
+
+    this.events.once('shutdown', () => this._scroll?.destroy());
   }
 
   previewMusicVolume() {

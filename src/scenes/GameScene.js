@@ -344,7 +344,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   spawnEscortAnchor() {
-    const candidates = this.bricks.filter((b) => b.alive && !b.indestructible && b.type === 'normal');
+    const candidates = this.bricks.filter((b) =>
+      b.alive && !b.indestructible && (b.type === 'normal' || b.type === 'reinforced'),
+    );
     if (!candidates.length) return;
     const brick = candidates[Math.floor(Math.random() * candidates.length)];
     brick.escort = true;
@@ -1076,18 +1078,89 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
+  isBallReachable(br) {
+    if (!this.isBallBreakable(br)) return false;
+    const below = this.bricks.filter(
+      (x) => x.alive && x !== br
+        && Math.abs(x.cx - br.cx) < br.w * 0.55
+        && x.y > br.y + br.h * 0.15,
+    );
+    return !below.some((x) => this.isColumnBlocker(x));
+  }
+
+  isColumnBlocker(b) {
+    if (!b?.alive) return false;
+    if (b.indestructible && (b.type === 'steel' || b.type === 'gold')) return true;
+    if (b.type === 'hostage' && !b.hostageCleared) return true;
+    if (this.challengeSys?.cannonsOnly && b.type === 'silver') return true;
+    return false;
+  }
+
+  fixBlockedColumns() {
+    const cellW = (this.bricks[0]?.w ?? BRICK.WIDTH) + BRICK.GAP;
+    const left = GAME.WALL_X + BRICK.GAP;
+    const byCol = new Map();
+    for (const b of this.bricks) {
+      if (!b.alive) continue;
+      const c = Math.round((b.cx - left) / cellW);
+      if (!byCol.has(c)) byCol.set(c, []);
+      byCol.get(c).push(b);
+    }
+    for (const col of byCol.values()) {
+      col.sort((a, b) => b.y - a.y);
+      for (let i = 0; i < col.length; i++) {
+        const b = col[i];
+        if (!this.isColumnBlocker(b) && b.type !== 'steel' && b.type !== 'gold') continue;
+        if (b.type !== 'steel' && b.type !== 'gold' && b.type !== 'hostage') continue;
+        const hasAbove = col.slice(i + 1).some((x) => x.alive && this.isBallBreakable(x));
+        if (!hasAbove) continue;
+        if (b.type === 'hostage') {
+          b.clearHostage?.();
+          b.hp = b.maxHp = 1;
+          b.drawFx();
+          b.sync?.();
+        } else {
+          this.demoteWallBrick(b);
+        }
+      }
+    }
+  }
+
+  demoteWallBrick(b) {
+    b.type = 'reinforced';
+    b.indestructible = false;
+    b.maxHp = b.hp = clamp(2 + Math.floor(this.level / 10), 2, 3);
+    b.color = this.theme?.bricks?.[(b.zoneRow ?? 0) % (this.theme?.bricks?.length ?? 1)] ?? b.color;
+    b.drawFx();
+    b.sync?.();
+  }
+
   ensureLevelWinnable() {
-    if (this.challengeSys?.cannonsOnly) {
-      this.bricks.forEach((b) => {
-        if (!b.alive || b.type !== 'silver') return;
+    this.fixBlockedColumns();
+    if (this.bricks.some((b) => b.alive && this.isBallReachable(b))) return;
+
+    const maxY = Math.max(...this.bricks.filter((b) => b.alive).map((b) => b.y), 0);
+    const bh = this.bricks[0]?.h ?? BRICK.HEIGHT;
+    for (const b of this.bricks) {
+      if (!b.alive) continue;
+      const onFront = b.y >= maxY - bh * 0.5;
+      if (onFront && (b.type === 'steel' || b.type === 'gold')) this.demoteWallBrick(b);
+      if (onFront && this.challengeSys?.cannonsOnly && b.type === 'silver') {
         b.type = 'reinforced';
         b.indestructible = false;
         b.maxHp = b.hp = clamp(b.hp, 2, 3);
         b.drawFx();
         b.sync?.();
-      });
+      }
+      if (onFront && b.type === 'hostage' && !b.hostageCleared) {
+        b.clearHostage?.();
+        b.hp = b.maxHp = 1;
+        b.drawFx();
+        b.sync?.();
+      }
     }
-    if (this.bricks.some((b) => this.isBallBreakable(b))) return;
+
+    if (this.bricks.some((b) => b.alive && this.isBallReachable(b))) return;
     this.relieveSoftlock(true);
   }
 
@@ -2643,12 +2716,16 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (this.destructiblesLeft() > 0) {
-      const left = this.bricks.filter((b) => b.alive && !b.indestructible);
-      if (!left.some((b) => this.isBallBreakable(b))) {
+      const reachable = () => this.bricks.some((b) => b.alive && this.isBallReachable(b));
+      if (!reachable()) {
+        this.fixBlockedColumns();
+      }
+      if (!reachable()) {
         this.relieveSoftlock();
       } else if (!this._lastBrickBreakAt) {
         this._lastBrickBreakAt = this.time.now;
       } else if (this.time.now - this._lastBrickBreakAt > 28000) {
+        this.fixBlockedColumns();
         this.relieveSoftlock();
         this._lastBrickBreakAt = this.time.now;
       }
