@@ -152,7 +152,11 @@ export class MenuScene extends Phaser.Scene {
     }
 
     const stackStart = y + 6;
-    const maxBottom = H - bottomPad - 52;
+    const footerLineH = uiPx(15, { min: 13, max: 16 });
+    const footerPad = uiPx(10, { min: 8, max: 12 });
+    const showGameplayTip = !portrait;
+    const footerStackH = footerPad + footerLineH * (showGameplayTip ? 3 : 2) + uiPx(6, { min: 4, max: 8 });
+    const maxBottom = H - bottomPad - footerStackH;
     this.buttons = layoutButtonStack(this, panel, items, {
       gap,
       width: btnW,
@@ -161,25 +165,30 @@ export class MenuScene extends Phaser.Scene {
     });
 
     const lastBtn = this.buttons[this.buttons.length - 1];
-    this.shareHint = this.add.text(cx, lastBtn.y + btnShare / 2 + 10, '', {
+    const shareHintY = Math.min(
+      lastBtn.y + btnShare / 2 + uiPx(10, { min: 8, max: 12 }),
+      maxBottom - uiPx(18, { min: 14, max: 18 }),
+    );
+    this.shareHint = this.add.text(cx, shareHintY, '', {
       ...orbitronStyle(11, PAL.textMuted, { align: 'center', wordWrap: { width: btnW } }),
     }).setOrigin(0.5, 0).setDepth(1001);
 
-    const hintY = H - bottomPad - uiPx(38, { min: 28, max: 38 });
-    const hintMinY = lastBtn.y + btnShare / 2 + uiPx(28, { min: 22, max: 28 });
-    if (hintY > hintMinY) {
-      this.add.text(cx, hintY, 'Double-tap in-game: spend Nexus  ·  Full meter: Nexus Burst', {
-        ...orbitronStyle(12, PAL.textMuted, { align: 'center', wordWrap: { width: wrapWidth(0.88) } }),
-      }).setOrigin(0.5).setAlpha(0.65).setDepth(1001);
+    let footY = H - bottomPad - footerPad;
+    this.add.text(cx, footY, `v${APP_VERSION} · ${BUILD_STAMP}`, {
+      ...orbitronStyle(10, '#4a5a70', { align: 'center' }),
+    }).setOrigin(0.5, 1).setDepth(1001);
+    footY -= footerLineH;
+
+    this.add.text(cx, footY, 'Made with ♥ by Tuhin Karmakar', {
+      ...orbitronStyle(11, '#5f7088', { align: 'center' }),
+    }).setOrigin(0.5, 1).setDepth(1001);
+    footY -= footerLineH;
+
+    if (showGameplayTip && footY - footerLineH > lastBtn.y + btnShare / 2 + uiPx(8)) {
+      this.add.text(cx, footY, 'Tip: Nexus meter · Full meter = Burst', {
+        ...orbitronStyle(11, PAL.textMuted, { align: 'center', wordWrap: { width: wrapWidth(0.9) } }),
+      }).setOrigin(0.5, 1).setAlpha(0.65).setDepth(1001);
     }
-
-    this.add.text(cx, H - bottomPad - uiPx(14, { min: 10, max: 14 }), `v${APP_VERSION} · ${BUILD_STAMP}`, {
-      ...orbitronStyle(11, '#4a5a70'),
-    }).setOrigin(0.5, 1).setDepth(1001);
-
-    this.add.text(cx, H - bottomPad - uiPx(30, { min: 22, max: 30 }), 'Made with ♥ by Tuhin Karmakar', {
-      ...orbitronStyle(12, '#5f7088'),
-    }).setOrigin(0.5, 1).setDepth(1001);
 
     this._setupInstallPromptListener();
 
