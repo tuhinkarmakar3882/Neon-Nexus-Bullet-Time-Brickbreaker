@@ -50,7 +50,8 @@ export class Paddle {
   }
 
   setWidth(w) {
-    this.w = clamp(w, this.baseW * 0.45, Math.min(GAME.WIDTH * 0.5, this.baseW * 2.4));
+    const cap = GAME.IS_PORTRAIT ? GAME.WIDTH * 0.62 : GAME.WIDTH * 0.5;
+    this.w = clamp(w, this.baseW * 0.45, Math.min(cap, this.baseW * 2.4));
   }
 
   glowColor() {

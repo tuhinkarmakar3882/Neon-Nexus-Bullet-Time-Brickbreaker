@@ -38,7 +38,15 @@ export class MenuScene extends Phaser.Scene {
       fontFamily: 'Syne, Orbitron, monospace', fontSize: clamp(Math.round(W * 0.024), 14, 28) + 'px', fontStyle: '700', color: cssHex(PAL.accent2),
     }).setOrigin(0.5).setDepth(1001).setShadow(0, 0, cssHex(PAL.accent2), 14, true, true);
 
-    this.add.text(cx, H * 0.285, `HIGH SCORE   ${SaveManager.getHighScore()}  ·  💎 ${MetaProgress.getGems()} GEMS`, {
+    const pad = 14 + GAME.SAFE_TOP;
+    this.add.text(W - pad - GAME.SAFE_RIGHT, pad, `💎 ${MetaProgress.getGems().toLocaleString()}`, {
+      fontFamily: 'Orbitron, monospace',
+      fontSize: clamp(Math.round(W * 0.034), 16, 24) + 'px',
+      fontStyle: '800',
+      color: cssHex(PAL.accent2),
+    }).setOrigin(1, 0).setDepth(1001).setShadow(0, 0, cssHex(PAL.accent2), 10, true, true);
+
+    this.add.text(cx, H * 0.285, `HIGH SCORE  ${SaveManager.getHighScore().toLocaleString()}`, {
       fontFamily: 'Orbitron, monospace', fontSize: '18px', color: PAL.text,
     }).setOrigin(0.5).setAlpha(0.8).setDepth(1001);
 

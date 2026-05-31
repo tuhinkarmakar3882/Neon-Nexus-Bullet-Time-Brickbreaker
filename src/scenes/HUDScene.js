@@ -3,6 +3,7 @@ import { GAME, SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { makeButton } from '../utils/UI.js';
 import { categoryColor, powerDisplayName } from '../config/PowerUps.js';
+import { MetaProgress } from '../systems/MetaProgress.js';
 import { tickBump, popScale } from '../utils/MicroFx.js';
 import { clamp } from '../utils/Helpers.js';
 
@@ -78,13 +79,20 @@ export class HUDScene extends Phaser.Scene {
     ).setDepth(1005).setInteractive({ useHandCursor: true });
     this.nexusHit.on('pointerdown', () => bus.emit('req:nexus'));
 
-    this.treasuryText = this.add.text(this._leftMeterX + this._meterBarW / 2, meterBottom + 22, '', {
-      ...ls('9px', cssHex(PAL.gold)), align: 'center',
-    }).setOrigin(0.5, 0).setDepth(1004);
+    const currencyX = W - GAME.WALL_X - GAME.SAFE_RIGHT - 6;
+    const currencyY = GAME.WALL_TOP + 10;
+    this.currencyText = this.add.text(currencyX, currencyY, '', {
+      fontFamily: 'Orbitron, monospace',
+      fontSize: GAME.IS_PORTRAIT ? '11px' : '12px',
+      color: PAL.text,
+      fontStyle: 'bold',
+      align: 'right',
+      lineSpacing: 4,
+    }).setOrigin(1, 0).setDepth(1006);
 
-    this.gambitBtn = makeButton(this, this._leftMeterX + this._meterBarW / 2, meterBottom + 38, 'CASH', () => bus.emit('req:gambit'), {
-      width: 64, height: 28, fontSize: '10px', primary: false, depth: 1004,
-    }).setAlpha(0);
+    this.gambitBtn = makeButton(this, currencyX, currencyY + 38, 'CASH', () => bus.emit('req:gambit'), {
+      width: 72, height: 28, fontSize: '10px', primary: false, depth: 1006,
+    }).setOrigin(1, 0).setAlpha(0);
 
     this.btText = this.add.text(this._rightMeterX + this._meterBarW / 2, meterTop + this._meterBarH * 0.5, 'SLOW-MO', {
       fontFamily: 'Orbitron, monospace', fontSize: '10px', fontStyle: '900', color: '#8ec5ff',
@@ -142,7 +150,13 @@ export class HUDScene extends Phaser.Scene {
     this.goalText = this.add.text(W / 2, metaY, '', ls('13px', cssHex(PAL.accent3))).setOrigin(0.5, 0);
     this.mutatorText = this.add.text(W / 2, metaY + 18, '', ls('11px', PAL.textMuted)).setOrigin(0.5, 0);
 
-    this.onTreasury = (t) => this.treasuryText.setText(`🌿 ${t.value ?? 0}`);
+    this.onTreasury = (t) => this.refreshCurrency(t.value);
+    this.refreshCurrency = (treasury) => {
+      const gems = MetaProgress.getGems();
+      const leaf = treasury ?? MetaProgress.getTreasury();
+      this.currencyText.setText(`💎 ${gems.toLocaleString()}\n🌿 ${leaf.toLocaleString()}`);
+    };
+    this.refreshCurrency();
     this.onGambit = (g) => {
       this.gambitBtn.setAlpha(g?.combo >= 8 ? 0.95 : 0);
     };

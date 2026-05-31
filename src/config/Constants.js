@@ -167,12 +167,12 @@ export function computeLayout(winW, winH, insets) {
   GAME.WALL_TOP = Math.round(H * (isPortrait ? 0.085 : 0.11)) + GAME.SAFE_TOP;
 
   GAME.IS_PORTRAIT = isPortrait;
-  /** Portrait phones need a wider starting paddle (fraction of arena width). */
-  const paddleFrac = isPortrait ? 0.26 : 0.155;
-  const paddleMin = isPortrait ? Math.round(W * 0.2) : Math.round(W * 0.12);
-  const paddleMax = isPortrait ? W * 0.5 : W * 0.42;
+  /** Portrait phones — wide paddle for thumb control. */
+  const paddleFrac = isPortrait ? 0.38 : 0.155;
+  const paddleMin = isPortrait ? Math.round(W * 0.34) : Math.round(W * 0.12);
+  const paddleMax = isPortrait ? W * 0.58 : W * 0.42;
   GAME.PADDLE_BASE_WIDTH = Math.round(clampN(W * paddleFrac, paddleMin, paddleMax));
-  GAME.PADDLE_HEIGHT = Math.round(clampN(H * 0.022, 20, 30));
+  GAME.PADDLE_HEIGHT = Math.round(clampN(H * (isPortrait ? 0.026 : 0.022), 22, 34));
   GAME.PADDLE_Y_OFFSET = Math.round(H * (isPortrait ? 0.042 : 0.048)) + GAME.SAFE_BOTTOM;
   /** Tie paddle speed to height so wide/narrow aspect changes don't skew feel */
   GAME.PADDLE_SPEED = Math.round(H * 0.88);
