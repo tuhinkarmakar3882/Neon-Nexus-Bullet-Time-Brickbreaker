@@ -48,14 +48,13 @@ export async function exitGameFullscreen() {
   }
 }
 
-/** Collapse mobile browser chrome when Fullscreen API is unavailable. */
+/** Nudge mobile browsers to collapse the URL bar — do not pin html/body height (breaks Phaser). */
 export function lockMobileViewport() {
   if (typeof window === 'undefined') return;
-  window.scrollTo(0, 1);
-  const vv = window.visualViewport;
-  if (vv) {
-    document.documentElement.style.height = `${vv.height}px`;
-    document.body.style.height = `${vv.height}px`;
+  try {
+    window.scrollTo(0, 1);
+  } catch {
+    /* ignore */
   }
 }
 

@@ -26,39 +26,44 @@ import {
 } from './systems/LayoutManager.js';
 import { attachFullscreenListener, lockMobileViewport } from './systems/Fullscreen.js';
 
-syncViewportLayout();
-lockMobileViewport();
+const isMobile = typeof navigator !== 'undefined'
+  && /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
 
-const config = {
-  type: Phaser.AUTO,
-  parent: 'game-root',
-  backgroundColor: '#08050c',
-  width: GAME.WIDTH,
-  height: GAME.HEIGHT,
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+let game = null;
+let bootSettledAt = 0;
+
+function buildPhaserConfig() {
+  syncViewportLayout();
+  return {
+    type: Phaser.AUTO,
+    parent: 'game-root',
+    backgroundColor: '#08050c',
     width: GAME.WIDTH,
     height: GAME.HEIGHT,
-    parent: 'game-root',
-  },
-  input: {
-    activePointers: 1,
-    touch: { capture: true },
-  },
-  render: {
-    antialias: true,
-    roundPixels: false,
-    powerPreference: 'high-performance',
-  },
-  fps: { target: 60, min: 30 },
-  scene: [
-    BootScene, PreloadScene, MenuScene, GameScene, HUDScene,
-    PauseScene, SettingsScene, GameOverScene, LevelCompleteScene, CodexScene, ShopScene, AdBreakScene,
-  ],
-};
-
-const game = new Phaser.Game(config);
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: GAME.WIDTH,
+      height: GAME.HEIGHT,
+      parent: 'game-root',
+    },
+    input: {
+      activePointers: 1,
+      touch: { capture: true },
+    },
+    render: {
+      antialias: !isMobile,
+      roundPixels: false,
+      powerPreference: isMobile ? 'default' : 'high-performance',
+      batchSize: isMobile ? 2048 : 4096,
+    },
+    fps: { target: 60, min: 30 },
+    scene: [
+      BootScene, PreloadScene, MenuScene, GameScene, HUDScene,
+      PauseScene, SettingsScene, GameOverScene, LevelCompleteScene, CodexScene, ShopScene, AdBreakScene,
+    ],
+  };
+}
 
 function restartUiScenes() {
   const settings = game.scene.getScene(SCENES.SETTINGS);
@@ -82,6 +87,7 @@ function restartUiScenes() {
 }
 
 function handleViewportChange() {
+  if (!game?.scale) return;
   if (isGameplayLocked(game)) {
     refreshDisplayScale(game);
     return;
@@ -91,6 +97,12 @@ function handleViewportChange() {
 
   if (layoutChanged) {
     applyLogicalResize(game);
+    refreshDisplayScale(game);
+    syncSceneCameras(game);
+
+    // Skip UI scene restart during initial mobile viewport settle (address bar, safe area).
+    if (Date.now() - bootSettledAt < 1800) return;
+
     restartUiScenes();
 
     const gs = game.scene.getScene(SCENES.GAME);
@@ -112,41 +124,61 @@ function scheduleViewportChange() {
   resizeTimer = setTimeout(handleViewportChange, 120);
 }
 
-window.addEventListener('resize', scheduleViewportChange);
-window.addEventListener('orientationchange', () => {
+function attachViewportListeners() {
+  window.addEventListener('resize', scheduleViewportChange);
+  window.addEventListener('orientationchange', () => {
+    lockMobileViewport();
+    scheduleViewportChange();
+  });
+  window.visualViewport?.addEventListener('resize', scheduleViewportChange);
+  window.visualViewport?.addEventListener('scroll', scheduleViewportChange);
+  attachFullscreenListener(() => scheduleViewportChange());
+}
+
+function bootGame() {
   lockMobileViewport();
-  scheduleViewportChange();
-});
-window.visualViewport?.addEventListener('resize', scheduleViewportChange);
-window.visualViewport?.addEventListener('scroll', scheduleViewportChange);
-attachFullscreenListener(() => scheduleViewportChange());
+  game = new Phaser.Game(buildPhaserConfig());
+  window.__NEON = game;
 
-game.events.once(Phaser.Core.Events.READY, () => {
-  refreshDisplayScale(game);
-  scheduleViewportChange();
+  game.events.once(Phaser.Core.Events.READY, () => {
+    bootSettledAt = Date.now();
+    refreshDisplayScale(game);
+    scheduleViewportChange();
 
-  InputRouter.attach(game);
-  RunPersistence.attachAutoSave(game);
-  const adProvider = createAdProvider(game);
-  Monetization.register({
-    ...adProvider,
-    init: async () => {
-      Monetization.applyConfig();
-      Monetization.removeAds = SaveManager.getRemoveAds();
-      await adProvider.init?.();
-    },
-  }, game);
+    InputRouter.attach(game);
+    RunPersistence.attachAutoSave(game);
+    const adProvider = createAdProvider(game);
+    Monetization.register({
+      ...adProvider,
+      init: async () => {
+        Monetization.applyConfig();
+        Monetization.removeAds = SaveManager.getRemoveAds();
+        try {
+          await adProvider.init?.();
+        } catch (e) {
+          console.warn('[Monetization] init skipped', e);
+        }
+      },
+    }, game);
 
-  const splash = document.getElementById('boot-splash');
-  if (splash) {
-    setTimeout(() => splash.classList.add('hide'), 350);
-    setTimeout(() => splash.remove(), 1100);
-  }
-});
+    const splash = document.getElementById('boot-splash');
+    if (splash) {
+      setTimeout(() => splash.classList.add('hide'), 350);
+      setTimeout(() => splash.remove(), 1100);
+    }
+  });
+}
+
+attachViewportListeners();
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootGame, { once: true });
+} else {
+  bootGame();
+}
 
 if ('serviceWorker' in navigator && import.meta.env && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
 
-window.__NEON = game;
 export default game;

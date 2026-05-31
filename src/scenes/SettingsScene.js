@@ -15,6 +15,7 @@ export class SettingsScene extends Phaser.Scene {
 
   init(data) {
     this.from = data?.from ?? SCENES.MENU;
+    this.settings = SaveManager.loadSettings();
   }
 
   create() {

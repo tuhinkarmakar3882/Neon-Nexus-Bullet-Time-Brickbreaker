@@ -150,9 +150,9 @@ export function computeLayout(winW, winH, insets) {
   const vh = Math.max(1, winH || 800);
   const aspect = vw / vh;
   const isPortrait = aspect < 0.82;
-  /** Match logical canvas to viewport so Scale.FIT fills the screen with no letterboxing. */
-  const H = Math.round(clampN(vh, 680, 1600));
-  const W = Math.round(H * aspect);
+  /** Use the real viewport height — never clamp up above the device (broke mobile FIT). */
+  const H = Math.round(clampN(vh, 480, 1600));
+  const W = Math.max(320, Math.round(H * aspect));
 
   GAME.WIDTH = W;
   GAME.HEIGHT = H;

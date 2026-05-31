@@ -178,11 +178,25 @@ export function makeOverlayPanel(scene, opts = {}) {
 /** Stack overlay buttons inside a panel card — avoids %Y drift on tall canvases. */
 export function layoutButtonStack(scene, panel, items, opts = {}) {
   const { cx, cy } = panel;
-  const gap = opts.gap ?? 14;
+  let gap = opts.gap ?? 14;
   const width = opts.width ?? Math.min(panel.cardW * 0.88, 420);
-  const heights = items.map((it) => it.height ?? opts.btnH ?? 72);
+  let heights = items.map((it) => it.height ?? opts.btnH ?? 72);
+  const maxBottom = opts.maxBottom;
+  if (maxBottom != null && opts.startY != null) {
+    let totalH = heights.reduce((a, h) => a + h, 0) + gap * Math.max(0, items.length - 1);
+    while (opts.startY + totalH > maxBottom && gap > 6) {
+      gap -= 2;
+      totalH = heights.reduce((a, h) => a + h, 0) + gap * Math.max(0, items.length - 1);
+    }
+    while (opts.startY + totalH > maxBottom && heights.some((h) => h > 40)) {
+      heights = heights.map((h) => Math.max(40, h - 3));
+      totalH = heights.reduce((a, h) => a + h, 0) + gap * Math.max(0, items.length - 1);
+    }
+  }
   const totalH = heights.reduce((a, h) => a + h, 0) + gap * Math.max(0, items.length - 1);
-  let y = cy - totalH / 2 + (opts.offsetY ?? 24);
+  let y = opts.startY != null
+    ? opts.startY + heights[0] / 2
+    : cy - totalH / 2 + (opts.offsetY ?? 24);
 
   return items.map((item, i) => {
     const h = heights[i];

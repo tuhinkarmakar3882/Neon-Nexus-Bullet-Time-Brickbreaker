@@ -14,9 +14,11 @@ export function isGameplayLocked(game) {
 export function getViewportSize() {
   const root = document.getElementById('game-root');
   const vv = window.visualViewport;
-  const w = root?.clientWidth || vv?.width || window.innerWidth;
-  const h = root?.clientHeight || vv?.height || window.innerHeight;
-  return { w: Math.max(1, w), h: Math.max(1, h) };
+  const rw = root?.clientWidth ?? 0;
+  const rh = root?.clientHeight ?? 0;
+  const w = rw > 32 ? rw : (vv?.width || window.innerWidth || 390);
+  const h = rh > 32 ? rh : (vv?.height || window.innerHeight || 844);
+  return { w: Math.max(320, Math.round(w)), h: Math.max(480, Math.round(h)) };
 }
 
 /** Resolve env(safe-area-inset-*) to pixel values. */

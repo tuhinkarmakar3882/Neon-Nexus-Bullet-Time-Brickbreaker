@@ -2,7 +2,7 @@ import {
   Zap, Maximize2, Hand, Snail, Copy, Shield, Shrink, FlipVertical2, Flame, Snowflake,
   Bomb, Heart, FastForward, Gauge, Activity, Bolt, Droplets, Crosshair, Magnet, Ghost,
   Rocket, Orbit, Radar, Repeat, CircleDot, Minimize2, Shuffle, Sparkles, CircleGauge,
-  ThermometerSnowflake, Disc, CloudFog,
+  ThermometerSnowflake, Disc, CloudFog, Settings, Pause,
 } from 'lucide';
 import { POWER_KEYS, POWERS } from '../config/PowerUps.js';
 
@@ -143,4 +143,27 @@ export function generateIconTextures(scene) {
 
 export function iconTextureKey(powerKey) {
   return `icon-${powerKey}`;
+}
+
+/** Canvas UI icons — avoids SVG loader issues on mobile Safari / Capacitor. */
+export function generateUiIcons(scene) {
+  const mk = (key, size, iconNode, fallback) => {
+    if (scene.textures.exists(key)) return;
+    const canvas = scene.textures.createCanvas(key, size, size);
+    const ctx = canvas.getContext();
+    try {
+      if (iconNode && normalizeIconNode(iconNode).length) {
+        drawIconNode(ctx, iconNode, size);
+      } else {
+        drawFallbackIcon(ctx, size, fallback ?? '?');
+      }
+    } catch {
+      drawFallbackIcon(ctx, size, fallback ?? '?');
+    }
+    canvas.refresh();
+  };
+
+  mk('pause-icon', 48, Pause, 'II');
+  mk('heart-icon', 32, Heart, '♥');
+  mk('settings-icon', 48, Settings, '⚙');
 }

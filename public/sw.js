@@ -1,6 +1,6 @@
 // Minimal offline-first service worker. Runtime-caches GET responses so the game
 // is fully playable offline after the first load (PWA / TWA / Capacitor webview).
-const CACHE = 'neon-nexus-v2';
+const CACHE = 'neon-nexus-v3';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
