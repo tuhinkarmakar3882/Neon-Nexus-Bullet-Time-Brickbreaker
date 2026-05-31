@@ -85,7 +85,7 @@ export class Background {
 
     this.aurora.forEach((a) => a.destroy());
     this.aurora = [];
-    if (bg.aurora) {
+    if (bg.aurora && !this.gameplay) {
       for (let i = 0; i < 2; i++) {
         const band = this.scene.add.image(W * (0.3 + i * 0.4), H * 0.22, 'soft')
           .setDisplaySize(W * 1.4, H * 0.35)
@@ -153,7 +153,7 @@ export class Background {
         scale: { min: 0.04, max: 0.1 },
         alpha: { min: 0.08 * starMult, max: 0.22 * starMult },
         frequency: bg.moteFreq,
-        tint: this.accent,
+        tint: this.gameplay ? 0xbfdfff : this.accent,
         blendMode: 'ADD',
         rotate: { min: 0, max: 360 },
       }).setDepth(-89);

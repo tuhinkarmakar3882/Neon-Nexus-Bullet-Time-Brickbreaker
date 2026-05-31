@@ -1,7 +1,7 @@
 // Pixabay background music + procedural arcade SFX (Web Audio API).
 
 import { POWERS, resolvePowerKey } from '../config/PowerUps.js';
-import { MUSIC_TRACKS, trackForLevel, menuTrackForVariant, pixabayAlternates, normalizeMusicVariant, allTrackUrls } from '../config/MusicCatalog.js';
+import { MUSIC_TRACKS, trackForLevel, menuTrackForVariant, pixabayAlternates, allTrackUrls } from '../config/MusicCatalog.js';
 
 export class AudioManager {
   constructor() {
@@ -23,7 +23,6 @@ export class AudioManager {
     this._musicVolScale = 1;
     this._tracksReady = false;
     this._currentTrackDef = null;
-    this._musicVariant = 'auto';
   }
 
   _initTracks() {
@@ -107,7 +106,7 @@ export class AudioManager {
     if (!this.musicOn || !trackDef?.url) return false;
     this._initTracks();
 
-    const urls = [trackDef.url, ...pixabayAlternates(trackDef.url, this._musicVariant)];
+    const urls = [trackDef.url, ...pixabayAlternates(trackDef.url)];
     for (const url of urls) {
       if (await this._tryPlayUrl(url, trackDef)) return true;
     }
@@ -185,16 +184,7 @@ export class AudioManager {
     else this.setLevelMusic(this._level, this._musicSeed, { biome: this._biome, isBoss: this._isBoss });
   }
 
-  setMusicVariant(variant) {
-    this._musicVariant = normalizeMusicVariant(variant);
-  }
-
-  getMusicVariant() {
-    return this._musicVariant;
-  }
-
-  applyMusicSettings({ musicVariant, musicVolume } = {}) {
-    if (musicVariant != null) this.setMusicVariant(musicVariant);
+  applyMusicSettings({ musicVolume } = {}) {
     if (musicVolume != null) this.setMusicVolume(musicVolume);
     if (!this.musicOn) return;
     if (this._isMenu) this.setMenuMusic();
@@ -203,7 +193,7 @@ export class AudioManager {
 
   setMenuMusic() {
     this._isMenu = true;
-    this._playPixabayTrack(menuTrackForVariant(this._musicVariant));
+    this._playPixabayTrack(menuTrackForVariant());
   }
 
   setLevelMusic(level, seed = level, opts = {}) {
@@ -212,11 +202,9 @@ export class AudioManager {
     this._musicSeed = seed >>> 0;
     this._biome = opts.biome ?? 'garden';
     this._isBoss = !!opts.isBoss;
-    if (opts.musicVariant != null) this._musicVariant = normalizeMusicVariant(opts.musicVariant);
     this._playPixabayTrack(trackForLevel(this._level, this._musicSeed, {
       biome: this._biome,
       isBoss: this._isBoss,
-      musicVariant: this._musicVariant,
     }));
   }
 

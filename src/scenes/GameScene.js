@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME, SCENES, JARDINAIN, BRICK } from '../config/Constants.js';
+import { GAME, SCENES, JARDINAIN, BRICK, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { POWERS, powerFillColor, powerColorHex, resolvePowerKey, CANNON_TYPES, BALL_MODS, POWER_KEYS, powerDisplayName, powerPillLabel, powerHasBallMod, powerHasCannon, findActiveBallModKey, findActiveCannonKey } from '../config/PowerUps.js';
 import { rollPower, rollPowerDraft, rollPositivePowerDraft, rollCapsuleVariant, rollBlessedPower } from '../config/DropTables.js';
@@ -56,11 +56,11 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.settings = resolveSettings(SaveManager.loadSettings());
     const musicSettings = SaveManager.loadSettings();
-    this.musicVariant = musicSettings.musicVariant ?? 'auto';
-    audio.applyMusicSettings({
-      musicVariant: this.musicVariant,
-      musicVolume: musicSettings.musicVolume,
-    });
+    audio.setSoundEnabled(musicSettings.sound);
+    audio.setMusicEnabled(musicSettings.music);
+    audio.setSfxVolume(musicSettings.sfxVolume ?? DEFAULT_SFX_VOLUME);
+    audio.setMusicVolume(musicSettings.musicVolume ?? DEFAULT_MUSIC_VOLUME);
+    audio.applyMusicSettings({ musicVolume: musicSettings.musicVolume });
     addCameraFx(this, this.settings);
     initBulletTimeFx(this);
 
@@ -167,11 +167,8 @@ export class GameScene extends Phaser.Scene {
     this.shieldGfx = this.add.graphics().setDepth(7);
     this.fogGfx = this.add.graphics().setDepth(850).setScrollFactor(0).setAlpha(0);
     this.aimGfx = this.add.graphics().setDepth(23);
-    this._ghostGfx = this.add.graphics().setDepth(17).setAlpha(0.3);
 
     this.applyEquippedCosmetics();
-    this.drawGhostPath(MetaProgress.getLastRunPath());
-
     this.createEmitters();
     this.spawnLevel();
     this._layoutW = GAME.WIDTH;
@@ -590,10 +587,10 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.challengeSys.onLevelStart(this.level, isBoss, this.levelSeed, null, activeMutators);
+    this.ensureLevelWinnable();
     audio.setLevelMusic(this.level, this.levelSeed, {
       biome: theme.biome ?? 'garden',
       isBoss,
-      musicVariant: this.musicVariant ?? 'auto',
     });
     this.applyBrickDamageSnapshot();
 
@@ -945,12 +942,17 @@ export class GameScene extends Phaser.Scene {
         onComplete: () => c.destroy(),
       });
     }
-    this.applyPower(key);
+    const deferToNext = this._pendingCompleteLevel;
+    if (deferToNext) {
+      this._carryOverPower = key;
+    } else {
+      this.applyPower(key);
+    }
     this.settleCameraAfterFx(150);
     const next = this._draftQueue.shift();
     if (next) {
       this.time.delayedCall(320, () => this.openPowerDraft(next));
-    } else if (this._pendingCompleteLevel) {
+    } else if (deferToNext) {
       this._pendingCompleteLevel = false;
       this.time.delayedCall(250, () => this.completeLevel());
     }
@@ -1064,6 +1066,51 @@ export class GameScene extends Phaser.Scene {
 
   destructiblesLeft() {
     return this.bricks.filter((b) => b.alive && !b.indestructible).length;
+  }
+
+  isBallBreakable(br) {
+    if (!br?.alive || br.indestructible) return false;
+    if (br.type === 'hostage' && !br.hostageCleared) return false;
+    if (this.challengeSys?.cannonsOnly && br.type === 'silver') return false;
+    if (br.vineUntil > (this.time?.now ?? 0)) return true;
+    return true;
+  }
+
+  ensureLevelWinnable() {
+    if (this.challengeSys?.cannonsOnly) {
+      this.bricks.forEach((b) => {
+        if (!b.alive || b.type !== 'silver') return;
+        b.type = 'reinforced';
+        b.indestructible = false;
+        b.maxHp = b.hp = clamp(b.hp, 2, 3);
+        b.drawFx();
+        b.sync?.();
+      });
+    }
+    if (this.bricks.some((b) => this.isBallBreakable(b))) return;
+    this.relieveSoftlock(true);
+  }
+
+  relieveSoftlock(silent = false) {
+    let fixed = false;
+    for (const b of this.bricks) {
+      if (!b.alive || b.indestructible) continue;
+      if (this.isBallBreakable(b)) continue;
+      if (b.type === 'hostage') {
+        b.clearHostage();
+        b.hp = 1;
+        b.maxHp = 1;
+      } else if (b.type === 'silver') {
+        b.type = 'reinforced';
+        b.hp = b.maxHp = 2;
+      } else {
+        b.hp = 1;
+      }
+      b.drawFx();
+      b.sync?.();
+      fixed = true;
+    }
+    if (fixed && !silent) this.toast('Clear path opened', 1400);
   }
 
   applyBrickDamageSnapshot() {
@@ -1386,6 +1433,7 @@ export class GameScene extends Phaser.Scene {
         rippleRing(this, this.paddle.x, this.paddle.y, { tint: powerFillColor('ExtraPaddle'), scale: 3, dur: 480 });
         break;
       case 'InstantWin':
+        this.forceClearDestructibles();
         this.flash('LEVEL CLEAR!', cssHex(PAL.accent2), 650, 'high');
         this.time.delayedCall(250, () => {
           if (!this.transitioning && !this.draftOpen) this.completeLevel();
@@ -1507,32 +1555,59 @@ export class GameScene extends Phaser.Scene {
     this.flash('SHUFFLE!', powerColorHex('Shuffle'), 700);
   }
 
+  forceClearDestructibles() {
+    for (const b of this.bricks) {
+      if (!b.alive || b.indestructible) continue;
+      b.alive = false;
+      b.panel?.destroy();
+      b.fx?.destroy();
+      b.badge?.destroy();
+      b.crackImg?.destroy();
+    }
+    this.bricks = this.bricks.filter((b) => b.alive);
+    this.emitStats();
+  }
+
   startBlackHole() {
     const alive = this.bricks.filter((b) => b.alive && !b.indestructible);
     if (!alive.length) return;
     const center = pick(alive);
     this.blackHole = { x: center.cx, y: center.cy, pulse: 0 };
-    this.pullBlackHole();
+    this._bhRing?.destroy();
+    this._bhRing = this.add.image(center.cx, center.cy, 'ring')
+      .setDepth(9).setTint(0x331122).setAlpha(0.22).setScale(0.65).setBlendMode('ADD');
+    this.tweens.add({
+      targets: this._bhRing,
+      scale: 0.85,
+      alpha: 0.12,
+      duration: 1400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
   }
 
   pullBlackHole() {
     if (!this.blackHole || !this.powerSys.isActive('BlackHole')) return;
     const { x, y } = this.blackHole;
-    const R = 130;
+    const R = 120;
     for (const b of this.bricks) {
       if (!b.alive || b.indestructible) continue;
       const d = Math.hypot(b.cx - x, b.cy - y);
       if (d < R) {
-        b.x += (x - b.cx) * 0.08;
-        b.y += (y - b.cy) * 0.08;
-        if (d < 36 && b.hit(99)) this.destroyBrick(b, false);
+        b.x += (x - b.cx) * 0.05;
+        b.y += (y - b.cy) * 0.05;
+        b.baseX = b.x;
+        if (d < 30 && b.hit(99)) this.destroyBrick(b, false);
       }
     }
-    this.spawnRipple(x, y, 0xbe0000);
+    if (this._bhRing?.active) this._bhRing.setPosition(x, y);
     this.blackHole.pulse++;
   }
 
   stopBlackHole() {
+    this._bhRing?.destroy();
+    this._bhRing = null;
     this.blackHole = null;
   }
 
@@ -1547,18 +1622,34 @@ export class GameScene extends Phaser.Scene {
     if (on) {
       if (this.squeezeActive) return;
       this.squeezeActive = true;
-      this._squeezeOrig = this.bricks.map((b) => ({ b, w: b.w, h: b.h, x: b.x, y: b.y }));
+      this._squeezeOrig = this.bricks.map((b) => ({
+        b, w: b.w, h: b.h, x: b.x, y: b.y, baseX: b.baseX, moveAmp: b.moveAmp,
+      }));
       this.bricks.forEach((br) => {
         if (!br.alive) return;
-        const cx = br.x + br.w / 2, cy = br.y + br.h / 2;
-        br.w *= 0.7; br.h *= 0.7;
-        br.x = cx - br.w / 2; br.y = cy - br.h / 2;
+        const cx = br.x + br.w / 2;
+        const cy = br.y + br.h / 2;
+        br.w *= 0.7;
+        br.h *= 0.7;
+        br.x = cx - br.w / 2;
+        br.y = cy - br.h / 2;
+        br.baseX = br.x;
+        br.moveAmp *= 0.7;
+        br.panel?.setSize?.(br.w, br.h);
+        br.drawFx?.();
         br.sync?.();
       });
     } else if (this.squeezeActive && this._squeezeOrig) {
-      this._squeezeOrig.forEach(({ b, w, h, x, y }) => {
+      this._squeezeOrig.forEach(({ b, w, h, x, y, baseX, moveAmp }) => {
         if (!b.alive) return;
-        b.w = w; b.h = h; b.x = x; b.y = y;
+        b.w = w;
+        b.h = h;
+        b.x = x;
+        b.y = y;
+        b.baseX = baseX;
+        b.moveAmp = moveAmp;
+        b.panel?.setSize?.(b.w, b.h);
+        b.drawFx?.();
         b.sync?.();
       });
       this.squeezeActive = false;
@@ -1571,14 +1662,20 @@ export class GameScene extends Phaser.Scene {
     ball.echoAngle += dtSec * GAME.ECHO_ORBIT_SPEED;
     const orbitR = ball.r * GAME.ECHO_ORBIT_RADIUS;
     const count = GAME.ECHO_ORBIT_COUNT;
+    ball._echoCd = ball._echoCd ?? new Map();
+    const now = this.time.now;
     for (let i = 0; i < count; i++) {
       const a = ball.echoAngle + (i * Math.PI * 2) / count;
       const ex = ball.x + Math.cos(a) * orbitR;
       const ey = ball.y + Math.sin(a) * orbitR;
       for (const br of this.bricks) {
         if (!br.alive || br.indestructible) continue;
-        if (ex > br.x && ex < br.x + br.w && ey > br.y && ey < br.y + br.h) {
-          if (br.hit(1)) this.destroyBrick(br, true, ball);
+        if ((ball._echoCd.get(br) ?? 0) > now) continue;
+        const hitR = orbitR * 0.5 + Math.min(br.w, br.h) * 0.35;
+        if (Math.hypot(ex - br.cx, ey - br.cy) > hitR) continue;
+        if (br.hit(1)) {
+          this.destroyBrick(br, true, ball);
+          ball._echoCd.set(br, now + 140);
         }
       }
     }
@@ -1933,9 +2030,14 @@ export class GameScene extends Phaser.Scene {
         this.toast('Controls scrambled!', 1400);
       } else {
         this.uiScrambleUntil = this.time.now + GAME.PHONE_SCRAMBLE_MS;
+        this._uiScrambleTimer?.remove(false);
         this.bus.emit('hud:scramble', true);
-        this.time.delayedCall(GAME.PHONE_SCRAMBLE_MS, () => this.bus.emit('hud:scramble', false));
-        this.toast('Signal jam — HUD scrambled', 1400);
+        this._uiScrambleTimer = this.time.delayedCall(GAME.PHONE_SCRAMBLE_MS, () => {
+          this.uiScrambleUntil = 0;
+          this._uiScrambleTimer = null;
+          this.bus.emit('hud:scramble', false);
+        });
+        this.toast('HUD glitch — stats flicker briefly', 1200);
       }
     } else {
       this.paddle.stun(GAME.POT_STUN_MS);
@@ -2006,6 +2108,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (fromBall && this.challengeSys?.cannonsOnly && brick.type === 'silver' && !this.paddle.hasCannon) return;
 
+    this._lastBrickBreakAt = this.time.now;
     const exploded = brick.type === 'explosive' || brick.type === 'seedpod';
     brick.alive = false;
     MetaProgress.unlockCodex('bricks', brick.type);
@@ -2359,6 +2462,11 @@ export class GameScene extends Phaser.Scene {
     this.levelFlash();
     this.emitStats();
     RunPersistence.saveRun(this);
+    if (this._carryOverPower) {
+      const k = this._carryOverPower;
+      this._carryOverPower = null;
+      this.applyPower(k);
+    }
     this.flushPendingDrafts();
   }
 
@@ -2394,11 +2502,12 @@ export class GameScene extends Phaser.Scene {
     const now = this.time?.now ?? 0;
     if (priority !== 'high') {
       const gap = now - (this._lastFlashAt ?? 0);
-      if (gap < 480) {
+      const minGap = this.settings.flashMinGap ?? 480;
+      if (gap < minGap) {
         this.toast(text, Math.min(ms, 1400));
         return;
       }
-      if (text === this._lastFlashText && gap < 1400) return;
+      if (text === this._lastFlashText && gap < minGap * 2) return;
     }
     this._lastFlashText = text;
     this._lastFlashAt = now;
@@ -2469,7 +2578,7 @@ export class GameScene extends Phaser.Scene {
 
     this.powerSys.tick(dtMs);
     this.statusSys.tick();
-    if (this.blackHole && this.powerSys.isActive('BlackHole') && this.frame % 10 === 0) {
+    if (this.blackHole && this.powerSys.isActive('BlackHole') && this.frame % 18 === 0) {
       this.pullBlackHole();
     }
     this.challengeSys.update(dtMs, this.combo);
@@ -2532,6 +2641,17 @@ export class GameScene extends Phaser.Scene {
     if (this.destructiblesLeft() === 0 && !this._completingLevel) {
       this.completeLevel();
       return;
+    }
+    if (this.destructiblesLeft() > 0) {
+      const left = this.bricks.filter((b) => b.alive && !b.indestructible);
+      if (!left.some((b) => this.isBallBreakable(b))) {
+        this.relieveSoftlock();
+      } else if (!this._lastBrickBreakAt) {
+        this._lastBrickBreakAt = this.time.now;
+      } else if (this.time.now - this._lastBrickBreakAt > 28000) {
+        this.relieveSoftlock();
+        this._lastBrickBreakAt = this.time.now;
+      }
     }
     this.emitStats();
   }
@@ -2635,18 +2755,18 @@ export class GameScene extends Phaser.Scene {
         hitSpark(this, ball.x, ball.y, { tint: 0xffe156, count: 3, spread: 14 });
         audio.wall();
       }
-      return;
-    }
-    if (ball.x <= lw + ball.r) {
-      ball.x = lw + ball.r;
-      if (ball.vx < 0) ball.vx = -ball.vx;
-      hitSpark(this, ball.x, ball.y, { tint: PAL.accent, count: 2, spread: 10 });
-      audio.wall();
-    } else if (ball.x >= rw - ball.r) {
-      ball.x = rw - ball.r;
-      if (ball.vx > 0) ball.vx = -ball.vx;
-      hitSpark(this, ball.x, ball.y, { tint: PAL.accent, count: 2, spread: 10 });
-      audio.wall();
+    } else {
+      if (ball.x <= lw + ball.r) {
+        ball.x = lw + ball.r;
+        if (ball.vx < 0) ball.vx = -ball.vx;
+        hitSpark(this, ball.x, ball.y, { tint: PAL.accent, count: 2, spread: 10 });
+        audio.wall();
+      } else if (ball.x >= rw - ball.r) {
+        ball.x = rw - ball.r;
+        if (ball.vx > 0) ball.vx = -ball.vx;
+        hitSpark(this, ball.x, ball.y, { tint: PAL.accent, count: 2, spread: 10 });
+        audio.wall();
+      }
     }
     if (ball.y < tw + ball.r) {
       ball.y = tw + ball.r;

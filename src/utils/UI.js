@@ -303,8 +303,8 @@ export function attachOverlayScroll(scene, opts = {}) {
     const dy = pointer.y - startY;
     if (!gestureDragged && Math.abs(dy) < dragThreshold) return;
     gestureDragged = true;
-    // Pull content with finger; wheel scrolls down into list below.
-    setScroll(clamp(scrollStart + dy, 0, getMaxScroll()));
+    // Finger down → content moves down (same direction as native wheel).
+    setScroll(clamp(scrollStart - dy, 0, getMaxScroll()));
   };
 
   const onUp = () => {

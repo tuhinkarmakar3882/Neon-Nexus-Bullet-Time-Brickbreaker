@@ -273,6 +273,10 @@ export const STORAGE = {
   META: 'nn_meta_v1',
 };
 
+/** Default audio mix — SFX loud, music faint background bed. */
+export const DEFAULT_SFX_VOLUME = 100;
+export const DEFAULT_MUSIC_VOLUME = 10;
+
 export const SCENES = {
   BOOT: 'Boot',
   PRELOAD: 'Preload',

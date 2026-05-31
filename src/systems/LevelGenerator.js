@@ -147,6 +147,8 @@ export function buildLevel(level, campaignSeed = 12345) {
   ensurePlayable(bricks, theme, rng);
   applyTwist(bricks, twist, cols, bw, bh, arenaLeft, top, rng, level);
   placePortals(bricks, rng, level);
+  fixPortalPairs(bricks, rng);
+  ensureOneExplosive(bricks, rng);
   clusterExplosives(bricks, rng, level);
   linkBrickPairs(bricks, rng);
 
@@ -441,16 +443,20 @@ function linkBrickPairs(bricks, rng) {
 
 function placePortals(bricks, rng, level) {
   if (level < 8) return;
-  const count = level >= 20 && rng() < 0.35 ? 2 : 1;
-  for (let p = 0; p < count; p++) {
+  const pairCount = level >= 20 && rng() < 0.35 ? 2 : 1;
+  for (let p = 0; p < pairCount; p++) {
     const eligible = bricks.filter((b) => ['normal', 'reinforced', 'silver', 'shifting'].includes(b.type) && !b.portalId);
-    if (eligible.length < 2) return;
-    let a = eligible[(rng() * eligible.length) | 0];
-    let b = eligible[(rng() * eligible.length) | 0];
-    for (let t = 0; t < 12 && (b === a || Math.hypot(a.x - b.x, a.y - b.y) < 140); t++) {
+    if (eligible.length < 2) break;
+    let a = null;
+    let b = null;
+    for (let t = 0; t < 24; t++) {
+      a = eligible[(rng() * eligible.length) | 0];
       b = eligible[(rng() * eligible.length) | 0];
+      if (a !== b && Math.hypot(a.x - b.x, a.y - b.y) >= 140) break;
+      a = null;
+      b = null;
     }
-    if (b === a) continue;
+    if (!a || !b) break;
     const ia = bricks.indexOf(a);
     const ib = bricks.indexOf(b);
     const pid = `p${(rng() * 1e6) | 0}`;
@@ -463,6 +469,34 @@ function placePortals(bricks, rng, level) {
     b.portalId = pid;
     b.portalLinkIndex = ia;
   }
+}
+
+/** Revert orphan portals (never leave a single portal brick). */
+function fixPortalPairs(bricks, rng) {
+  const byId = new Map();
+  for (const b of bricks) {
+    if (b.type !== 'portal' || !b.portalId) continue;
+    if (!byId.has(b.portalId)) byId.set(b.portalId, []);
+    byId.get(b.portalId).push(b);
+  }
+  for (const group of byId.values()) {
+    if (group.length === 2) continue;
+    for (const b of group) {
+      b.type = 'normal';
+      b.color = b.color === 0x72f2eb ? PAL.accent2 : b.color;
+      b.portalId = null;
+      b.portalLinkIndex = null;
+    }
+  }
+}
+
+function ensureOneExplosive(bricks, rng) {
+  if (bricks.some((b) => b.type === 'explosive')) return;
+  const pool = bricks.filter((b) => !['gold', 'steel', 'boss', 'portal', 'hostage'].includes(b.type));
+  if (!pool.length) return;
+  const pick = pool[(rng() * pool.length) | 0];
+  pick.type = 'explosive';
+  pick.color = PAL.explosive;
 }
 
 function hash(a, b) {

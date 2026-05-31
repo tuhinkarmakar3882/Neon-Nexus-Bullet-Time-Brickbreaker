@@ -270,20 +270,23 @@ export class HUDScene extends Phaser.Scene {
     this.onHint = (show) => this.hintText.setAlpha(show ? 0.85 : 0);
     this.onToast = (t) => this.showToast(t);
     this.onScramble = (on) => {
+      const scrambleTargets = [this.scoreText, this.scoreLabel, this.levelText, this.bricksText, this.diffText, this.comboText].filter(Boolean);
       if (on) {
+        this.scrambleTween?.stop();
+        this.scrambleTween?.remove();
         this.scrambleTween = this.tweens.add({
-          targets: [this.scoreText, this.scoreLabel, this.levelText, this.bricksText],
-          alpha: { from: 0.25, to: 1 },
-          duration: 120,
+          targets: scrambleTargets,
+          alpha: { from: 0.35, to: 1 },
+          duration: 140,
           yoyo: true,
           repeat: -1,
         });
       } else {
         this.scrambleTween?.stop();
-        this.scoreText.setAlpha(1);
-        this.scoreLabel?.setAlpha(1);
-        this.levelText.setAlpha(1);
-        this.bricksText.setAlpha(1);
+        this.scrambleTween?.remove();
+        this.scrambleTween = null;
+        this.tweens.killTweensOf(scrambleTargets);
+        scrambleTargets.forEach((t) => t.setAlpha(1).setScale(1));
       }
     };
     this.onBulletTime = (bt) => {

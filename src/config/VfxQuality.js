@@ -102,6 +102,7 @@ export const VFX_PRESETS = {
     particleMult: 1.45,
     bulletTime: true,
     flashText: true,
+    flashMinGap: 720,
     scanlines: true,
     scanlineAlpha: 0.028,
     bloom: 0.78,
@@ -114,7 +115,7 @@ export const VFX_PRESETS = {
     confettiMult: 1.4,
     shakeMult: 1.15,
     glowMult: 1.25,
-    impactMult: 1.2,
+    impactMult: 0.88,
     bg: {
       nebula: 4,
       nebulaAlpha: 0.16,
@@ -145,7 +146,7 @@ export function resolveSettings(raw = {}) {
     music,
     vfxQuality,
     sfxVolume: raw.sfxVolume ?? 100,
-    musicVolume: raw.musicVolume ?? 100,
+    musicVolume: raw.musicVolume ?? 10,
     ...preset,
   };
 }

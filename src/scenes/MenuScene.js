@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME, SCENES } from '../config/Constants.js';
+import { GAME, SCENES, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { Background } from '../objects/Background.js';
 import { makeButton, makeResponsiveOverlayPanel, layoutButtonStack, staggerButtons, addCameraFx } from '../utils/UI.js';
@@ -15,6 +15,7 @@ import { resolveSettings } from '../config/VfxQuality.js';
 import { shareProgressScreenshot } from '../systems/ShareProgress.js';
 import { displayStyle, bodyStyle, orbitronStyle, uiPx, wrapWidth } from '../utils/Typography.js';
 import { canOfferInstall, onInstallPromptReady, triggerInstallPrompt } from '../systems/InstallPrompt.js';
+import { APP_VERSION, BUILD_STAMP } from '../config/Version.js';
 
 const AD_BANNER_H = 50;
 
@@ -125,6 +126,18 @@ export class MenuScene extends Phaser.Scene {
         primary: false,
         color: PAL.accent3,
       },
+      {
+        label: 'CONNECT WITH ME',
+        onClick: () => {
+          if (typeof window !== 'undefined') {
+            window.open('https://www.linkedin.com/in/tuhinkarmakar3882/', '_blank', 'noopener,noreferrer');
+          }
+        },
+        height: btnShare,
+        fontSize: portrait ? '15px' : '17px',
+        primary: false,
+        color: PAL.accent2,
+      },
     );
 
     if (canOfferInstall()) {
@@ -160,7 +173,11 @@ export class MenuScene extends Phaser.Scene {
       }).setOrigin(0.5).setAlpha(0.65).setDepth(1001);
     }
 
-    this.add.text(cx, H - bottomPad - uiPx(14, { min: 10, max: 14 }), 'Made with ♥ by Tuhin Karmakar', {
+    this.add.text(cx, H - bottomPad - uiPx(14, { min: 10, max: 14 }), `v${APP_VERSION} · ${BUILD_STAMP}`, {
+      ...orbitronStyle(11, '#4a5a70'),
+    }).setOrigin(0.5, 1).setDepth(1001);
+
+    this.add.text(cx, H - bottomPad - uiPx(30, { min: 22, max: 30 }), 'Made with ♥ by Tuhin Karmakar', {
       ...orbitronStyle(12, '#5f7088'),
     }).setOrigin(0.5, 1).setDepth(1001);
 
@@ -218,8 +235,9 @@ export class MenuScene extends Phaser.Scene {
     audio.init(); audio.resume();
     const s = SaveManager.loadSettings();
     audio.setSoundEnabled(s.sound); audio.setMusicEnabled(s.music);
-    audio.setSfxVolume(s.sfxVolume ?? 100); audio.setMusicVolume(s.musicVolume ?? 100);
-    audio.applyMusicSettings({ musicVariant: s.musicVariant, musicVolume: s.musicVolume });
+    audio.setSfxVolume(s.sfxVolume ?? DEFAULT_SFX_VOLUME);
+    audio.setMusicVolume(s.musicVolume ?? DEFAULT_MUSIC_VOLUME);
+    audio.applyMusicSettings({ musicVolume: s.musicVolume });
     audio.setMenuMusic();
   }
 

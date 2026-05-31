@@ -1,6 +1,5 @@
-import { STORAGE } from '../config/Constants.js';
+import { STORAGE, DEFAULT_SFX_VOLUME, DEFAULT_MUSIC_VOLUME } from '../config/Constants.js';
 import { migrateVfxQuality, normalizeVfxQuality } from '../config/VfxQuality.js';
-import { normalizeMusicVariant } from '../config/MusicCatalog.js';
 
 const mem = {};
 
@@ -63,18 +62,16 @@ export const SaveManager = {
       sound,
       music,
       vfxQuality: storedQuality ? normalizeVfxQuality(storedQuality) : migrateVfxQuality(legacy),
-      musicVariant: normalizeMusicVariant(get(STORAGE.MUSIC_VARIANT, 'auto')),
-      sfxVolume: this.getNumber(STORAGE.SFX_VOLUME, 100),
-      musicVolume: this.getNumber(STORAGE.MUSIC_VOLUME, 100),
+      sfxVolume: this.getNumber(STORAGE.SFX_VOLUME, DEFAULT_SFX_VOLUME),
+      musicVolume: this.getNumber(STORAGE.MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME),
     };
   },
   saveSettings(s) {
     this.setBool(STORAGE.SOUND, s.sound);
     this.setBool(STORAGE.MUSIC, s.music);
     set(STORAGE.VFX_QUALITY, normalizeVfxQuality(s.vfxQuality));
-    set(STORAGE.MUSIC_VARIANT, normalizeMusicVariant(s.musicVariant));
-    this.setNumber(STORAGE.SFX_VOLUME, s.sfxVolume ?? 100);
-    this.setNumber(STORAGE.MUSIC_VOLUME, s.musicVolume ?? 100);
+    this.setNumber(STORAGE.SFX_VOLUME, s.sfxVolume ?? DEFAULT_SFX_VOLUME);
+    this.setNumber(STORAGE.MUSIC_VOLUME, s.musicVolume ?? DEFAULT_MUSIC_VOLUME);
   },
   getHighScore() {
     return this.getNumber(STORAGE.HIGH_SCORE, 0);
