@@ -4,23 +4,82 @@
   <meta charset="UTF-8"/>
   <meta name="viewport"
         content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
-  <title>Neon Nexus: Bullet-Time Brick Breaker</title>
-  <meta name="description" content="A visually-stunning, cross-platform neon brick breaker with bullet-time and 23 power-ups."/>
+
+  <title>Neon Nexus: Bullet-Time Brick Breaker — Free Browser Game</title>
+  <meta name="description" content="Play Neon Nexus free — a neon brick breaker with Nexus slow-mo, 27 power-ups, elemental balls, Jardinain creatures, and infinite procedural levels. Works in your browser, no download."/>
+  <meta name="keywords" content="brick breaker, arkanoid, bullet time, slow motion, neon game, browser game, free game, Phaser game, Jardinains, arcade, paddle game"/>
   <meta name="author" content="Tuhin Karmakar"/>
+  <meta name="application-name" content="Neon Nexus"/>
+  <meta name="robots" content="index, follow, max-image-preview:large"/>
+  <meta name="googlebot" content="index, follow"/>
+
+  <!-- SEO:CANONICAL -->
+
+  <!-- Open Graph (Facebook, Discord, iMessage, LinkedIn) -->
+  <meta property="og:type" content="website"/>
+  <meta property="og:site_name" content="Neon Nexus"/>
+  <meta property="og:locale" content="en_US"/>
+  <meta property="og:title" content="Neon Nexus: Bullet-Time Brick Breaker"/>
+  <meta property="og:description" content="Neon brick breaker with Nexus slow-mo, 27 power-ups, elemental balls, and infinite procedural levels. Play free in your browser."/>
+  <!-- SEO:OG_URL -->
+  <meta property="og:image" content="%OG_IMAGE%"/>
+  <meta property="og:image:alt" content="Neon Nexus — twilight garden brick breaker with golden neon glow"/>
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+  <meta property="og:image:type" content="image/png"/>
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="Neon Nexus: Bullet-Time Brick Breaker"/>
+  <meta name="twitter:description" content="Free neon brick breaker with bullet-time slow-mo, 27 power-ups, and Jardinain siege. Play in your browser."/>
+  <meta name="twitter:image" content="%OG_IMAGE%"/>
+  <meta name="twitter:image:alt" content="Neon Nexus game preview — neon brick breaker"/>
 
   <link rel="manifest" href="./manifest.json"/>
   <meta name="theme-color" content="#120818"/>
+  <meta name="color-scheme" content="dark"/>
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Neon Nexus"/>
 
-  <link rel="icon" href="./icons/ios/32.png"/>
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/ios/180.png"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="./icons/android/android-launchericon-48-48.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/android/android-launchericon-192-192.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/android/android-launchericon-192-192.png"/>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Syne:wght@600;700;800&display=swap"
         rel="stylesheet">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoGame",
+    "name": "Neon Nexus: Bullet-Time Brick Breaker",
+    "alternateName": "Neon Nexus",
+    "description": "A neon brick breaker with Nexus slow-mo, 27 power-ups, elemental balls, Jardinain creatures, and infinite procedural levels.",
+    "url": "<!-- SEO:JSON_URL -->",
+    "image": "%OG_IMAGE%",
+    "applicationCategory": "Game",
+    "gamePlatform": ["Web browser", "Android", "iOS"],
+    "operatingSystem": "Any",
+    "playMode": "SinglePlayer",
+    "genre": ["Arcade", "Action"],
+    "inLanguage": "en",
+    "isAccessibleForFree": true,
+    "author": {
+      "@type": "Person",
+      "name": "Tuhin Karmakar"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD",
+      "availability": "https://schema.org/InStock"
+    }
+  }
+  </script>
 
   <style>
     :root {
@@ -95,13 +154,30 @@
       color: rgba(110, 128, 152, 0.38);
       text-transform: uppercase;
     }
+    .seo-fallback {
+      max-width: 40rem;
+      margin: 2rem auto;
+      padding: 1.5rem;
+      line-height: 1.6;
+      text-align: center;
+    }
+    .seo-fallback h1 { font-size: 1.25rem; color: var(--accent); margin-bottom: 0.75rem; }
+    .seo-fallback p { opacity: 0.75; font-size: 0.85rem; margin-bottom: 0.5rem; }
   </style>
 </head>
 <body>
-  <div id="game-root"></div>
+  <noscript>
+    <div class="seo-fallback">
+      <h1>Neon Nexus: Bullet-Time Brick Breaker</h1>
+      <p>Free neon brick breaker with Nexus slow-mo, 27 power-ups, elemental balls, Jardinain creatures, and infinite procedural levels.</p>
+      <p>Enable JavaScript to play in your browser — no download required.</p>
+    </div>
+  </noscript>
+
+  <main id="game-root" aria-label="Neon Nexus game canvas"></main>
   <div id="ad-banner" aria-hidden="true"><!-- AdSense / demo banner injected by ad provider --></div>
 
-  <div id="boot-splash">
+  <div id="boot-splash" aria-hidden="true">
     <div>
       <div class="title">NEON NEXUS<br/>BULLET-TIME</div>
       <div class="sub">LOADING…</div>

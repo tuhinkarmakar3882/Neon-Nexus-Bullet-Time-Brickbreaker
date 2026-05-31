@@ -70,6 +70,8 @@ export class GameScene extends Phaser.Scene {
     this.timeScale = 1;
     this.bulletTimeRemaining = 0;
     this.bulletTimePeak = 1;
+    this._nexusSlowMo = false;
+    this._nexusBtMs = 0;
     this.hitStopRemaining = 0;
     this._completingLevel = false;
     this.over = false;
@@ -555,7 +557,10 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.challengeSys.onLevelStart(this.level, isBoss, this.levelSeed, null, activeMutators);
-    audio.setLevelMusic(this.level, this.levelSeed);
+    audio.setLevelMusic(this.level, this.levelSeed, {
+      biome: theme.biome ?? 'garden',
+      isBoss,
+    });
     this.applyBrickDamageSnapshot();
 
     this.escortBrick = null;
@@ -698,10 +703,13 @@ export class GameScene extends Phaser.Scene {
     this.btMeter = 0;
     this.emitBtMeter();
     const ratio = spent / GAME.BT_METER_MAX;
-    const ms = Math.round(GAME.BULLET_TIME_MS * (0.4 + ratio * 0.6));
-    this.triggerBulletTime(ms, { intensity: 0.5 + ratio * 0.5, punch: true, player: true });
-    this.flash('SLOW-MO', '#8ec5ff', 500);
-    hapticPulse(8);
+    const ms = Math.round(GAME.BT_NEXUS_TIME_MS * (0.7 + ratio * 0.55));
+    const intensity = GAME.BT_NEXUS_INTENSITY_MIN
+      + ratio * (GAME.BT_NEXUS_INTENSITY_MAX - GAME.BT_NEXUS_INTENSITY_MIN);
+    this.triggerBulletTime(ms, { intensity, punch: true, player: true, nexus: true, wow: true });
+    impactFlash(this, 0x4488ff, 0.2);
+    this.flash('NEXUS SLOW-MO', '#8ec5ff', 600);
+    hapticPulse(12);
     return true;
   }
 
@@ -1022,7 +1030,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   destructiblesLeft() {
-    return this.bricks.filter((b) => b.alive && b.type !== 'gold' && b.type !== 'steel').length;
+    return this.bricks.filter((b) => b.alive && !b.indestructible).length;
   }
 
   applyBrickDamageSnapshot() {
@@ -1289,12 +1297,10 @@ export class GameScene extends Phaser.Scene {
         this._firstNegativeRun = true;
         this.cameras.main.setAlpha(0.55);
         this.time.delayedCall(500, () => this.cameras.main.setAlpha(this.challengeSys?.mutators?.includes('LowVisibility') ? 0.88 : 1));
-        audio.powerNegative?.();
       }
     }
     if (this.settings.flashText) this.flash(powerPillLabel(key), powerColorHex(key), 650);
-    if (neg) audio.powerNegative?.();
-    else audio.powerCategory?.(def.category ?? 'env');
+    audio.powerPickup?.(key);
     const willBt = def.bulletTime && this.settings.bulletTime;
     if (willBt) this.triggerBulletTime(undefined, { punch: false, intensity: 0.9 });
     if (def.kind === 'timed') this.powerSys.activate(key, def.dur);
@@ -1552,15 +1558,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   triggerBulletTime(ms = GAME.BULLET_TIME_MS, opts = {}) {
-    const { hitStop = false, punch = false, intensity = 1, wow = false, player = false } = opts;
+    const { hitStop = false, punch = false, intensity = 1, wow = false, player = false, nexus = false } = opts;
     if (!this.settings.bulletTime && !hitStop && !player) return;
     if (hitStop) this.hitStopRemaining = Math.max(this.hitStopRemaining, GAME.HIT_STOP_MS);
-    if (punch) screenPunch(this, wow ? 0.07 : 0.045);
-    if (wow) impactFlash(this, PAL.accent2, 0.28);
+    if (punch) screenPunch(this, wow ? 0.09 : 0.045);
+    if (wow) impactFlash(this, nexus ? 0x4488ff : PAL.accent2, nexus ? 0.22 : 0.28);
     if (this.bulletTimeRemaining <= 0) audio.bulletTime();
+    if (nexus) {
+      this._nexusSlowMo = true;
+      this._nexusBtMs = ms;
+    }
     this.bulletTimePeak = Math.max(this.bulletTimePeak, intensity);
     this.bulletTimeRemaining = Math.max(this.bulletTimeRemaining, ms);
-    this.bus?.emit('hud:bulletTime', { active: true, ratio: 1 });
+    this.bus?.emit('hud:bulletTime', { active: true, ratio: 1, nexus });
   }
 
   /** Fire cannon shot — smaller blast than explosive ball. */
@@ -1882,7 +1892,7 @@ export class GameScene extends Phaser.Scene {
 
     const base = brick.type === 'silver' || brick.type === 'boss' || brick.type === 'reinforced'
       ? GAME.SCORE_SILVER : GAME.SCORE_BRICK;
-    audio.brickHit?.(brick.type, brick.hp) ?? audio.brick(fromBall ? this.combo : 0);
+    audio.brickBreak?.(brick.type, fromBall ? this.combo : 0, brick.hp) ?? audio.brick(fromBall ? this.combo : 0);
     if (fromBall) {
       this.combo++;
       this.addBtMeter(GAME.BT_METER_COMBO_FILL);
@@ -2008,14 +2018,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   canCompleteLevel() {
-    if (this.goalFail) return false;
-    if (this.destructiblesLeft() > 0) return false;
-    if (this.goal?.type === 'rescue' && this.levelKnockouts < (this.goal.target ?? 2)) return false;
-    if (this.goal?.type === 'bossPerch' && this.levelKnockouts < (this.goal.target ?? 1)) return false;
-    if (this.goal?.type === 'silence' && this.potHitLevel) return false;
-    const nestsLeft = this.bricks.filter((b) => b.alive && b.type === 'nest').length;
-    if (this.goal?.type === 'nestHunt' && nestsLeft > 0) return false;
-    return true;
+    return this.destructiblesLeft() <= 0;
   }
 
   evaluateStars() {
@@ -2270,18 +2273,23 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const target = this.bulletTimeRemaining > 0 ? GAME.BULLET_TIME_SCALE : 1;
+    const target = this.bulletTimeRemaining > 0
+      ? (this._nexusSlowMo ? GAME.BT_NEXUS_TIME_SCALE : GAME.BULLET_TIME_SCALE)
+      : 1;
     const ramp = Math.min(1, realDt / GAME.BULLET_TIME_RAMP_MS);
     this.timeScale += (target - this.timeScale) * ramp;
 
     if (this.bulletTimeRemaining > 0) {
       this.bulletTimeRemaining -= realDt;
-      const ratio = clamp(this.bulletTimeRemaining / GAME.BULLET_TIME_MS, 0, 1);
-      const fadeOut = this.bulletTimeRemaining <= 0 ? 0 : Math.max(0.35, ratio);
+      const refMs = this._nexusSlowMo ? (this._nexusBtMs || GAME.BT_NEXUS_TIME_MS) : GAME.BULLET_TIME_MS;
+      const ratio = clamp(this.bulletTimeRemaining / refMs, 0, 1);
+      const fadeOut = this.bulletTimeRemaining <= 0 ? 0 : Math.max(this._nexusSlowMo ? 0.5 : 0.35, ratio);
       if (this.settings.bulletTime) setBulletTimeIntensity(this, this.bulletTimePeak * fadeOut);
-      this.bus?.emit('hud:bulletTime', { active: true, ratio: fadeOut });
+      this.bus?.emit('hud:bulletTime', { active: true, ratio: fadeOut, nexus: this._nexusSlowMo });
       if (this.bulletTimeRemaining <= 0) {
         this.bulletTimePeak = 1;
+        this._nexusSlowMo = false;
+        this._nexusBtMs = 0;
         resetGameplayCamera(this);
         setBulletTimeIntensity(this, 0);
         this.bus?.emit('hud:bulletTime', { active: false, ratio: 0 });
@@ -2371,10 +2379,8 @@ export class GameScene extends Phaser.Scene {
     if (anyStuck !== this._hintShown) { this._hintShown = anyStuck; this.bus.emit('hud:hint', anyStuck); }
 
     if (this.destructiblesLeft() === 0 && !this._completingLevel) {
-      if (this.canCompleteLevel()) { this.completeLevel(); return; }
-      if (this.goal?.type === 'rescue' || this.goal?.type === 'bossPerch') {
-        this.flash(this.goal?.type === 'bossPerch' ? 'KNOCK OUT FORTRESS GNOME' : 'NEED MORE KNOCKOUTS', '#ff8899', 700);
-      }
+      this.completeLevel();
+      return;
     }
     this.emitStats();
   }
@@ -2648,7 +2654,7 @@ export class GameScene extends Phaser.Scene {
         const killed = br.hit(dmg);
         if (this.settings.particles) this.burst(ball.x, ball.y, 0xffffff, 4);
         if (killed) this.destroyBrick(br, true, ball);
-        else if (!br.indestructible) audio.brickHit?.(br.type, br.hp) ?? audio.brick(0);
+        else if (!br.indestructible) audio.brickBreak?.(br.type, 0, br.hp) ?? audio.brick(0);
         break;
       }
     }
@@ -2777,7 +2783,7 @@ export class GameScene extends Phaser.Scene {
       if (gm.overlapsPaddle(this.paddle)) {
         this.score += gm.value;
         this.floatText(gm.x, this.paddle.top, `+${gm.value}`, '#9ff0ff', 26);
-        this.burst(gm.x, gm.y, 0x9ff0ff, 8); audio.blip(990);
+        this.burst(gm.x, gm.y, 0x9ff0ff, 8); audio.gemPickup?.();
         gm.destroy(); this.gems.splice(i, 1); continue;
       }
       if (gm.y > GAME.HEIGHT) { gm.destroy(); this.gems.splice(i, 1); }

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
-import { anchorButtonStack, makeResponsiveOverlayPanel } from '../utils/UI.js';
+import { anchorButtonStack, makeResponsiveOverlayPanel, overlayFrame } from '../utils/UI.js';
 import { InputRouter } from '../systems/InputRouter.js';
 import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 
@@ -14,7 +14,9 @@ export class PauseScene extends Phaser.Scene {
     InputRouter.onOverlayOpen(SCENES.PAUSE);
     this.input.setTopOnly(true);
     const panel = makeResponsiveOverlayPanel(this, { dimAlpha: 0.82 });
-    const { stackTop, frame } = anchorButtonStack(this, panel, [
+    const frame = overlayFrame(panel);
+    const stackMinTop = frame.titleY + uiPx(48, { min: 40, max: 52 });
+    const { stackTop } = anchorButtonStack(this, panel, [
       { label: 'RESUME', onClick: () => this.resume(), fontSize: '18px', color: PAL.accent },
       {
         label: 'CODEX', primary: false, fontSize: '16px',
@@ -40,7 +42,7 @@ export class PauseScene extends Phaser.Scene {
           this.scene.start(SCENES.MENU);
         },
       },
-    ], { minTop: frame.titleY + uiPx(48, { min: 40, max: 52 }) });
+    ], { minTop: stackMinTop });
 
     const title = this.add.text(frame.cx, frame.titleY, 'PAUSED', {
       ...orbitronStyle(48, cssHex(PAL.accent), { fontStyle: '900', align: 'center' }),

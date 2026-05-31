@@ -105,6 +105,11 @@ export const GAME = {
   /** Minimum meter to activate partial slow-mo (spends entire meter). */
   BT_METER_SPEND: 25,
   BT_METER_BURST_COST: 100,
+  /** Player-activated Nexus slow-mo — slower and longer than incidental bullet time. */
+  BT_NEXUS_TIME_MS: 1200,
+  BT_NEXUS_TIME_SCALE: 0.12,
+  BT_NEXUS_INTENSITY_MIN: 1.15,
+  BT_NEXUS_INTENSITY_MAX: 1.65,
 
   /** Combo bank / gambit */
   COMBO_BANK_STEP: 8,

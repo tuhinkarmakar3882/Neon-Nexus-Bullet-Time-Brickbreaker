@@ -41,7 +41,7 @@ export function setBulletTimeIntensity(scene, intensity) {
   const cam = scene.cameras?.main;
   if (!cam) return;
 
-  const zoom = 1 + 0.045 * intensity;
+  const zoom = 1 + 0.055 * intensity;
   fx.baseZoom = zoom;
   if (intensity >= 0.02) cam.setZoom(zoom);
   else cam.setZoom(1);
@@ -55,12 +55,13 @@ export function setBulletTimeIntensity(scene, intensity) {
   const W = GAME.WIDTH;
   const H = GAME.HEIGHT;
   const g = fx.overlay;
+  const boost = intensity > 1 ? 1 + (intensity - 1) * 0.35 : 1;
   g.clear();
-  g.fillStyle(0x6a9cff, 0.07 * intensity);
+  g.fillStyle(0x6a9cff, 0.07 * intensity * boost);
   g.fillRect(0, 0, W, H);
 
-  const edge = Math.round(90 + 50 * intensity);
-  const edgeA = 0.42 * intensity;
+  const edge = Math.round(90 + 58 * intensity * boost);
+  const edgeA = 0.42 * intensity * boost;
   g.fillStyle(0x04060e, edgeA);
   g.fillRect(0, 0, W, edge);
   g.fillRect(0, H - edge, W, edge);

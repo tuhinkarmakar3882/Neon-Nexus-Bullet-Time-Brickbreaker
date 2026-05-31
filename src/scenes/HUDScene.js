@@ -293,16 +293,18 @@ export class HUDScene extends Phaser.Scene {
       if (!this.btText) return;
       this.tweens.killTweensOf(this.btText);
       if (!bt?.active) {
+        this.btText.setText('SLOW-MO');
         this.tweens.add({ targets: this.btText, alpha: 0, duration: 120 });
         return;
       }
-      this.btText.setAlpha(0.55 + 0.35 * (bt.ratio ?? 1));
+      if (bt.nexus) this.btText.setText('NEXUS');
+      this.btText.setAlpha(0.65 + 0.35 * (bt.ratio ?? 1));
       this.tweens.add({
         targets: this.btText,
-        alpha: { from: 0.5, to: 1 },
-        scaleX: { from: 0.96, to: 1.04 },
-        scaleY: { from: 0.96, to: 1.04 },
-        duration: 180,
+        alpha: { from: 0.6, to: 1 },
+        scaleX: { from: bt.nexus ? 0.94 : 0.96, to: bt.nexus ? 1.08 : 1.04 },
+        scaleY: { from: bt.nexus ? 0.94 : 0.96, to: bt.nexus ? 1.08 : 1.04 },
+        duration: bt.nexus ? 140 : 180,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',

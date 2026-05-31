@@ -1,9 +1,11 @@
 import { mulberry32 } from '../utils/Helpers.js';
 
+/** Primary win condition for almost every level — destroy all destructible bricks. */
 export const GOAL_TYPES = {
   clear: {
     label: 'CLEAR ALL',
     desc: 'Destroy every destructible brick.',
+    primary: true,
   },
   rescue: {
     label: 'RESCUE',
@@ -29,18 +31,17 @@ export const GOAL_TYPES = {
   },
 };
 
+const BONUS_GOAL_POOL = ['rescue', 'silence', 'nestHunt', 'escort'];
+
+/** ~90% clear-all; rare bonus objectives on higher levels for variety. */
 export function pickLevelGoal(level, levelSeed, isBoss) {
   const rng = mulberry32((levelSeed ^ 0x90a1) >>> 0);
   if (isBoss) {
-    if (rng() < 0.5) return { type: 'bossPerch', ...GOAL_TYPES.bossPerch };
+    if (rng() < 0.15) return { type: 'bossPerch', ...GOAL_TYPES.bossPerch };
     return { type: 'clear', ...GOAL_TYPES.clear };
   }
-  if (level < 3 || rng() > 0.38) return { type: 'clear', ...GOAL_TYPES.clear };
-  const pool = level >= 8
-    ? ['rescue', 'silence', 'nestHunt', 'escort']
-    : level >= 6
-      ? ['rescue', 'silence', 'nestHunt']
-      : ['rescue', 'silence'];
+  if (level < 8 || rng() > 0.1) return { type: 'clear', ...GOAL_TYPES.clear };
+  const pool = level >= 14 ? BONUS_GOAL_POOL : BONUS_GOAL_POOL.filter((t) => t !== 'escort' && t !== 'nestHunt');
   const type = pool[Math.floor(rng() * pool.length)];
   return { type, ...GOAL_TYPES[type] };
 }
