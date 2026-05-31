@@ -1,6 +1,6 @@
-// Global, tunable game constants with a RESPONSIVE design canvas.
-// computeLayout() sizes everything to the device aspect ratio at boot so the
-// game fills the screen (landscape desktop / portrait mobile).
+// Global, tunable game constants with a responsive LOGICAL layout.
+// computeLayout() sets GAME.WIDTH/HEIGHT in CSS viewport pixels (game coordinates).
+// Physical canvas pixels = logical size × devicePixelRatio (see LayoutManager).
 
 const clampN = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -30,6 +30,9 @@ export const GAME = {
   PADDLE_HEIGHT: 28,
   PADDLE_SPEED: 1500,
   PADDLE_Y_OFFSET: 78,
+  /** 0–1 tablet paddle boost from computeLayout (short side ~680–1080px). */
+  TABLET_BOOST: 0,
+  IS_TABLET: false,
 
   BULLET_TIME_SCALE: 0.26,
   BULLET_TIME_MS: 780,
@@ -106,10 +109,13 @@ export const GAME = {
   BT_METER_SPEND: 25,
   BT_METER_BURST_COST: 100,
   /** Player-activated Nexus slow-mo — slower and longer than incidental bullet time. */
-  BT_NEXUS_TIME_MS: 1200,
-  BT_NEXUS_TIME_SCALE: 0.12,
-  BT_NEXUS_INTENSITY_MIN: 1.15,
-  BT_NEXUS_INTENSITY_MAX: 1.65,
+  BT_NEXUS_TIME_MS: 2800,
+  BT_NEXUS_TIME_SCALE: 0.10,
+  BT_NEXUS_INTENSITY_MIN: 1.2,
+  BT_NEXUS_INTENSITY_MAX: 1.75,
+
+  /** Cooldown after portal teleport — prevents ping-pong between linked bricks. */
+  PORTAL_GRACE_MS: 220,
 
   /** Combo bank / gambit */
   COMBO_BANK_STEP: 8,
@@ -163,10 +169,11 @@ export function computeLayout(winW, winH, insets) {
   const vh = Math.max(1, winH || 800);
   const aspect = vw / vh;
   const isPortrait = aspect < 0.82;
-  /** Use the real viewport height — never clamp up above the device (broke mobile FIT). */
+  /** Logical height in CSS px — never clamp above the device (broke mobile FIT). */
   const H = Math.round(clampN(vh, 480, 1600));
   const W = Math.max(320, Math.round(H * aspect));
 
+  // Logical game coordinates (CSS px). Rendering density is applied in LayoutManager.
   GAME.WIDTH = W;
   GAME.HEIGHT = H;
 
@@ -180,12 +187,36 @@ export function computeLayout(winW, winH, insets) {
   GAME.WALL_TOP = Math.round(H * (isPortrait ? 0.085 : 0.11)) + GAME.SAFE_TOP;
 
   GAME.IS_PORTRAIT = isPortrait;
-  /** Portrait phones — wide paddle for thumb control. */
-  const paddleFrac = isPortrait ? 0.38 : 0.155;
-  const paddleMin = isPortrait ? Math.round(W * 0.34) : Math.round(W * 0.12);
-  const paddleMax = isPortrait ? W * 0.58 : W * 0.42;
+
+  /** 0 = large screens; ramps to 1 when short side ≤ 360px (phones, small windows). */
+  const shortSide = Math.min(W, H);
+  const compact = clampN((680 - shortSide) / 320, 0, 1);
+
+  /** Tablets (short side ~680–1080px): modest paddle boost — separate from phone compact ramp. */
+  const tablet = compact > 0 ? 0 : clampN(
+    clampN((shortSide - 680) / 160, 0, 1) * clampN((1080 - shortSide) / 180, 0, 1),
+    0,
+    1,
+  );
+  GAME.TABLET_BOOST = tablet;
+  GAME.IS_TABLET = tablet >= 0.35;
+
+  /** Wide paddle on portrait; phones + tablets scale up on smaller viewports. */
+  const paddleFrac = isPortrait
+    ? 0.38 + compact * 0.10 + tablet * 0.08
+    : 0.155 + compact * 0.10 + tablet * 0.07;
+  const paddleMin = isPortrait
+    ? Math.round(W * (0.34 + compact * 0.08 + tablet * 0.06))
+    : Math.round(W * (0.12 + compact * 0.08 + tablet * 0.05));
+  const paddleMax = isPortrait
+    ? W * (0.62 + tablet * 0.05)
+    : W * (0.48 + tablet * 0.05);
   GAME.PADDLE_BASE_WIDTH = Math.round(clampN(W * paddleFrac, paddleMin, paddleMax));
-  GAME.PADDLE_HEIGHT = Math.round(clampN(H * (isPortrait ? 0.026 : 0.022), 22, 34));
+  GAME.PADDLE_HEIGHT = Math.round(clampN(
+    H * ((isPortrait ? 0.026 : 0.022) + compact * 0.006),
+    24,
+    38,
+  ));
   GAME.PADDLE_Y_OFFSET = Math.round(H * (isPortrait ? 0.042 : 0.048)) + GAME.SAFE_BOTTOM;
   /** Tie paddle speed to height so wide/narrow aspect changes don't skew feel */
   GAME.PADDLE_SPEED = Math.round(H * 0.88);
@@ -222,8 +253,10 @@ export const STORAGE = {
   REDUCED_FX: 'nn_reducedFx',
   HAPTICS: 'nn_haptics',
   VFX_QUALITY: 'nn_vfxQuality',
+  MUSIC_VARIANT: 'nn_musicVariant',
   IMMERSIVE_HUD: 'nn_immersiveHud',
   REMOVE_ADS: 'nn_removeAds',
+  STRIPE_REDEEMED: 'nn_stripeRedeemed',
   RUN: 'nn_run_v1',
   META: 'nn_meta_v1',
 };

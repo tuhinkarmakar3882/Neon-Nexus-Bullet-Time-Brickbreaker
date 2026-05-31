@@ -1,6 +1,6 @@
 import { SCENES } from '../config/Constants.js';
 
-const OVERLAY_SCENES = [SCENES.PAUSE, SCENES.GAMEOVER, SCENES.SETTINGS, SCENES.LEVEL_COMPLETE, SCENES.CODEX, SCENES.SHOP, SCENES.AD_BREAK, SCENES.PURCHASE];
+const OVERLAY_SCENES = [SCENES.PAUSE, SCENES.GAMEOVER, SCENES.SETTINGS, SCENES.LEVEL_COMPLETE, SCENES.CODEX, SCENES.SHOP, SCENES.AD_BREAK];
 
 class InputRouterService {
   constructor() {
@@ -31,10 +31,14 @@ class InputRouterService {
 
   onOverlayClose(resumeGame = true) {
     if (!this.game) return;
-    this._overlayActive = !OVERLAY_SCENES.some((k) => this.game.scene.isActive(k));
     const sm = this.game.scene;
-    if (sm.isPaused(SCENES.HUD)) sm.resume(SCENES.HUD);
-    if (resumeGame && sm.isPaused(SCENES.GAME) && !this.isOverlayActive()) sm.resume(SCENES.GAME);
+    const stillOverlayed = OVERLAY_SCENES.some((k) => sm.isActive(k));
+    this._overlayActive = stillOverlayed;
+    if (stillOverlayed) return;
+
+    const gameActive = sm.isActive(SCENES.GAME);
+    if (gameActive && sm.isPaused(SCENES.HUD)) sm.resume(SCENES.HUD);
+    if (resumeGame && gameActive && sm.isPaused(SCENES.GAME)) sm.resume(SCENES.GAME);
   }
 
   shouldBlockGameplay() {

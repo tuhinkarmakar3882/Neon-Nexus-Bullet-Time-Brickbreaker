@@ -12,9 +12,11 @@ import { InputRouter } from '../systems/InputRouter.js';
 import { clamp } from '../utils/Helpers.js';
 import { MetaProgress } from '../systems/MetaProgress.js';
 import { GNOME_TIERS } from '../config/GnomeTiers.js';
-import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
+import { fitTextWidth, orbitronStyle, bodyStyle, displayStyle, uiPx } from '../utils/Typography.js';
 
 const DEPTH = 1001;
+
+const sectionHdr = (color) => displayStyle(15, cssHex(color), { fontStyle: '700', letterSpacing: '0.06em' });
 
 export class CodexScene extends Phaser.Scene {
   constructor() {
@@ -211,7 +213,7 @@ export class CodexScene extends Phaser.Scene {
     c.removeAll(true);
     let y = 8;
     const wrap = this.contentWidth - 16;
-    const body = { ...orbitronStyle(12, PAL.text, { wordWrap: { width: wrap }, lineSpacing: 4 }) };
+    const body = { ...bodyStyle(13, PAL.text, { wordWrap: { width: wrap }, lineSpacing: 5 }) };
     const bullet = { ...body, color: PAL.textMuted };
 
     HOW_TO_PLAY.basics.forEach((line) => {
@@ -222,12 +224,7 @@ export class CodexScene extends Phaser.Scene {
     y += 8;
     HOW_TO_PLAY.sections.forEach((sec) => {
       const cat = categoryColor(sec.color);
-      const hdr = this.add.text(-wrap / 2, y, sec.title.toUpperCase(), {
-        fontFamily: 'Syne, Orbitron, monospace',
-        fontSize: '15px',
-        fontStyle: '800',
-        color: cssHex(cat),
-      }).setOrigin(0, 0);
+      const hdr = this.add.text(-wrap / 2, y, sec.title.toUpperCase(), sectionHdr(cat)).setOrigin(0, 0);
       c.add(hdr);
       y += 24;
 
@@ -244,9 +241,7 @@ export class CodexScene extends Phaser.Scene {
     });
 
     y += 4;
-    c.add(this.add.text(-wrap / 2, y, 'GNOME TIERS', {
-      fontFamily: 'Syne, Orbitron, monospace', fontSize: '15px', fontStyle: '800', color: cssHex(PAL.info),
-    }).setOrigin(0, 0));
+    c.add(this.add.text(-wrap / 2, y, 'GNOME TIERS', sectionHdr(PAL.info)).setOrigin(0, 0));
     y += 24;
     HOW_TO_PLAY.gnomeTiers.forEach((line) => {
       c.add(this.add.text(-wrap / 2 + 8, y, `· ${line}`, bullet).setOrigin(0, 0));
@@ -270,12 +265,7 @@ export class CodexScene extends Phaser.Scene {
       const cat = categoryColor(catId);
       const label = CATEGORY_LABELS[catId] ?? catId;
 
-      c.add(this.add.text(-wrap / 2, y, label.toUpperCase(), {
-        fontFamily: 'Syne, Orbitron, monospace',
-        fontSize: '14px',
-        fontStyle: '800',
-        color: cssHex(cat),
-      }).setOrigin(0, 0));
+      c.add(this.add.text(-wrap / 2, y, label.toUpperCase(), sectionHdr(cat)).setOrigin(0, 0));
       y += 22;
 
       const rule = this.add.graphics();
@@ -321,7 +311,7 @@ export class CodexScene extends Phaser.Scene {
       container.add(this.add.image(iconX, iconY, iconKey).setDisplaySize(20, 20).setTint(0xffffff));
     } else {
       container.add(this.add.text(iconX, iconY - 1, def.short, {
-        fontFamily: 'Orbitron, monospace', fontSize: '10px', fontStyle: '900', color: '#120818',
+        ...displayStyle(10, '#120818', { fontStyle: '700' }),
       }).setOrigin(0.5));
     }
 
@@ -330,22 +320,15 @@ export class CodexScene extends Phaser.Scene {
         : cssHex(PAL.accent3);
     const badge = def.polarity === 'neg' ? 'CURSE' : def.polarity === 'wild' ? 'WILD' : def.kind === 'instant' ? 'INSTANT' : 'TIMED';
     container.add(this.add.text(w - 12, 10, badge, {
-      fontFamily: 'Orbitron, monospace', fontSize: '9px', fontStyle: '700', color: polarity,
+      ...displayStyle(9, polarity, { fontStyle: '600', letterSpacing: '0.04em' }),
     }).setOrigin(1, 0));
 
     container.add(this.add.text(54, 12, powerDisplayName(key), {
-      fontFamily: 'Syne, Orbitron, monospace',
-      fontSize: uiPx(12, { min: 11, max: 13 }) + 'px',
-      fontStyle: '700',
-      color: PAL.text,
+      ...displayStyle(12, PAL.text, { fontStyle: '700' }),
     }).setOrigin(0, 0));
 
     container.add(this.add.text(54, 30, def.desc, {
-      fontFamily: 'Orbitron, monospace',
-      fontSize: uiPx(10, { min: 9, max: 11 }) + 'px',
-      color: PAL.textMuted,
-      wordWrap: { width: w - 68 },
-      lineSpacing: 2,
+      ...bodyStyle(11, PAL.textMuted, { wordWrap: { width: w - 68 }, lineSpacing: 3 }),
     }).setOrigin(0, 0));
 
     return container;
@@ -360,15 +343,14 @@ export class CodexScene extends Phaser.Scene {
     Object.entries(GNOME_TIERS).forEach(([tier, info]) => {
       const seen = unlocked.has(tier);
       c.add(this.add.text(-wrap / 2, y, seen ? info.label.toUpperCase() : '???', {
-        fontFamily: 'Syne, Orbitron, monospace', fontSize: '16px', fontStyle: '800',
-        color: seen ? cssHex(PAL.accent2) : PAL.textMuted,
+        ...displayStyle(16, seen ? cssHex(PAL.accent2) : PAL.textMuted, { fontStyle: '700' }),
       }).setOrigin(0, 0));
       y += 24;
       const desc = seen
         ? `Projectiles: ${(info.projectiles ?? ['pot']).join(', ')}${info.tracking ? ' · tracking shots' : ''}`
         : 'Knock out this tier to unlock the bestiary entry.';
       c.add(this.add.text(-wrap / 2 + 8, y, desc, {
-        fontFamily: 'Orbitron, monospace', fontSize: '12px', color: PAL.textMuted, wordWrap: { width: wrap - 8 },
+        ...bodyStyle(12, PAL.textMuted, { wordWrap: { width: wrap - 8 }, lineSpacing: 4 }),
       }).setOrigin(0, 0));
       y += 44;
     });
@@ -382,8 +364,8 @@ export class CodexScene extends Phaser.Scene {
     const achievements = MetaProgress.getJournalAchievements();
     let y = 4;
     const wrap = this.contentWidth - 24;
-    const hdr = { fontFamily: 'Syne, Orbitron, monospace', fontSize: '15px', fontStyle: '800', color: cssHex(PAL.accent) };
-    const body = { fontFamily: 'Orbitron, monospace', fontSize: '12px', color: PAL.textMuted, wordWrap: { width: wrap } };
+    const hdr = displayStyle(15, cssHex(PAL.accent), { fontStyle: '700', letterSpacing: '0.06em' });
+    const body = bodyStyle(13, PAL.textMuted, { wordWrap: { width: wrap }, lineSpacing: 4 });
 
     c.add(this.add.text(-wrap / 2, y, 'GARDEN JOURNAL', hdr).setOrigin(0, 0));
     y += 28;

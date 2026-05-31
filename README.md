@@ -2,7 +2,7 @@
 
 A visually-stunning, cross-platform **neon brick breaker** with bullet-time slow-mo,
 **27 power-ups** (positive, negative, and elemental balls), Jardinain creatures, infinite
-procedural levels, and save/resume. Rebuilt on **Phaser 3** from the original canvas prototype
+procedural levels, and save/resume. Built on **[Phaser 4.1.0](https://phaser.io/v401)** (WebGL | Web Audio) from the original canvas prototype
 in `legacy/`.
 
 > Design docs: [`docs/GAME_MECHANICS.md`](docs/GAME_MECHANICS.md) (original spec),
@@ -60,6 +60,23 @@ src/
   scenes/              Boot … LevelComplete, Codex
   utils/               Textures, IconTextures, UI widgets
 ```
+
+---
+
+## Production release
+
+Full ship checklist and platform guides live in [`docs/`](docs/):
+
+| Doc | Topic |
+|-----|-------|
+| [**PRODUCTION_PLAN.md**](docs/PRODUCTION_PLAN.md) | Master roadmap (Phases 0–6) |
+| [**RELEASE.md**](docs/RELEASE.md) | Android / Google Play |
+| [**PWA.md**](docs/PWA.md) | Vercel & Netlify deploy |
+| [**IAP.md**](docs/IAP.md) | RevenueCat + Stripe |
+| [**MUSIC.md**](docs/MUSIC.md) | Pixabay ambient loops |
+| [**ADS.md**](docs/ADS.md) | Freemium AdMob / AdSense |
+
+Copy [`.env.production.example`](.env.production.example) for production env vars.
 
 ---
 

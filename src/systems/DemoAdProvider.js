@@ -2,11 +2,22 @@ import { SCENES } from '../config/Constants.js';
 import { MetaProgress } from './MetaProgress.js';
 import { SaveManager } from './SaveManager.js';
 import { applyBannerPlaceholder, hideWebBannerBar, showWebBannerBar } from './AdBannerSlot.js';
+import { launchParallelScene } from './SceneLaunch.js';
 
 const AD_SIM_MS = 1400;
 
+const PURCHASE_HOST_ORDER = [SCENES.SHOP, SCENES.SETTINGS, SCENES.PAUSE, SCENES.MENU];
+
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Foreground overlay scene — prefer active, unpaused scene (Shop over Settings). */
+function resolvePurchaseHostScene(game) {
+  for (const key of PURCHASE_HOST_ORDER) {
+    if (game.scene.isActive(key) && !game.scene.isPaused(key)) return key;
+  }
+  return PURCHASE_HOST_ORDER.find((k) => game.scene.isActive(k)) ?? null;
 }
 
 export function createDemoAdProvider(game) {
@@ -26,18 +37,21 @@ export function createDemoAdProvider(game) {
         return window.__nativePurchase(productId);
       }
       return new Promise((resolve) => {
-        const from = [SCENES.SETTINGS, SCENES.SHOP, SCENES.MENU, SCENES.PAUSE]
-          .find((k) => game.scene.isActive(k)) ?? null;
+        const sm = game.scene;
+        const from = resolvePurchaseHostScene(game);
+        let settled = false;
 
         const done = (res) => {
+          if (settled) return;
+          settled = true;
           game.events.off('purchase:done', done);
-          if (from && game.scene.isPaused(from)) game.scene.resume(from);
           resolve(res ?? { success: false });
         };
+
         game.events.once('purchase:done', done);
-        if (game.scene.isActive(SCENES.PURCHASE)) game.scene.stop(SCENES.PURCHASE);
-        if (from) game.scene.pause(from);
-        game.scene.launch(SCENES.PURCHASE, { productId, from });
+        if (sm.isActive(SCENES.PURCHASE)) sm.stop(SCENES.PURCHASE);
+        if (from && !sm.isPaused(from)) sm.pause(from);
+        launchParallelScene(game, SCENES.PURCHASE, { productId, from }, from);
       });
     },
     restore: async () => {
@@ -67,7 +81,7 @@ export function createDemoAdProvider(game) {
     showInterstitialOverlay: () => new Promise((resolve) => {
       game.events.once('ad:break:done', resolve);
       if (game.scene.isActive(SCENES.AD_BREAK)) game.scene.stop(SCENES.AD_BREAK);
-      game.scene.launch(SCENES.AD_BREAK, { provider: 'demo' });
+      launchParallelScene(game, SCENES.AD_BREAK, { provider: 'demo' });
     }),
   };
 }

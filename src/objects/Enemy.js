@@ -1,7 +1,7 @@
 import { GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
 
-// Garden pests — moth, hornet, firefly. Twilight palette, organic silhouettes.
+// Neon garden pests — crisp silhouettes with glowing outlines.
 const KINDS = ['drifter', 'chaser', 'zigzag'];
 const COLORS = { drifter: PAL.info, chaser: PAL.danger, zigzag: PAL.accent };
 
@@ -24,7 +24,7 @@ export class Enemy {
     this.swayPhase = Math.random() * Math.PI * 2;
 
     this.glow = scene.add.image(this.x, this.y, 'soft').setDepth(12).setTint(this.color)
-      .setAlpha(0.42).setBlendMode('ADD').setDisplaySize(this.r * 3.6, this.r * 3.6);
+      .setAlpha(0.38).setBlendMode('ADD').setDisplaySize(this.r * 3.2, this.r * 3.2);
     this.gfx = scene.add.graphics().setDepth(13);
     this.draw();
   }
@@ -38,53 +38,64 @@ export class Enemy {
     g.clear();
 
     if (this.kind === 'drifter') {
-      // lunar moth — wide wings
-      const wing = 0.55 + 0.45 * Math.abs(Math.sin(this.wingPhase));
-      g.fillStyle(c, 0.35);
-      g.fillEllipse(-r * 0.9 * wing, -r * 0.1, r * 0.85, r * 1.1);
-      g.fillEllipse(r * 0.9 * wing, -r * 0.1, r * 0.85, r * 1.1);
-      g.fillStyle(c, 1);
-      g.fillEllipse(0, 0, r * 0.35, r * 0.7);
-      g.fillStyle(0xfff8ef, 0.9);
-      g.fillCircle(-r * 0.12, -r * 0.25, r * 0.1);
-      g.fillCircle(r * 0.12, -r * 0.25, r * 0.1);
-      g.fillStyle(0x120818, 0.8);
-      g.fillCircle(-r * 0.12, -r * 0.22, r * 0.05);
-      g.fillCircle(r * 0.12, -r * 0.22, r * 0.05);
-      g.lineStyle(1.5, 0xffffff, 0.4);
-      g.lineBetween(-r * 0.5, r * 0.1, r * 0.5, r * 0.1);
+      const wing = 0.5 + 0.5 * Math.abs(Math.sin(this.wingPhase));
+      g.fillStyle(c, 0.18);
+      g.fillEllipse(-r * 0.48 * wing, -r * 0.04, r * 0.92 * wing, r * 0.58);
+      g.fillEllipse(r * 0.48 * wing, -r * 0.04, r * 0.92 * wing, r * 0.58);
+      g.lineStyle(2, c, 0.85);
+      g.strokeEllipse(-r * 0.48 * wing, -r * 0.04, r * 0.88 * wing, r * 0.52);
+      g.strokeEllipse(r * 0.48 * wing, -r * 0.04, r * 0.88 * wing, r * 0.52);
+      g.fillStyle(c, 0.95);
+      g.fillEllipse(0, 0, r * 0.28, r * 0.62);
+      g.fillStyle(0xffffff, 0.95);
+      g.fillCircle(-r * 0.1, -r * 0.22, r * 0.09);
+      g.fillCircle(r * 0.1, -r * 0.22, r * 0.09);
+      g.fillStyle(0x080c18, 0.9);
+      g.fillCircle(-r * 0.1, -r * 0.2, r * 0.045);
+      g.fillCircle(r * 0.1, -r * 0.2, r * 0.045);
     } else if (this.kind === 'chaser') {
-      // hornet — pointed body, stripes
-      g.fillStyle(c, 0.3);
-      g.fillEllipse(-r * 0.7, 0, r * 0.55, r * 0.45);
-      g.fillEllipse(r * 0.7, 0, r * 0.55, r * 0.45);
-      g.fillStyle(c, 1);
-      g.fillEllipse(0, 0, r * 0.55, r * 0.95);
-      g.fillStyle(0x120818, 0.55);
-      g.fillRect(-r * 0.45, -r * 0.15, r * 0.9, r * 0.12);
-      g.fillRect(-r * 0.4, r * 0.08, r * 0.8, r * 0.1);
-      g.fillStyle(0xfff8ef, 0.85);
-      g.fillCircle(0, -r * 0.35, r * 0.18);
-      g.fillStyle(0x120818, 0.7);
-      g.fillCircle(-r * 0.06, -r * 0.35, r * 0.05);
-      g.fillCircle(r * 0.06, -r * 0.35, r * 0.05);
-      g.fillStyle(c, 1);
-      g.fillTriangle(0, r * 0.55, -r * 0.12, r * 0.35, r * 0.12, r * 0.35);
+      const wing = 0.55 + 0.45 * Math.abs(Math.sin(this.wingPhase * 1.4));
+      g.fillStyle(c, 0.15);
+      g.fillEllipse(-r * 0.72 * wing, -r * 0.05, r * 0.5, r * 0.38);
+      g.fillEllipse(r * 0.72 * wing, -r * 0.05, r * 0.5, r * 0.38);
+      g.lineStyle(2, c, 0.8);
+      g.strokeEllipse(-r * 0.72 * wing, -r * 0.05, r * 0.5, r * 0.38);
+      g.strokeEllipse(r * 0.72 * wing, -r * 0.05, r * 0.5, r * 0.38);
+      g.fillStyle(c, 0.95);
+      g.fillTriangle(0, -r * 0.42, r * 0.32, r * 0.08, 0, r * 0.42);
+      g.fillTriangle(0, -r * 0.42, -r * 0.32, r * 0.08, 0, r * 0.42);
+      g.fillTriangle(0, r * 0.08, r * 0.22, r * 0.55, 0, r * 0.42);
+      g.fillTriangle(0, r * 0.08, -r * 0.22, r * 0.55, 0, r * 0.42);
+      g.lineStyle(2, 0xffffff, 0.35);
+      g.lineBetween(0, -r * 0.42, r * 0.32, r * 0.08);
+      g.lineBetween(r * 0.32, r * 0.08, r * 0.22, r * 0.55);
+      g.lineBetween(r * 0.22, r * 0.55, 0, r * 0.42);
+      g.lineBetween(0, r * 0.42, -r * 0.22, r * 0.55);
+      g.lineBetween(-r * 0.22, r * 0.55, -r * 0.32, r * 0.08);
+      g.lineBetween(-r * 0.32, r * 0.08, 0, -r * 0.42);
+      g.fillStyle(0x120818, 0.65);
+      g.fillRect(-r * 0.38, -r * 0.05, r * 0.76, r * 0.1);
+      g.fillRect(-r * 0.32, r * 0.12, r * 0.64, r * 0.08);
+      g.fillStyle(0xffffff, 0.9);
+      g.fillCircle(0, -r * 0.32, r * 0.14);
+      g.fillStyle(0x120818, 0.85);
+      g.fillCircle(-r * 0.05, -r * 0.32, r * 0.045);
+      g.fillCircle(r * 0.05, -r * 0.32, r * 0.045);
     } else {
-      // firefly beetle — round shell
-      g.fillStyle(c, 0.25);
-      g.fillEllipse(-r * 0.75, -r * 0.05, r * 0.6, r * 0.5);
-      g.fillEllipse(r * 0.75, -r * 0.05, r * 0.6, r * 0.5);
-      g.fillStyle(c, 1);
-      g.fillCircle(0, 0, r * 0.82);
-      g.fillStyle(0xfff8ef, 0.5);
-      g.fillEllipse(0, -r * 0.15, r * 0.5, r * 0.35);
-      g.lineStyle(2, 0xffffff, 0.45);
+      const pulse = 0.85 + 0.15 * Math.sin(this.wingPhase * 2);
+      g.fillStyle(c, 0.2 * pulse);
+      g.fillCircle(0, 0, r * 0.95);
+      g.lineStyle(2.5, c, 0.9);
       g.strokeCircle(0, 0, r * 0.82);
-      g.fillStyle(0xfff8ef, 0.95);
-      g.fillCircle(0, r * 0.55, r * 0.14);
-      g.fillStyle(c, 0.8);
-      g.fillCircle(0, -r * 0.55, r * 0.12);
+      g.fillStyle(c, 0.9);
+      g.fillCircle(0, 0, r * 0.55);
+      g.fillStyle(0xffffff, 0.75);
+      g.fillEllipse(0, -r * 0.12, r * 0.38, r * 0.22);
+      g.lineStyle(1.5, c, 0.7);
+      g.lineBetween(-r * 0.08, -r * 0.58, -r * 0.22, -r * 0.82);
+      g.lineBetween(r * 0.08, -r * 0.58, r * 0.22, -r * 0.82);
+      g.fillStyle(0xffffff, 0.95);
+      g.fillCircle(0, r * 0.52, r * 0.12 * pulse);
     }
   }
 
@@ -112,7 +123,7 @@ export class Enemy {
 
     this.spin += dtSec * (this.kind === 'zigzag' ? 5 : 2);
     this.wingPhase += dtSec * 12;
-    if (this.kind === 'drifter' || this.kind === 'chaser') this.draw();
+    this.draw();
 
     if (this.y + this.r >= paddle.top && this.x > paddle.left - this.r && this.x < paddle.right + this.r) return 'attack';
     if (this.y > GAME.HEIGHT + this.r * 2) return 'gone';
@@ -124,8 +135,8 @@ export class Enemy {
   }
 
   sync() {
-    this.gfx.setPosition(this.x, this.y).setRotation(this.kind === 'zigzag' ? this.spin * 0.3 : 0);
-    this.glow.setPosition(this.x, this.y);
+    this.gfx.setPosition(this.x, this.y).setRotation(this.kind === 'zigzag' ? this.spin * 0.25 : 0);
+    this.glow.setPosition(this.x, this.y).setAlpha(0.32 + 0.12 * Math.sin(this.wingPhase));
   }
 
   kill() {

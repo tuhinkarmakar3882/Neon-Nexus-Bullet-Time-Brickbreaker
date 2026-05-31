@@ -1,3 +1,4 @@
+import Phaser from 'phaser';
 import { GAME, SCENES, computeLayout } from '../config/Constants.js';
 
 let lastAspect = null;
@@ -48,6 +49,19 @@ export function readSafeAreaInsets() {
   return out;
 }
 
+/** Cap device pixel ratio — used for text/texture resolution, not canvas buffer. */
+export function getDisplayPixelRatio() {
+  if (typeof window === 'undefined') return 1;
+  return Math.min(window.devicePixelRatio || 1, 2);
+}
+
+/** Prefer smooth bicubic scaling when the browser CSS-scales the canvas. */
+export function applyCanvasSmoothing(game) {
+  const canvas = game?.canvas;
+  if (!canvas || !Phaser.Display?.Canvas?.CanvasInterpolation?.setBicubic) return;
+  Phaser.Display.Canvas.CanvasInterpolation.setBicubic(canvas);
+}
+
 /**
  * Recompute logical layout from the viewport.
  * @returns {boolean} true when GAME.WIDTH/HEIGHT changed
@@ -69,6 +83,8 @@ export function syncViewportLayout() {
 export function refreshDisplayScale(game) {
   if (!game?.scale) return;
   game.scale.refresh();
+  syncSceneCameras(game);
+  applyCanvasSmoothing(game);
 }
 
 /** Resize Phaser logical canvas and sync every active camera viewport. */
@@ -77,6 +93,7 @@ export function applyLogicalResize(game) {
   game.scale.setGameSize(GAME.WIDTH, GAME.HEIGHT);
   game.scale.refresh();
   syncSceneCameras(game);
+  applyCanvasSmoothing(game);
 }
 
 /** Keep camera viewports aligned with logical game size (fixes post-resize drift). */
@@ -86,8 +103,8 @@ export function syncSceneCameras(game) {
     const cam = scene.cameras?.main;
     if (!cam) continue;
     cam.setSize(GAME.WIDTH, GAME.HEIGHT);
-    cam.centerOn(GAME.WIDTH / 2, GAME.HEIGHT / 2);
     cam.setZoom(1);
+    cam.centerOn(GAME.WIDTH / 2, GAME.HEIGHT / 2);
     cam.setAngle(0);
     cam.setRotation(0);
   }

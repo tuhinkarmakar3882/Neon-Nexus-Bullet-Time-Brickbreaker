@@ -1,22 +1,23 @@
 import Phaser from 'phaser';
 import { SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
+import { Capacitor } from '@capacitor/core';
 import { Monetization } from '../systems/Monetization.js';
 import { makeButton, makeResponsiveOverlayPanel, overlayFrame } from '../utils/UI.js';
-import { InputRouter } from '../systems/InputRouter.js';
 import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 
-/** Store checkout sheet — demo simulates payment; native uses window.__nativePurchase hooks. */
+/** Modal checkout sheet — launched on top of Shop/Settings by the ad provider. */
 export class PurchaseScene extends Phaser.Scene {
   constructor() { super(SCENES.PURCHASE); }
 
   init(data) {
     this.productId = data?.productId ?? 'remove_ads';
     this._from = data?.from ?? null;
+    this._purchasing = false;
+    this._status = null;
   }
 
   create() {
-    InputRouter.onOverlayOpen(SCENES.PURCHASE);
     this.input.setTopOnly(true);
     const UI_DEPTH = 1200;
 
@@ -39,17 +40,20 @@ export class PurchaseScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setDepth(UI_DEPTH + 1);
     fitTextWidth(blurb, wrap, uiPx(12, { min: 11, max: 14 }));
 
+    const webStripe = !Capacitor.isNativePlatform() && !!import.meta.env.VITE_STRIPE_CHECKOUT_URL;
     const hint = Monetization.isSimulatedStore()
       ? 'Demo checkout — confirm to simulate payment.'
-      : 'Payment is handled by your app store.';
-    this.add.text(frame.cx, blurb.y + blurb.height + uiPx(20, { min: 16, max: 24 }), hint, {
+      : webStripe
+        ? 'Checkout opens in your browser. Return here and use Restore or redeem your unlock code.'
+        : 'Payment is handled by your app store.';
+    this._status = this.add.text(frame.cx, blurb.y + blurb.height + uiPx(20, { min: 16, max: 24 }), hint, {
       ...orbitronStyle(11, PAL.textMuted, { align: 'center', wordWrap: { width: wrap } }),
     }).setOrigin(0.5, 0).setDepth(UI_DEPTH + 1);
 
     const btnW = Math.min(frame.btnW, uiPx(280, { max: 300 }));
 
-    makeButton(this, frame.cx, frame.footerY - uiPx(58, { min: 48, max: 62 }), 'CONFIRM PURCHASE', async () => {
-      await this.finish({ success: true, productId: this.productId, simulated: Monetization.isSimulatedStore() });
+    makeButton(this, frame.cx, frame.footerY - uiPx(58, { min: 48, max: 62 }), 'CONFIRM PURCHASE', () => {
+      this.confirmPurchase();
     }, {
       width: btnW,
       height: uiPx(50, { min: 44, max: 54 }),
@@ -58,7 +62,7 @@ export class PurchaseScene extends Phaser.Scene {
     });
 
     makeButton(this, frame.cx, frame.footerY, 'CANCEL', () => {
-      this.finish({ success: false, cancelled: true, productId: this.productId });
+      this.closePurchase({ success: false, cancelled: true, productId: this.productId });
     }, {
       width: btnW,
       height: uiPx(46, { min: 40, max: 50 }),
@@ -68,11 +72,24 @@ export class PurchaseScene extends Phaser.Scene {
     });
   }
 
-  async finish(result) {
-    InputRouter.onOverlayClose(false);
+  confirmPurchase() {
+    if (this._purchasing) return;
+    this._purchasing = true;
+    this._status?.setText('Processing…');
+    this._status?.setColor(cssHex(PAL.accent2));
+    this.closePurchase({
+      success: true,
+      productId: this.productId,
+      simulated: Monetization.isSimulatedStore(),
+    });
+  }
+
+  closePurchase(result) {
+    if (!this.scene.isActive()) return;
     const from = this._from;
-    this.scene.stop();
-    if (from && this.scene.isPaused(from)) this.scene.resume(from);
+    const sm = this.game.scene;
     this.game.events.emit('purchase:done', result);
+    this.scene.stop();
+    if (from && sm.isPaused(from)) sm.resume(from);
   }
 }

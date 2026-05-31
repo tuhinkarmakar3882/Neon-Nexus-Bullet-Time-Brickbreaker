@@ -68,7 +68,7 @@ export class HUDScene extends Phaser.Scene {
 
     this.flashText = this.add.text(arenaCx, H * 0.4, '', {
       ...orbitronStyle(64, PAL.text, { fontStyle: '900', align: 'center', wordWrap: { width: arenaW } }),
-    }).setOrigin(0.5).setAlpha(0);
+    }).setOrigin(0.5).setAlpha(0).setDepth(1008);
 
     const hintMsg = portrait ? 'TAP TO LAUNCH' : 'TAP / CLICK / SPACE TO LAUNCH';
     this.hintText = this.add.text(arenaCx, paddleY - uiPx(10, { min: 8, max: 12 }), hintMsg, {
@@ -265,13 +265,7 @@ export class HUDScene extends Phaser.Scene {
     this.onFlash = (f) => this.showFlash(f);
     this.onLife = () => this.tweens.add({ targets: this.livesC, scaleX: 1.25, scaleY: 1.25, yoyo: true, duration: 200 });
     this.onHint = (show) => this.hintText.setAlpha(show ? 0.85 : 0);
-    this.onToast = (t) => {
-      if (!t?.text) return;
-      this.toastText.setFontSize(uiPx(22, { min: 14, max: 22 }));
-      this.toastText.setText(t.text).setAlpha(1);
-      fitTextWidth(this.toastText, arenaWidth(), uiPx(12, { min: 11, max: 16 }));
-      this.tweens.add({ targets: this.toastText, alpha: 0, delay: t.ms ?? 2000, duration: 400 });
-    };
+    this.onToast = (t) => this.showToast(t);
     this.onScramble = (on) => {
       if (on) {
         this.scrambleTween = this.tweens.add({
@@ -352,6 +346,8 @@ export class HUDScene extends Phaser.Scene {
     bus.on('hud:mutators', this.onMutators);
     bus.on('hud:immersive', this.onImmersive);
     this.events.once('shutdown', () => {
+      this._clearFlashTimers?.();
+      this._clearToastTimers?.();
       bus.off('hud:stats', this.onStats);
       bus.off('hud:flash', this.onFlash); bus.off('hud:life', this.onLife);
       bus.off('hud:hint', this.onHint); bus.off('hud:toast', this.onToast);
@@ -388,13 +384,67 @@ export class HUDScene extends Phaser.Scene {
     }
   }
 
-  showFlash(f) {
-    if (!f || !f.text) { this.flashText.setAlpha(0); return; }
+  _clearFlashTimers() {
+    this._flashHideTimer?.remove(false);
+    this._flashHideTimer = null;
     this.tweens.killTweensOf(this.flashText);
+  }
+
+  _clearToastTimers() {
+    this._toastHideTimer?.remove(false);
+    this._toastHideTimer = null;
+    this.tweens.killTweensOf(this.toastText);
+  }
+
+  showFlash(f) {
+    this._clearFlashTimers();
+    if (!f?.text) {
+      this.flashText.setAlpha(0).setText('');
+      return;
+    }
+    const holdMs = Math.max(0, f.ms ?? 800);
     this.flashText.setFontSize(uiPx(64, { min: 28, max: 64 }));
-    this.flashText.setText(f.text).setColor(f.color).setAlpha(1).setScale(0.8).setShadow(0, 0, f.color, 22, true, true);
+    this.flashText.setText(f.text).setColor(f.color ?? cssHex(PAL.text)).setAlpha(1).setScale(0.8)
+      .setShadow(0, 0, f.color ?? cssHex(PAL.text), 22, true, true);
     fitTextWidth(this.flashText, arenaWidth(), uiPx(22, { min: 18, max: 28 }));
     this.tweens.add({ targets: this.flashText, scale: 1, duration: 200, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: this.flashText, alpha: 0, delay: f.ms, duration: 300 });
+    this._flashHideTimer = this.time.delayedCall(holdMs, () => {
+      this._flashHideTimer = null;
+      this.tweens.killTweensOf(this.flashText);
+      this.tweens.add({
+        targets: this.flashText,
+        alpha: { from: 1, to: 0 },
+        duration: 300,
+        ease: 'Cubic.easeIn',
+        onComplete: () => {
+          if (this.flashText?.active) this.flashText.setAlpha(0).setText('');
+        },
+      });
+    });
+  }
+
+  showToast(t) {
+    this._clearToastTimers();
+    if (!t?.text) {
+      this.toastText.setAlpha(0).setText('');
+      return;
+    }
+    const holdMs = Math.max(0, t.ms ?? 2000);
+    this.toastText.setFontSize(uiPx(22, { min: 14, max: 22 }));
+    this.toastText.setText(t.text).setAlpha(1);
+    fitTextWidth(this.toastText, arenaWidth(), uiPx(12, { min: 11, max: 16 }));
+    this._toastHideTimer = this.time.delayedCall(holdMs, () => {
+      this._toastHideTimer = null;
+      this.tweens.killTweensOf(this.toastText);
+      this.tweens.add({
+        targets: this.toastText,
+        alpha: { from: 1, to: 0 },
+        duration: 400,
+        ease: 'Cubic.easeIn',
+        onComplete: () => {
+          if (this.toastText?.active) this.toastText.setAlpha(0).setText('');
+        },
+      });
+    });
   }
 }

@@ -20,10 +20,13 @@ export class Bullet {
     this.bouncesLeft = opts.bounces ?? 0;
     this.dead = false;
     this.tint = opts.tint ?? TINTS[this.type] ?? 0xff7080;
+    this.laserWidth = opts.laserWidth ?? 1;
+    this.hitW = this.type === 'laser' ? 3.5 * this.laserWidth : 4;
 
     if (this.type === 'laser' || this.type === 'shock') {
       this.gfx = scene.add.image(x, y, 'bullet-bolt').setDepth(18).setTint(this.tint);
-      this.gfx.setDisplaySize(this.type === 'shock' ? 10 : 7, 22);
+      const w = this.type === 'shock' ? 10 : 7 * this.laserWidth;
+      this.gfx.setDisplaySize(w, 22);
     } else {
       this.gfx = scene.add.graphics().setDepth(18);
       this.drawBolt();

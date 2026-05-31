@@ -1,7 +1,7 @@
-// Per-level garden biomes — warm twilight palettes for bricks, walls, and sky glow.
+// Per-level biomes — garden warmth + nexus/frost/ember bands.
 
 export const THEMES = [
-  { name: 'Dusk Garden',   bg: 0xe8b86d, wall: 0xd45d8c, bricks: [0xc4785a, 0xd45d8c, 0xe8b86d, 0x9b8cff, 0x7eb87a, 0xb8886a], biome: 'garden' },
+  { name: 'Neon Garden',   bg: 0x2fe6c7, wall: 0xff4fa3, bricks: [0x8a7bff, 0xff6f9c, 0x2fd9c7, 0xffc04d, 0x5aa0ff, 0x9ad24d, 0xff8a5a], biome: 'garden' },
   { name: 'Moss Hollow',   bg: 0x7eb87a, wall: 0x5a9870, bricks: [0x6aab8a, 0x7eb87a, 0x4a8868, 0x8ec890, 0x5a9870, 0xa0c898], biome: 'garden' },
   { name: 'Terracotta',    bg: 0xc4785a, wall: 0xe8b86d, bricks: [0xc4785a, 0xd4886a, 0xb86850, 0xe8a878, 0xa85848, 0xf0b888], biome: 'garden' },
   { name: 'Lavender Dusk', bg: 0x9b8cff, wall: 0xd45d8c, bricks: [0x9b8cff, 0xb8a0e8, 0x8878c8, 0xc8b0f0, 0x7868b8, 0xd8c8ff], biome: 'garden' },

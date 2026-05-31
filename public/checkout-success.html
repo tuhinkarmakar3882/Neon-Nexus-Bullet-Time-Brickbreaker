@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Purchase complete — Neon Nexus</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #08050c;
+      color: #cfe9ff;
+      font-family: system-ui, sans-serif;
+      text-align: center;
+      padding: 24px;
+    }
+    .card {
+      max-width: 420px;
+      padding: 32px 24px;
+      border: 1px solid rgba(0, 255, 255, 0.25);
+      border-radius: 12px;
+      background: rgba(12, 8, 20, 0.92);
+    }
+    h1 { font-size: 1.25rem; margin: 0 0 12px; color: #00ffff; }
+    p { margin: 0 0 8px; opacity: 0.85; line-height: 1.5; }
+    .err { color: #ff8899; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Neon Nexus</h1>
+    <p id="status">Unlocking your purchase…</p>
+  </div>
+  <script>
+    (async () => {
+      const status = document.getElementById('status');
+      const params = new URLSearchParams(location.search);
+      const sessionId = params.get('session_id');
+      if (!sessionId) {
+        status.textContent = 'Missing checkout session. Return to the game and use Restore Purchases or enter your unlock code in Settings.';
+        status.className = 'err';
+        return;
+      }
+      try {
+        localStorage.setItem('neon_stripe_session', sessionId);
+        const res = await fetch('/api/fulfill-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.productId) throw new Error(data.error || 'Fulfillment failed');
+        localStorage.setItem('neon_pending_entitlement', JSON.stringify({ productId: data.productId, sessionId: data.sessionId }));
+        status.textContent = 'Purchase unlocked! Returning to the game…';
+        setTimeout(() => { location.href = './?stripe=success'; }, 900);
+      } catch (e) {
+        status.textContent = e.message || 'Could not verify payment. Try Restore Purchases in Settings or paste your unlock code.';
+        status.className = 'err';
+      }
+    })();
+  </script>
+</body>
+</html>

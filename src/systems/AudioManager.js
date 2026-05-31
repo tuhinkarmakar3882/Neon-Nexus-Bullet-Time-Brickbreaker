@@ -1,34 +1,135 @@
-// Procedural music + arcade SFX — Web Audio API, no external assets.
+// Pixabay background music + procedural arcade SFX (Web Audio API).
 
 import { POWERS, resolvePowerKey } from '../config/PowerUps.js';
-import {
-  buildMusicProfile,
-  arpNoteAt,
-  leadNoteAt,
-  bassNoteAt,
-  midi,
-} from './MusicEngine.js';
+import { MUSIC_TRACKS, trackForLevel, menuTrackForVariant, pixabayAlternates, normalizeMusicVariant, allTrackUrls } from '../config/MusicCatalog.js';
 
 export class AudioManager {
   constructor() {
     this.ctx = null;
     this.master = null;
-    this.musicGain = null;
     this.sfxGain = null;
-    this.duckGain = null;
     this.soundOn = true;
     this.musicOn = true;
-    this._timer = null;
-    this._step = 0;
-    this._nextTime = 0;
-    this.bpm = 96;
-    this.profile = buildMusicProfile(1, 1, true);
-    this.prog = this.profile.prog;
     this._level = 1;
     this._musicSeed = 1;
     this._biome = 'garden';
     this._isBoss = false;
     this._isMenu = true;
+    this._currentTrackId = null;
+    this._trackSlot = 0;
+    this._trackA = null;
+    this._trackB = null;
+    this._trackFadeId = null;
+    this._musicVolScale = 1;
+    this._tracksReady = false;
+    this._currentTrackDef = null;
+    this._musicVariant = 'auto';
+  }
+
+  _initTracks() {
+    if (this._tracksReady || typeof Audio === 'undefined') return;
+    this._trackA = new Audio();
+    this._trackB = new Audio();
+    this._trackA.preload = 'auto';
+    this._trackB.preload = 'auto';
+    this._tracksReady = true;
+  }
+
+  _activeTrackEl() {
+    return this._trackSlot === 0 ? this._trackA : this._trackB;
+  }
+
+  _idleTrackEl() {
+    return this._trackSlot === 0 ? this._trackB : this._trackA;
+  }
+
+  _baseTrackVolume(trackDef) {
+    return (trackDef?.volume ?? 0.38) * this._musicVolScale * (this.musicOn ? 1 : 0);
+  }
+
+  _stopTracks(immediate = true) {
+    if (this._trackFadeId) {
+      clearInterval(this._trackFadeId);
+      this._trackFadeId = null;
+    }
+    [this._trackA, this._trackB].forEach((el) => {
+      if (!el) return;
+      if (immediate) {
+        el.pause();
+        el.volume = 0;
+        el.removeAttribute('src');
+      }
+    });
+  }
+
+  _fadeTrackVolumes(fromEl, toEl, toVol, ms = 1200) {
+    if (this._trackFadeId) clearInterval(this._trackFadeId);
+    const steps = Math.max(8, Math.round(ms / 40));
+    let i = 0;
+    const fromStart = fromEl?.volume ?? 0;
+    this._trackFadeId = setInterval(() => {
+      i++;
+      const t = i / steps;
+      if (fromEl) fromEl.volume = Math.max(0, fromStart * (1 - t));
+      if (toEl) toEl.volume = toVol * t;
+      if (i >= steps) {
+        clearInterval(this._trackFadeId);
+        this._trackFadeId = null;
+        if (fromEl) { fromEl.pause(); fromEl.volume = 0; }
+        if (toEl) toEl.volume = toVol;
+      }
+    }, ms / steps);
+  }
+
+  async _tryPlayUrl(url, trackDef) {
+    const next = this._idleTrackEl();
+    const cur = this._activeTrackEl();
+    if (!next) return false;
+
+    next.loop = trackDef.loop !== false;
+    next.src = url;
+    next.volume = 0;
+
+    try {
+      await next.play();
+    } catch {
+      return false;
+    }
+
+    this._currentTrackId = trackDef.id;
+    this._currentTrackDef = trackDef;
+    this._trackSlot = 1 - this._trackSlot;
+    this._fadeTrackVolumes(cur, next, this._baseTrackVolume(trackDef));
+    return true;
+  }
+
+  async _crossfadeToTrack(trackDef) {
+    if (!this.musicOn || !trackDef?.url) return false;
+    this._initTracks();
+
+    const urls = [trackDef.url, ...pixabayAlternates(trackDef.url, this._musicVariant)];
+    for (const url of urls) {
+      if (await this._tryPlayUrl(url, trackDef)) return true;
+    }
+    return false;
+  }
+
+  async _playPixabayTrack(trackDef) {
+    if (!this.musicOn) return;
+    await this._crossfadeToTrack(trackDef);
+  }
+
+  /** Preload all catalog URLs (best-effort). */
+  preloadMusicCatalog() {
+    this._initTracks();
+    allTrackUrls().forEach((url) => {
+      if (!url) return;
+      const link = document.createElement('link');
+      link.rel = 'prefetch';
+      link.as = 'audio';
+      link.href = url;
+      document.head.appendChild(link);
+    });
   }
 
   init() {
@@ -48,42 +149,6 @@ export class AudioManager {
       this.master.gain.value = 0.92;
       this.comp.connect(this.master);
       this.master.connect(this.ctx.destination);
-
-      this.duckGain = this.ctx.createGain();
-      this.duckGain.gain.value = 1;
-      this.duckGain.connect(this.comp);
-
-      this.musicGain = this.ctx.createGain();
-      this.musicGain.gain.value = this.musicOn ? 0.36 : 0;
-      this.musicGain.connect(this.duckGain);
-
-      this.musicFilter = this.ctx.createBiquadFilter();
-      this.musicFilter.type = 'lowpass';
-      this.musicFilter.frequency.value = 7200;
-      this.musicFilter.Q.value = 0.5;
-      this.musicFilter.connect(this.musicGain);
-
-      this.delay = this.ctx.createDelay(1.4);
-      this.delay.delayTime.value = 0.375;
-      this.fb = this.ctx.createGain();
-      this.fb.gain.value = 0.14;
-      this.delayMix = this.ctx.createGain();
-      this.delayMix.gain.value = 0.16;
-      this.delay.connect(this.fb);
-      this.fb.connect(this.delay);
-      this.delay.connect(this.delayMix);
-      this.delayMix.connect(this.musicFilter);
-
-      this.reverbDelay = this.ctx.createDelay(0.6);
-      this.reverbDelay.delayTime.value = 0.41;
-      this.reverbFb = this.ctx.createGain();
-      this.reverbFb.gain.value = 0.1;
-      this.reverbMix = this.ctx.createGain();
-      this.reverbMix.gain.value = 0.1;
-      this.reverbDelay.connect(this.reverbFb);
-      this.reverbFb.connect(this.reverbDelay);
-      this.reverbDelay.connect(this.reverbMix);
-      this.reverbMix.connect(this.musicFilter);
 
       this.sfxGain = this.ctx.createGain();
       this.sfxGain.gain.value = this.soundOn ? 0.62 : 0;
@@ -106,42 +171,39 @@ export class AudioManager {
 
   setMusicEnabled(on) {
     this.musicOn = on;
-    if (this.musicGain) {
-      this.musicGain.gain.setTargetAtTime(on ? 0.36 : 0, this.ctx.currentTime, 0.08);
+    if (!on) {
+      this._stopTracks();
+      return;
     }
-    if (on) this.startMusic();
-    else this.stopMusic();
+    const active = this._activeTrackEl();
+    if (active?.src) {
+      active.volume = this._baseTrackVolume(this._currentTrackDef ?? MUSIC_TRACKS.menu);
+      active.play().catch(() => {});
+      return;
+    }
+    if (this._isMenu) this.setMenuMusic();
+    else this.setLevelMusic(this._level, this._musicSeed, { biome: this._biome, isBoss: this._isBoss });
   }
 
-  _applyProfile(profile) {
-    this.profile = profile;
-    this.prog = profile.prog;
-    this.bpm = profile.bpm;
-    const beat = 60 / this.bpm / 4;
-    if (this.delay) this.delay.delayTime.setTargetAtTime(beat * 3, this.ctx?.currentTime ?? 0, 0.08);
-    if (this.musicFilter) {
-      this.musicFilter.frequency.setTargetAtTime(profile.filterHz ?? 7200, this.ctx?.currentTime ?? 0, 0.2);
-    }
+  setMusicVariant(variant) {
+    this._musicVariant = normalizeMusicVariant(variant);
   }
 
-  _fadeMusic(to, dur = 0.35) {
-    if (!this.musicGain || !this.ctx) return;
-    const t = this.ctx.currentTime;
-    this.musicGain.gain.cancelScheduledValues(t);
-    this.musicGain.gain.setTargetAtTime(to, t, dur * 0.35);
+  getMusicVariant() {
+    return this._musicVariant;
+  }
+
+  applyMusicSettings({ musicVariant, musicVolume } = {}) {
+    if (musicVariant != null) this.setMusicVariant(musicVariant);
+    if (musicVolume != null) this.setMusicVolume(musicVolume);
+    if (!this.musicOn) return;
+    if (this._isMenu) this.setMenuMusic();
+    else this.setLevelMusic(this._level, this._musicSeed, { biome: this._biome, isBoss: this._isBoss });
   }
 
   setMenuMusic() {
     this._isMenu = true;
-    this._fadeMusic(0, 0.25);
-    this.stopMusic();
-    this._applyProfile(buildMusicProfile(1, Date.now() & 0xffff, true));
-    this._step = 0;
-    if (this.ctx) this._nextTime = this.ctx.currentTime + 0.12;
-    if (this.musicOn) {
-      this.startMusic();
-      this._fadeMusic(0.36, 0.4);
-    }
+    this._playPixabayTrack(menuTrackForVariant(this._musicVariant));
   }
 
   setLevelMusic(level, seed = level, opts = {}) {
@@ -150,227 +212,23 @@ export class AudioManager {
     this._musicSeed = seed >>> 0;
     this._biome = opts.biome ?? 'garden';
     this._isBoss = !!opts.isBoss;
-    this._fadeMusic(0, 0.22);
-    this.stopMusic();
-    this._applyProfile(buildMusicProfile(level, this._musicSeed, false, {
+    if (opts.musicVariant != null) this._musicVariant = normalizeMusicVariant(opts.musicVariant);
+    this._playPixabayTrack(trackForLevel(this._level, this._musicSeed, {
       biome: this._biome,
       isBoss: this._isBoss,
+      musicVariant: this._musicVariant,
     }));
-    this._step = 0;
-    if (this.ctx) this._nextTime = this.ctx.currentTime + 0.12;
-    if (this.musicOn) {
-      this.startMusic();
-      this._fadeMusic(0.36, 0.45);
-    }
   }
 
+  /** Resume Pixabay track after app background (NativeBridge). */
   startMusic() {
-    if (!this.ctx || this._timer) return;
-    this._nextTime = this.ctx.currentTime + 0.1;
-    this._timer = setInterval(() => this._scheduler(), 25);
+    if (!this.musicOn) return;
+    const el = this._activeTrackEl();
+    if (el?.src) el.play().catch(() => {});
   }
 
   stopMusic() {
-    if (this._timer) {
-      clearInterval(this._timer);
-      this._timer = null;
-    }
-  }
-
-  _scheduler() {
-    if (!this.ctx) return;
-    const step16 = 60 / this.bpm / 4;
-    while (this._nextTime < this.ctx.currentTime + 0.14) {
-      this._playStep(this._step, this._nextTime);
-      this._nextTime += step16;
-      this._step = (this._step + 1) % (this.profile.phraseSteps ?? 64);
-    }
-  }
-
-  _sidechain(t, depth = 0.38, release = 0.11) {
-    if (!this.duckGain) return;
-    const g = this.duckGain.gain;
-    g.cancelScheduledValues(t);
-    g.setValueAtTime(1, t);
-    g.linearRampToValueAtTime(1 - depth, t + 0.012);
-    g.linearRampToValueAtTime(1, t + release);
-  }
-
-  _env(node, t, a, d, s, r, peak, sus) {
-    node.gain.cancelScheduledValues(t);
-    node.gain.setValueAtTime(0, t);
-    node.gain.linearRampToValueAtTime(peak, t + a);
-    node.gain.linearRampToValueAtTime(sus, t + a + d);
-    node.gain.setValueAtTime(sus, t + a + d + s);
-    node.gain.linearRampToValueAtTime(0.0001, t + a + d + s + r);
-  }
-
-  _toMusic(node) {
-    node.connect(this.musicFilter);
-    node.connect(this.delay);
-    node.connect(this.reverbDelay);
-  }
-
-  _pad(chord, t, dur, vol = 0.07) {
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(900, t);
-    filter.frequency.linearRampToValueAtTime(3200 + this.profile.intensity * 1200, t + dur * 0.18);
-    filter.frequency.exponentialRampToValueAtTime(1400, t + dur);
-    filter.Q.value = 0.6;
-    filter.connect(this.musicFilter);
-    filter.connect(this.reverbDelay);
-
-    const g = this.ctx.createGain();
-    g.connect(filter);
-    this._env(g, t, dur * 0.08, dur * 0.1, dur * 0.55, dur * 0.2, vol, vol * 0.72);
-
-    chord.notes.forEach((n, i) => {
-      const o = this.ctx.createOscillator();
-      o.type = i === 0 ? 'sawtooth' : 'triangle';
-      o.frequency.value = midi(n);
-      o.detune.value = (i - 1) * 4;
-      o.connect(g);
-      o.start(t);
-      o.stop(t + dur + 0.1);
-    });
-  }
-
-  _bass(noteMidi, t, vol = 0.2) {
-    const dur = (60 / this.bpm) * 0.72;
-    const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    const f = this.ctx.createBiquadFilter();
-    f.type = 'lowpass';
-    f.frequency.value = 520;
-    osc.type = 'sawtooth';
-    osc.frequency.value = midi(noteMidi);
-    osc.connect(f);
-    f.connect(g);
-    g.connect(this.musicFilter);
-    this._env(g, t, 0.004, 0.04, dur * 0.55, dur * 0.22, vol, vol * 0.78);
-    osc.start(t);
-    osc.stop(t + dur + 0.05);
-  }
-
-  _arp(noteMidi, t, vol = 0.045) {
-    const dur = (60 / this.bpm / 2) * 0.62;
-    const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    const f = this.ctx.createBiquadFilter();
-    f.type = 'lowpass';
-    f.frequency.setValueAtTime(midi(noteMidi) * 3.2, t);
-    f.frequency.exponentialRampToValueAtTime(midi(noteMidi) * 1.4, t + dur);
-    osc.type = 'square';
-    osc.frequency.value = midi(noteMidi);
-    osc.connect(f);
-    f.connect(g);
-    this._toMusic(g);
-    this._env(g, t, 0.002, dur * 0.1, 0, dur * 0.35, vol, 0.001);
-    osc.start(t);
-    osc.stop(t + dur + 0.02);
-  }
-
-  _lead(noteMidi, t, vol = 0.1) {
-    const dur = (60 / this.bpm) * 0.68;
-    const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    const f = this.ctx.createBiquadFilter();
-    f.type = 'lowpass';
-    f.frequency.value = 6800;
-    osc.type = 'square';
-    osc.frequency.value = midi(noteMidi);
-    osc.connect(f);
-    f.connect(g);
-    this._toMusic(g);
-    this._env(g, t, 0.004, dur * 0.08, dur * 0.42, dur * 0.22, vol, vol * 0.62);
-    osc.start(t);
-    osc.stop(t + dur + 0.04);
-  }
-
-  _kick(t, vol = 0.55) {
-    const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(160, t);
-    osc.frequency.exponentialRampToValueAtTime(52, t + 0.1);
-    g.gain.setValueAtTime(vol * (this.profile.drumMix ?? 0.55), t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-    osc.connect(g);
-    g.connect(this.musicFilter);
-    osc.start(t);
-    osc.stop(t + 0.2);
-    this._sidechain(t, this.profile.sidechain ?? 0.14);
-  }
-
-  _snare(t, vol = 0.16) {
-    const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.12, this.ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length) ** 1.6;
-    const src = this.ctx.createBufferSource();
-    src.buffer = buf;
-    const f = this.ctx.createBiquadFilter();
-    f.type = 'bandpass';
-    f.frequency.value = 2200;
-    f.Q.value = 0.8;
-    const g = this.ctx.createGain();
-    g.gain.setValueAtTime(vol * (this.profile.drumMix ?? 0.55), t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
-    src.connect(f);
-    f.connect(g);
-    g.connect(this.musicFilter);
-    src.start(t);
-  }
-
-  _hat(t, vol = 0.045, open = false) {
-    const dur = open ? 0.07 : 0.028;
-    const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * dur, this.ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
-    const src = this.ctx.createBufferSource();
-    src.buffer = buf;
-    const f = this.ctx.createBiquadFilter();
-    f.type = 'highpass';
-    f.frequency.value = open ? 6000 : 8500;
-    const g = this.ctx.createGain();
-    g.gain.value = vol * (this.profile.drumMix ?? 0.55);
-    src.connect(f);
-    f.connect(g);
-    g.connect(this.musicFilter);
-    src.start(t);
-  }
-
-  _drumPattern(step, t, chord) {
-    const s = step % 16;
-    const kicks = this.profile.kicks ?? [0, 8];
-    const snares = this.profile.snares ?? [4, 12];
-    if (kicks.includes(s)) this._kick(t);
-    if (snares.includes(s)) this._snare(t);
-    if (s % 2 === 1) this._hat(t, 0.04);
-    if (s === 6 || s === 14) this._hat(t, 0.03, true);
-  }
-
-  _playStep(step, t) {
-    const bar = Math.floor(step / 16) % 4;
-    const s = step % 16;
-    const chord = this.prog[bar];
-    const p = this.profile;
-
-    if (s === 0) {
-      this._pad(chord, t, (60 / this.bpm) * 4, p.padMix ?? 0.07);
-    }
-
-    this._drumPattern(step, t, chord);
-
-    if (step % 2 === 0) {
-      this._arp(arpNoteAt(p, step, chord), t, p.arpMix ?? 0.045);
-    }
-
-    const lead = leadNoteAt(p, step);
-    if (lead != null) this._lead(lead, t, p.leadMix ?? 0.1);
-
-    const bass = bassNoteAt(p, step, chord);
-    if (bass != null) this._bass(bass, t, p.bassMix ?? 0.2);
+    [this._trackA, this._trackB].forEach((el) => el?.pause());
   }
 
   // ---------- SFX voices ----------
@@ -613,6 +471,12 @@ export class AudioManager {
     this._sweep(880, 180, 0.42, 'sine', 0.26);
     this._noise(0.14, 0.18, 200, 1600);
     this._sfx(55, 0.4, 'triangle', 0.12);
+    const active = this._activeTrackEl();
+    if (active && !active.paused) {
+      const base = active.volume;
+      active.volume = base * 0.55;
+      setTimeout(() => { if (active && !active.paused) active.volume = base; }, 420);
+    }
   }
 
   wowHit() {
@@ -639,8 +503,10 @@ export class AudioManager {
 
   setMusicVolume(pct) {
     const v = Math.max(0, Math.min(100, pct)) / 100;
-    if (this.musicGain) {
-      this.musicGain.gain.setTargetAtTime(this.musicOn ? 0.36 * v : 0, this.ctx?.currentTime ?? 0, 0.08);
+    this._musicVolScale = v;
+    const active = this._activeTrackEl();
+    if (active && !active.paused) {
+      active.volume = this._baseTrackVolume(this._currentTrackDef);
     }
   }
 

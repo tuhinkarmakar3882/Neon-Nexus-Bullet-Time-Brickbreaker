@@ -1,6 +1,7 @@
 /** Lightweight micro-animation helpers — keep motion snappy (<400ms). */
 
-import { fxCount, fxParticlesOn } from './FxBudget.js';
+import { fxCount, fxParticlesOn, fxShake, fxImpactScale, fxGlowScale } from './FxBudget.js';
+import { displayStyle } from './Typography.js';
 
 export function popScale(scene, target, opts = {}) {
   if (!target?.active) return;
@@ -77,14 +78,16 @@ export function pulseAlpha(scene, target, opts = {}) {
 
 export function rippleRing(scene, x, y, opts = {}) {
   const { tint = 0xffffff, scale = 2.8, dur = 480, depth = 32 } = opts;
+  const impact = fxImpactScale(scene, 1);
+  const ringScale = scale * impact;
   const ring = scene.add.image(x, y, 'ring').setDepth(depth).setTint(tint)
-    .setBlendMode('ADD').setScale(0.08).setAlpha(0.85);
+    .setBlendMode('ADD').setScale(0.08).setAlpha(0.85 * impact);
   const ring2 = scene.add.image(x, y, 'ring').setDepth(depth - 1).setTint(0xffffff)
-    .setBlendMode('ADD').setScale(0.05).setAlpha(0.35);
+    .setBlendMode('ADD').setScale(0.05).setAlpha(0.35 * impact);
   scene.tweens.add({
     targets: ring,
-    scaleX: scale,
-    scaleY: scale,
+    scaleX: ringScale,
+    scaleY: ringScale,
     alpha: 0,
     duration: dur,
     ease: 'Cubic.easeOut',
@@ -92,13 +95,16 @@ export function rippleRing(scene, x, y, opts = {}) {
   });
   scene.tweens.add({
     targets: ring2,
-    scaleX: scale * 0.65,
-    scaleY: scale * 0.65,
+    scaleX: ringScale * 0.65,
+    scaleY: ringScale * 0.65,
     alpha: 0,
     duration: dur * 0.85,
     ease: 'Cubic.easeOut',
     onComplete: () => ring2.destroy(),
   });
+  if (impact > 1.05 && fxParticlesOn(scene)) {
+    neonPulse(scene, x, y, tint, { scale: ringScale * 0.4, dur: dur * 0.7 });
+  }
 }
 
 /** Staggered entrance for brick panels / containers */
@@ -201,11 +207,12 @@ export function dustPuff(scene, x, y, tint = 0xffffff, count = 4) {
 /** Combined brick-break presentation — style tunes impact per element. */
 export function brickBreakFx(scene, x, y, color, opts = {}) {
   const { reduced = false, particles = true, style = 'normal' } = opts;
+  const impact = fxImpactScale(scene, 1);
   if (!particles) {
-    rippleRing(scene, x, y, { tint: color, scale: 2, dur: 280 });
+    rippleRing(scene, x, y, { tint: color, scale: 2 * impact, dur: 280 });
     return;
   }
-  const scale = reduced ? 0.65 : 1;
+  const scale = (reduced ? 0.65 : 1) * impact;
   switch (style) {
     case 'explosive':
       explosiveImpactFx(scene, x, y, color, {
@@ -334,13 +341,72 @@ export function powerPickupFx(scene, key, x, y, def = {}) {
 }
 
 export function microShake(scene, intensity = 0.004, dur = 80) {
-  scene.cameras.main.shake(dur, intensity);
+  const scaled = fxShake(scene, intensity);
+  if (scaled <= 0.0005) return;
+  scene.cameras.main.shake(dur, scaled);
+}
+
+/** Soft expanding glow halo for high-tier impacts. */
+export function neonPulse(scene, x, y, tint = 0xffffff, opts = {}) {
+  if (!fxParticlesOn(scene)) return;
+  const { scale = 1.8, dur = 320, depth = 30 } = opts;
+  const glow = scene.add.image(x, y, 'soft').setDepth(depth).setTint(tint)
+    .setBlendMode('ADD').setAlpha(0.35 * fxGlowScale(scene, 1)).setScale(0.06);
+  scene.tweens.add({
+    targets: glow,
+    scale: scale,
+    alpha: 0,
+    duration: dur,
+    ease: 'Cubic.easeOut',
+    onComplete: () => glow.destroy(),
+  });
+}
+
+/** Directional shockwave arc from paddle / wall ricochet. */
+export function shockwaveArc(scene, x, y, angle, tint = 0xffffff, opts = {}) {
+  if (!fxParticlesOn(scene)) return;
+  const { spread = 0.9, dur = 260, depth = 31 } = opts;
+  const g = scene.add.graphics().setDepth(depth).setBlendMode('ADD');
+  g.lineStyle(2, tint, 0.7 * fxGlowScale(scene, 1));
+  g.beginPath();
+  g.arc(x, y, 8, angle - spread, angle + spread, false);
+  g.strokePath();
+  scene.tweens.add({
+    targets: g,
+    alpha: 0,
+    duration: dur,
+    ease: 'Quad.easeOut',
+    onUpdate: () => {
+      g.clear();
+      const r = 8 + (1 - g.alpha) * 42 * fxImpactScale(scene, 1);
+      g.lineStyle(2, tint, g.alpha * 0.7);
+      g.beginPath();
+      g.arc(x, y, r, angle - spread, angle + spread, false);
+      g.strokePath();
+    },
+    onComplete: () => g.destroy(),
+  });
+}
+
+/** Combo milestone flare — stacked rings scaling outward. */
+export function comboFlare(scene, x, y, color, combo = 8) {
+  if (!fxParticlesOn(scene) || combo < 8) return;
+  const rings = Math.min(3, 1 + Math.floor(combo / 12));
+  for (let i = 0; i < rings; i++) {
+    rippleRing(scene, x, y - i * 6, {
+      tint: color,
+      scale: 1.8 + i * 0.6,
+      dur: 380 + i * 80,
+      depth: 34 + i,
+    });
+  }
+  hitSpark(scene, x, y, { tint: color, count: 4 + rings * 3, spread: 28 + rings * 6 });
 }
 
 /** Combo / milestone callout with punchy scale-in */
 export function surgeText(scene, x, y, msg, color, size = 36) {
   const t = scene.add.text(x, y, msg, {
-    fontFamily: 'Orbitron, monospace', fontSize: size + 'px', fontStyle: '900', color,
+    ...displayStyle(size, color, { fontStyle: '700' }),
   }).setOrigin(0.5).setDepth(42).setScale(0.3).setAlpha(0);
   t.setShadow(0, 0, color, 16, true, true);
   scene.tweens.add({ targets: t, scale: 1.15, alpha: 1, duration: 140, ease: 'Back.easeOut' });
@@ -426,6 +492,7 @@ export function launchBurst(scene, x, y, tint = 0xffffff) {
   rippleRing(scene, x, y, { tint, scale: 2.2, dur: 320, depth: 24 });
   hitSpark(scene, x, y, { tint, count: 6, spread: 28 });
   dustPuff(scene, x, y, tint, 3);
+  shockwaveArc(scene, x, y, -Math.PI / 2, tint, { spread: 1.1 });
 }
 
 /** Gnome / entity pop-in */
@@ -484,8 +551,7 @@ export function spinIn(scene, target, opts = {}) {
 export function tierPulse(scene, x, y, rating, color) {
   const stars = '▮'.repeat(Math.min(rating, 10));
   const t = scene.add.text(x, y, stars, {
-    fontFamily: 'Orbitron, monospace', fontSize: '22px', fontStyle: '900', color,
-    letterSpacing: 4,
+    ...displayStyle(22, color, { fontStyle: '700', letterSpacing: 4 }),
   }).setOrigin(0.5).setDepth(41).setAlpha(0).setScale(0.6);
   scene.tweens.add({ targets: t, alpha: 0.9, scale: 1, duration: 220, ease: 'Back.easeOut' });
   scene.tweens.add({

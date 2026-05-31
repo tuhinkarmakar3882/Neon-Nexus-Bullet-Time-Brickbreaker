@@ -60,8 +60,8 @@ export function setBulletTimeIntensity(scene, intensity) {
   g.fillStyle(0x6a9cff, 0.07 * intensity * boost);
   g.fillRect(0, 0, W, H);
 
-  const edge = Math.round(90 + 58 * intensity * boost);
-  const edgeA = 0.42 * intensity * boost;
+  const edge = Math.round(48 + 36 * intensity * boost);
+  const edgeA = 0.2 * intensity * boost;
   g.fillStyle(0x04060e, edgeA);
   g.fillRect(0, 0, W, edge);
   g.fillRect(0, H - edge, W, edge);

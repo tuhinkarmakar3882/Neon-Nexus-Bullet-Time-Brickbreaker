@@ -8,7 +8,7 @@ import { Monetization } from '../systems/Monetization.js';
 import { InputRouter } from '../systems/InputRouter.js';
 import { clamp } from '../utils/Helpers.js';
 import { audio } from '../systems/AudioManager.js';
-import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
+import { fitTextWidth, orbitronStyle, displayStyle, bodyStyle, uiPx } from '../utils/Typography.js';
 
 export class ShopScene extends Phaser.Scene {
   constructor() { super(SCENES.SHOP); }
@@ -187,10 +187,7 @@ export class ShopScene extends Phaser.Scene {
 
     if (equipped) {
       parts.push(this.add.text(-rowW / 2 + 52, 11, 'EQUIPPED', {
-        fontFamily: 'Orbitron, monospace',
-        fontSize: '10px',
-        color: cssHex(PAL.accent2),
-        letterSpacing: '0.12em',
+        ...displayStyle(10, cssHex(PAL.accent2), { letterSpacing: '0.12em', fontStyle: '600' }),
       }).setOrigin(0, 0.5));
     }
 
@@ -211,10 +208,9 @@ export class ShopScene extends Phaser.Scene {
     }
 
     parts.push(this.add.text(rowW / 2 - 16, 0, actionLabel, {
-      fontFamily: 'Orbitron, monospace',
-      fontSize: equipped ? '18px' : actionLabel === '★ PREMIUM' ? '10px' : '13px',
-      color: actionColor,
-      fontStyle: owned && !equipped ? 'bold' : 'normal',
+      ...displayStyle(equipped ? 18 : actionLabel === '★ PREMIUM' ? 10 : 13, actionColor, {
+        fontStyle: owned && !equipped ? '700' : '500',
+      }),
     }).setOrigin(1, 0.5));
 
     row.add(parts);

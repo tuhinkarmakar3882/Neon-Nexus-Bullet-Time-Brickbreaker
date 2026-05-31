@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://example.com/neon-nexus/sitemap.xml
+Sitemap: /sitemap.xml

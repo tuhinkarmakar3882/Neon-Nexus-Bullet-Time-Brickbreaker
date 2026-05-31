@@ -13,7 +13,8 @@ import { syncSceneCameras } from '../systems/LayoutManager.js';
 import { requestGameFullscreen } from '../systems/Fullscreen.js';
 import { resolveSettings } from '../config/VfxQuality.js';
 import { shareProgressScreenshot } from '../systems/ShareProgress.js';
-import { orbitronStyle, uiPx, wrapWidth } from '../utils/Typography.js';
+import { displayStyle, bodyStyle, orbitronStyle, uiPx, wrapWidth } from '../utils/Typography.js';
+import { canOfferInstall, onInstallPromptReady, triggerInstallPrompt } from '../systems/InstallPrompt.js';
 
 const AD_BANNER_H = 50;
 
@@ -27,8 +28,8 @@ export class MenuScene extends Phaser.Scene {
     const H = GAME.HEIGHT;
     const portrait = GAME.IS_PORTRAIT;
     const settings = resolveSettings(SaveManager.loadSettings());
-    addCameraFx(this, { bloom: settings.bloom, scanlines: settings.scanlines });
-    this.bg = new Background(this, PAL.accent);
+    addCameraFx(this, settings);
+    this.bg = new Background(this, PAL.accent, { preset: settings });
 
     const cx = W / 2;
     const bottomPad = GAME.SAFE_BOTTOM + AD_BANNER_H + 12;
@@ -48,19 +49,19 @@ export class MenuScene extends Phaser.Scene {
 
     const titleSize = clamp(Math.round(W * (portrait ? 0.056 : 0.074)), 34, 110);
     const title = this.add.text(cx, y, 'NEON NEXUS', {
-      fontFamily: 'Orbitron, monospace', fontSize: titleSize + 'px', fontStyle: '900', color: cssHex(PAL.accent), align: 'center',
+      ...displayStyle(titleSize, cssHex(PAL.accent), { fontStyle: '700', align: 'center' }),
     }).setOrigin(0.5, 0).setDepth(1001);
     title.setShadow(0, 0, cssHex(PAL.accent), 22, true, true);
     y += titleSize + (portrait ? 6 : 10);
 
     const subSize = clamp(Math.round(W * 0.022), 11, 22);
     this.add.text(cx, y, 'JARDINAINS!  GARDEN SIEGE', {
-      fontFamily: 'Syne, Orbitron, monospace',
-      fontSize: subSize + 'px',
-      fontStyle: '700',
-      color: cssHex(PAL.accent2),
-      align: 'center',
-      wordWrap: { width: panel.cardW - 32 },
+      ...bodyStyle(subSize, cssHex(PAL.accent2), {
+        fontStyle: '600',
+        letterSpacing: '0.14em',
+        align: 'center',
+        wordWrap: { width: panel.cardW - 32 },
+      }),
     }).setOrigin(0.5, 0).setDepth(1001).setShadow(0, 0, cssHex(PAL.accent2), 14, true, true);
     y += subSize * (portrait ? 2.4 : 2) + 8;
 
@@ -91,6 +92,7 @@ export class MenuScene extends Phaser.Scene {
         height: btnPrimary,
         fontSize: portrait ? '26px' : '32px',
         color: PAL.accent,
+        activateOnDown: true,
       });
       items.push({
         label: 'NEW GAME',
@@ -98,6 +100,7 @@ export class MenuScene extends Phaser.Scene {
         height: btnSecondary,
         fontSize: portrait ? '20px' : '24px',
         primary: false,
+        activateOnDown: true,
       });
     } else {
       items.push({
@@ -106,6 +109,7 @@ export class MenuScene extends Phaser.Scene {
         height: btnPrimary + 6,
         fontSize: portrait ? '30px' : '36px',
         color: PAL.accent,
+        activateOnDown: true,
       });
     }
 
@@ -122,6 +126,17 @@ export class MenuScene extends Phaser.Scene {
         color: PAL.accent3,
       },
     );
+
+    if (canOfferInstall()) {
+      items.splice(items.length - 1, 0, {
+        label: '⬇ INSTALL APP',
+        onClick: () => this.runInstallPrompt(),
+        height: btnShare,
+        fontSize: portrait ? '14px' : '15px',
+        primary: false,
+        color: PAL.accent3,
+      });
+    }
 
     const stackStart = y + 6;
     const maxBottom = H - bottomPad - 52;
@@ -149,11 +164,35 @@ export class MenuScene extends Phaser.Scene {
       ...orbitronStyle(12, '#5f7088'),
     }).setOrigin(0.5, 1).setDepth(1001);
 
+    this._setupInstallPromptListener();
+
     staggerButtons(this, this.buttons);
     this.tweens.add({ targets: title, scaleX: 1.025, scaleY: 1.025, yoyo: true, repeat: -1, duration: 2000, ease: 'Sine.easeInOut' });
     Monetization.showBanner();
-    this.events.once('shutdown', () => Monetization.hideBanner());
+    this.events.once('shutdown', () => {
+      this._launchingGame = false;
+      Monetization.hideBanner();
+    });
     this.input.once('pointerdown', () => this.unlockAudio());
+  }
+
+  _setupInstallPromptListener() {
+    if (typeof window === 'undefined') return;
+    this._offInstallReady = onInstallPromptReady((ev) => {
+      if (ev && canOfferInstall() && this.scene.isActive()) this.scene.restart();
+    });
+    this.events.once('shutdown', () => {
+      this._offInstallReady?.();
+    });
+  }
+
+  async runInstallPrompt() {
+    const { outcome } = await triggerInstallPrompt();
+    if (outcome === 'accepted') {
+      this.shareHint?.setText('App installed — enjoy!');
+    } else if (outcome === 'unavailable') {
+      this.shareHint?.setText('Install unavailable — use browser menu → Add to Home Screen');
+    }
   }
 
   async shareProgress() {
@@ -180,6 +219,7 @@ export class MenuScene extends Phaser.Scene {
     const s = SaveManager.loadSettings();
     audio.setSoundEnabled(s.sound); audio.setMusicEnabled(s.music);
     audio.setSfxVolume(s.sfxVolume ?? 100); audio.setMusicVolume(s.musicVolume ?? 100);
+    audio.applyMusicSettings({ musicVariant: s.musicVariant, musicVolume: s.musicVolume });
     audio.setMenuMusic();
   }
 
@@ -189,10 +229,13 @@ export class MenuScene extends Phaser.Scene {
   }
 
   startGame(resume = null, extra = {}) {
+    if (this._launchingGame) return;
+    this._launchingGame = true;
     this.unlockAudio();
     requestGameFullscreen();
     this.cameras.main.fadeOut(280, 255, 255, 255);
     this.cameras.main.once('camerafadeoutcomplete', () => {
+      this._launchingGame = false;
       if (resume) this.scene.start(SCENES.GAME, { resume });
       else this.scene.start(SCENES.GAME, { newGame: true, ...extra });
     });

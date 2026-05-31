@@ -8,6 +8,7 @@ import {
   resolveAppId,
 } from '../config/AdsConfig.js';
 import { applyBannerPlaceholder, hideWebBannerBar, showWebBannerBar } from './AdBannerSlot.js';
+import { launchParallelScene } from './SceneLaunch.js';
 
 let AdMobModule = null;
 
@@ -291,7 +292,7 @@ export function createGoogleAdProvider(game) {
     showInterstitialOverlay: (g = game) => new Promise((resolve) => {
       g.events.once('ad:break:done', resolve);
       if (g.scene.isActive(SCENES.AD_BREAK)) g.scene.stop(SCENES.AD_BREAK);
-      g.scene.launch(SCENES.AD_BREAK, { provider: 'google' });
+      launchParallelScene(g, SCENES.AD_BREAK, { provider: 'google' });
     }),
   };
 }

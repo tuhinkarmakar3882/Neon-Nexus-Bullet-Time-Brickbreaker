@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Version** | 2.0.0 |
-| **Engine** | Phaser 3.90.0 |
-| **Bundler** | Vite 7 |
+| **Engine** | [Phaser 4.1.0](https://phaser.io/v401) (WebGL \| Web Audio) |
+| **Bundler** | Vite 8 |
 | **Platforms** | Web (PWA), Capacitor (iOS/Android) |
 | **License** | MIT |
 
@@ -230,6 +230,7 @@ Scene keys are defined in `src/config/Constants.js` → `SCENES`.
 | `LevelComplete` | LevelCompleteScene | `scenes/LevelCompleteScene.js` | Stars, treasury, 2× bonus, next level |
 | `Codex` | CodexScene | `scenes/CodexScene.js` | How-to-play, powers, gnomes, **journal** tab |
 | `Shop` | ShopScene | `scenes/ShopScene.js` | Cosmetics + IAP |
+| `Purchase` | PurchaseScene | `scenes/PurchaseScene.js` | Demo checkout modal (launched over Shop/Settings) |
 | `AdBreak` | AdBreakScene | `scenes/AdBreakScene.js` | Interstitial overlay |
 
 ### Navigation diagram
@@ -267,7 +268,27 @@ stateDiagram-v2
   Codex --> Pause: BACK (from Pause)
 ```
 
-**Parallel scenes**: When `Game` runs, `HUD` is launched alongside it. Overlay scenes (`Pause`, `Settings`, etc.) pause `Game` + `HUD` via `InputRouter`.
+**Parallel scenes**: When `Game` runs, `HUD` is launched alongside it. Overlay scenes (`Pause`, `Settings`, etc.) pause `Game` + `HUD` via `InputRouter`. `Purchase` is a **sub-modal** (not an overlay in `InputRouter`) — it runs on top of Shop/Settings without changing the overlay stack.
+
+### Phaser 4 scene API
+
+This project targets **[Phaser 4.1.0](https://phaser.io/v401)**. Scene stacking differs from Phaser 3:
+
+| Context | Phaser 3 | Phaser 4 |
+|---------|----------|----------|
+| From inside a Scene | `this.scene.launch(key, data)` | Same — `ScenePlugin.launch()` |
+| From `game.scene` (SceneManager) | `game.scene.launch(key, data)` | **`game.scene.run(key, data)`** — `launch` is not on the manager |
+
+Code outside an active Scene (e.g. `DemoAdProvider`, viewport relayout in `main.js`) must use [`SceneLaunch.js`](../src/systems/SceneLaunch.js) → `launchParallelScene(game, key, data)`, which calls `run()` on Phaser 4.
+
+```js
+// ✅ Inside MenuScene, GameScene, etc.
+this.scene.launch(SCENES.SHOP, { from: SCENES.MENU });
+
+// ✅ From systems / providers (no ScenePlugin)
+import { launchParallelScene } from './SceneLaunch.js';
+launchParallelScene(game, SCENES.PURCHASE, { productId, from });
+```
 
 ---
 
@@ -316,7 +337,7 @@ All under `src/objects/`. Entities own Phaser display objects and minimal state;
 |------|-------|---------|
 | `Background.js` | Background | Gradient, stars, nebula, grid parallax |
 | `Paddle.js` | Paddle | Nine-slice Vaus; sticky, cannon, stun, width penalty |
-| `Ball.js` | Ball | Stuck/launched; elements; bounce speed; trail particles |
+| `Ball.js` | Ball | Stuck/launched; elements; bounce speed; trail particles; **rim + identity tint** |
 | `Brick.js` | Brick | Typed HP, cracks, frost/burn FX, moving, portals |
 | `Bullet.js` | Bullet | Player projectiles: laser, fire, ice, shock, napalm |
 | `PowerUp.js` | PowerUp | Falling capsule, Lucide icon, polarity styling |
@@ -469,6 +490,8 @@ Custom implementation in `GameScene` — **no Phaser Physics plugin**.
 | Floor | Life lost; **Shield** gives one bounce then clears |
 | Steel/gold | Normal ball clangs + bounces; electric/nuke/laser/shock break |
 | Stuck recovery | 5s stagnant samples → micro angle nudge (`STUCK_ANGLE_NUDGE`) |
+| **Readability** | Dark `ball-rim` outline + brighter default halo; each ball gets an **identity tint** on ring/trail when unmodded (white, sky, gold, violet, …) so multi-ball chaos stays trackable |
+| **Layers** | shadow → trail → halo → ring → rim → core (`Ball.js`) |
 
 ### 11.2 Ball modifiers (on brick hit)
 
@@ -494,9 +517,20 @@ Custom implementation in `GameScene` — **no Phaser Physics plugin**.
 `envSpeedMult()` returns 1.5 (SpeedUp), 0.5 (SlowDown), or 1.  
 Applied to ball motion, enemies, gnome throw rate, and hazard gravity scaling.
 
-### 11.5 Variable gravity
+### 11.6 Portal teleports
 
-Per-level `gravityScale` from `LevelGenerator` (0.65–1.35) affects falling gnomes, projectiles, and power-up drop speed.
+Linked portal bricks (`LevelGenerator.placePortals`, level ≥8) teleport balls and falling gnomes to their partner cell.
+
+| Rule | Implementation |
+|------|----------------|
+| Entry detection | AABB overlap in `ballBricks()` or `Jardinain.checkPortal()` |
+| Exit placement | `portalExitPosition()` — spawn **outside** exit brick along tunnel vector (entry→exit) or current velocity, not at brick center |
+| Anti ping-pong | `PORTAL_GRACE_MS` (220ms) per entity; ignores re-entry until grace expires |
+| Handler | `GameScene.tryBallPortal()` / `teleportEntityToPortal()` — single code path (no duplicate `checkBallPortal`) |
+
+Previously, teleporting to the exit brick center caused immediate re-trigger and infinite portal loops.
+
+### 11.7 Variable gravity
 
 ---
 
@@ -625,7 +659,7 @@ Knockout triggers automatically at **3** paddle juggles (`KNOCKOUT_JUGGLES`). El
 | `boss` | 3 | Boss levels; tint shifts per HP |
 | `gold` | ∞ | Indestructible decorative |
 | `steel` | ∞ | Needs laser/electric/explosive/shock |
-| `portal` | 1 | Linked pair; teleports ball/gnome |
+| `portal` | 1 | Linked pair; teleports ball/gnome (with exit offset + grace cooldown) |
 | `shifting` | 1 | Horizontal sine glide (`moving: true`) |
 | `mirror` | 1 | Reflects ball angle |
 | `moss` | 2 | Slows ball on contact |
@@ -643,8 +677,8 @@ Knockout triggers automatically at **3** paddle juggles (`KNOCKOUT_JUGGLES`). El
 | Seed | `levelSeed = (campaignSeed + level × 997) >>> 0` |
 | Patterns | 15+ layouts including fortress boss arena |
 | Boss | Every **5** levels → `fortress` pattern with gold/steel walls |
-| Goals | ~38% from level 3+ via `LevelGoals.js` |
-| Portals | Level ≥10, paired cells |
+| Goals | **~90% Clear all** from level 8+; rare bonus goals; boss 85% clear (`LevelGoals.js`) |
+| Portals | Level ≥8, paired cells (min distance apart) |
 | Gravity | Bands: 0.65×–1.35× by level band |
 | Mutators | Up to 2 from level 31+ (`Mutators.js`); seasonal every 7 levels |
 
@@ -947,18 +981,20 @@ Category stingers (`powerCategory`) differentiate paddle vs ball vs wild vs env 
 
 | Package | Version | Use |
 |---------|---------|-----|
-| phaser | 3.90.0 | Game engine |
-| lucide | ^0.511.0 | Power-up icon paths |
-| @capacitor/core | ^7.0.0 | Native platform API |
-| @capacitor/cli | ^7.0.0 | Capacitor CLI |
-| @capacitor/android | ^7.0.0 | Android shell |
-| @capacitor/ios | ^7.0.0 | iOS shell |
+| phaser | 4.1.0 | Game engine — [v4.1 docs](https://phaser.io/v401) |
+| lucide | ^1.17.0 | Power-up icon paths |
+| stripe | ^22.2.0 | Serverless Stripe webhook / fulfill APIs |
+| @capacitor/core | ^8.3.4 | Native platform API |
+| @capacitor/cli | ^8.3.4 | Capacitor CLI |
+| @capacitor/android | ^8.3.4 | Android shell |
+| @capacitor/ios | ^8.3.4 | iOS shell |
+| @revenuecat/purchases-capacitor | ^13.1.4 | Native IAP (Capacitor 8) |
 
 ### Dev
 
 | Package | Version | Use |
 |---------|---------|-----|
-| vite | ^7.0.0 | Bundler |
+| vite | ^8.0.14 | Bundler |
 | puppeteer-core | ^25.1.0 | Smoke tests |
 
 No unit test framework — validation is smoke + manual play.
@@ -1134,6 +1170,29 @@ flowchart LR
   G -->|utility| J[stack on paddle/env]
   F --> K[emitPowers + saveRun]
 ```
+
+---
+
+## Production systems (v2.0.0 release)
+
+| Module | Path | Role |
+|--------|------|------|
+| **PlayBilling** | `src/systems/PlayBilling.js` | RevenueCat native IAP + Stripe web checkout redirect |
+| **SceneLaunch** | `src/systems/SceneLaunch.js` | Phaser 4 `game.scene.run()` wrapper for parallel scenes from providers |
+| **NativeBridge** | `src/systems/NativeBridge.js` | Capacitor back button, audio pause/resume, splash, status bar |
+| **MusicCatalog** | `src/config/MusicCatalog.js` | Pixabay ambient loop URLs per biome + menu |
+| **TrackPlayer** | `src/systems/AudioManager.js` | HTMLAudio crossfade; Pixabay loops per level |
+| **WebUnlock** | `src/systems/WebUnlock.js` | Stripe session fulfill + unlock code redeem (web PWA) |
+| **createAdProvider** | `src/systems/createAdProvider.js` | Freemium ad provider selection + prod demo warning |
+| **PWA** | `vite-plugin-pwa`, `vercel.json`, `netlify.toml` | Workbox precache, deploy configs |
+| **Stripe APIs** | `api/*`, `netlify/functions/*`, `server/unlock-crypto.js` | Webhook, fulfill-session, redeem-unlock |
+| **Legal** | `public/privacy.html`, `public/terms.html` | Play Store + PWA privacy URLs |
+
+Boot sequence (`main.js`): `warnProductionConfig()` → `audio.preloadMusicCatalog()` → Phaser → `Monetization.init()` → `initNativeBridge()` → `syncStoreEntitlements()`.
+
+Music flow: `MenuScene` / `GameScene.setLevelMusic` → `AudioManager._playPixabayTrack` → Pixabay HTMLAudio crossfade (retries alternate URLs from pool on failure). No procedural music.
+
+See also: [`docs/PRODUCTION_PLAN.md`](PRODUCTION_PLAN.md), [`docs/RELEASE.md`](RELEASE.md), [`docs/PWA.md`](PWA.md), [`docs/IAP.md`](IAP.md), [`docs/MUSIC.md`](MUSIC.md).
 
 ---
 

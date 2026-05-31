@@ -1,33 +1,33 @@
-// Twilight Garden palette — warm dusk tones, moss & terracotta accents (Jardinains theme).
+// Neon Nexus palette — teal / magenta / sky on deep space (iconic arcade neon).
 
 export const PAL = {
-  bgTop: '#1a0f24',
-  bgMid: '#120818',
-  bgBot: '#08050c',
+  bgTop: '#0a0f1e',
+  bgMid: '#0a0d1c',
+  bgBot: '#05060c',
 
-  accent: 0xe8b86d,     // golden lantern
-  accent2: 0xd45d8c,    // rose bloom
-  accent3: 0x7eb87a,    // sage / moss
-  info: 0x9b8cff,       // twilight violet
+  accent: 0x2fe6c7,     // neon teal — primary UI chrome
+  accent2: 0xff4fa3,    // hot magenta
+  accent3: 0xffb24d,    // amber — combo / rewards (not primary chrome)
+  info: 0x5aa0ff,       // sky blue
 
-  text: '#f5ebe0',
-  textMuted: '#a898b0',
-  textDark: '#1a0f12',
-  danger: 0xff6b7a,
+  text: '#e8eefc',
+  textMuted: '#8b9bb4',
+  textDark: '#05060a',
+  danger: 0xff5a6e,
 
-  powerPos: 0x7eb87a,
-  powerNeg: 0xff6b7a,
-  powerWild: 0xe8b86d,
+  powerPos: 0x2fe6c7,
+  powerNeg: 0xff5a6e,
+  powerWild: 0xffb24d,
   powerFire: 0xff8a5a,
   powerFrost: 0x7ec8e8,
-  powerCannon: 0xc9b8a8,
+  powerCannon: 0x8b9bb4,
 
-  brickRows: [0xc4785a, 0x7eb87a, 0x9b8cff, 0xe8b86d, 0xd45d8c, 0x6aab8a, 0xb8886a],
-  silver: 0xc9c0b8,
-  gold: 0xf0c878,
+  brickRows: [0x8a7bff, 0xff6f9c, 0x2fd9c7, 0xffc04d, 0x5aa0ff, 0x9ad24d, 0xff8a5a],
+  silver: 0xc2cad8,
+  gold: 0xffd770,
   steel: 0x8899aa,
-  explosive: 0xff7040,
-  nest: 0x8b7fd4,
+  explosive: 0xff7a3d,
+  nest: 0x9b8cff,
 };
 
 export const cssHex = (n) => '#' + (n & 0xffffff).toString(16).padStart(6, '0');

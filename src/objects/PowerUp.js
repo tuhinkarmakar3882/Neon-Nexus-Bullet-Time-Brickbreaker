@@ -5,7 +5,7 @@ import {
 import { PAL } from '../config/Palette.js';
 import { iconTextureKey } from '../utils/IconTextures.js';
 import { rand } from '../utils/Helpers.js';
-import { fitTextWidth } from '../utils/Typography.js';
+import { fitTextWidth, displayStyle } from '../utils/Typography.js';
 
 /** Falling seed capsule — Arkanoid-style letter on a color-coded pill. */
 export class PowerUp {
@@ -55,10 +55,7 @@ export class PowerUp {
     const letterColor = powerBadgeTextColor(this.polarity);
     const fontSize = Math.max(9, Math.round(this.h * 0.28));
     this.letter = scene.add.text(0, 1, this.label, {
-      fontFamily: 'Orbitron, monospace',
-      fontSize: fontSize + 'px',
-      fontStyle: '900',
-      color: letterColor,
+      ...displayStyle(fontSize, letterColor, { fontStyle: '700' }),
     }).setOrigin(0.5);
     fitTextWidth(this.letter, this.w * 0.72, 8);
     if (letterColor === '#ffffff') {

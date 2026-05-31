@@ -93,25 +93,27 @@ Reduce, SlowPaddle, Flip, HeavyBall, FogSight, GnomeRush, etc.
 
 | State | Action |
 |-------|--------|
-| Partial fill | Double-tap → spend meter for brief slow-mo |
+| Partial fill (≥25%) | Double-tap meter → spend for **boosted Nexus slow-mo** (~0.12× time scale, ~1–1.5s, stronger FX than incidental bullet time) |
 | Full meter | Auto-opens **3-choice positive power draft** (tap meter or double-tap to reopen) |
 
-Settings toggle can disable bullet-time FX. Active slow-mo shows **SLOW-MO** on the right meter.
+Settings toggle can disable bullet-time FX. Active slow-mo shows **SLOW-MO** or **NEXUS** on the right meter.
 
 ---
 
-## 6. Level goals (alternate win conditions)
+## 6. Level goals
 
-Picked procedurally (~38% chance from level 3+). Fortress levels may use **Boss Perch**.
+**Primary win condition:** destroy all destructible bricks (`canCompleteLevel()`).
 
-| Goal | Win condition |
-|------|----------------|
-| Clear all | Default — destroy destructibles |
-| Rescue | ≥2 gnome knockouts before clear |
-| Silence | No pot may hit paddle |
-| Nest hunt | Destroy all nest bricks |
-| Escort | Protect lantern brick until clear |
-| Boss perch | Knock fortress gnome off perch, then clear |
+Bonus goals appear rarely (~10% from level 8+) for variety; fortress levels may use **Boss Perch** (~15%).
+
+| Goal | Notes |
+|------|-------|
+| **Clear all** | Default — always levels 1–7; ~90% overall |
+| Rescue | ≥2 gnome knockouts (bonus) |
+| Silence | No pot may hit paddle (bonus) |
+| Nest hunt | Destroy all nest bricks (bonus) |
+| Escort | Protect lantern brick (bonus) |
+| Boss perch | Knock fortress gnome off perch (boss variant) |
 
 Goal + mutator text appears under the top HUD bar; mutator intro card at level start.
 
@@ -135,7 +137,6 @@ FastBall · LowVisibility (Mist) · DoubleJardinains · NarrowArena · WideArena
 |--------|------|
 | **3-star levels** | 1★ for clear; +1★ par time (`90s + 8s × level`); +1★ no lives lost; +1★ ≥1 knockout (max 3★) |
 | **Treasury** | Stars ×50, combo bank milestones, shop currency |
-| **Treasury** | Stars ×50, combo bank milestones, shop currency |
 | **Gnome contracts** | Optional per-level bonus — no pot hits, elite knockout, juggle chain (`GnomeContracts.js`) |
 | **Codex journal** | Stats + achievements |
 
@@ -145,25 +146,46 @@ Persistence: `MetaProgress.js` → `localStorage['nn_meta_v1']`.
 
 ## 9. Brick specials (tactical)
 
-Beyond normal/silver/reinforced: explosive, invisible, nest, boss, gold, steel, portal, shifting, **mirror**, **moss**, **beehive**, **seedpod**, **linked**, **hostage**.
+Beyond normal/silver/reinforced: explosive, invisible, nest, boss, gold, steel, **portal**, shifting, **mirror**, **moss**, **beehive**, **seedpod**, **linked**, **hostage**.
+
+| Special | Behavior |
+|---------|----------|
+| **Portal** | Linked pair (level ≥8). Teleports ball/gnome to partner; exit spawns **outside** the exit brick with a short grace cooldown to prevent ping-pong loops |
+| Mirror | Reflects ball angle |
+| Moss | Slows ball on contact |
 
 Fortress every **5** levels.
 
 ---
 
-## 10. HUD layout
+## 10. Ball readability
 
-| Zone | Content |
-|------|---------|
-| **Top bar** | Score, level, bricks, lives, pause, active power chips |
-| **Left vertical meter** | Gnome streak (fill bottom→top), CASH gambit button |
-| **Right vertical meter** | Nexus meter, treasury, slow-mo label |
-| **Below bar** | Goal line, mutator line |
-| **Immersive mode** | Settings toggle hides chrome; tap top to peek |
+Chaos is intentional — readability is handled in `Ball.js`:
+
+| Feature | Purpose |
+|---------|---------|
+| **Dark rim** (`ball-rim`) | High-contrast outline on busy brick fields |
+| **Brighter default halo** | Unmodded ball stays visible without power tint |
+| **Identity tints** | Each ball gets a distinct ring/trail hue (white, sky, gold, violet, …) when several are on screen |
+| **Power tint** | Active mods override identity with category color (frost, electric, mega, etc.) |
 
 ---
 
-## 11. Monetization (cosmetic-first)
+## 11. HUD layout
+
+| Zone | Content |
+|------|---------|
+| **Top bar** | Score, level, bricks, lives, pause, gems/treasury |
+| **Left vertical meter** | Gnome streak (fill bottom→top), CASH gambit button |
+| **Right vertical meter** | Nexus meter, slow-mo / NEXUS label |
+| **Below bar** | Goal line, mutator line |
+| **Immersive mode** | Settings toggle hides chrome; tap top to peek |
+
+Active powers are read from **power-up pills in the arena** (not HUD chips).
+
+---
+
+## 12. Monetization (cosmetic-first)
 
 Demo ad provider in dev; swap for AdMob/AdSense in production.
 
@@ -177,13 +199,13 @@ Demo ad provider in dev; swap for AdMob/AdSense in production.
 
 ---
 
-## 12. Settings (persisted)
+## 13. Settings (persisted)
 
 Sound, music, volumes, bullet time, flash text, particles, scanlines, reduced FX, haptics, **immersive HUD**, remove ads IAP.
 
 ---
 
-## 13. VFX, sound & animation
+## 14. VFX, sound & animation
 
 All audio is **Web Audio synthesis** (`AudioManager.js`). All motion is **tween + particle** based — no sprite sheets.
 
@@ -198,11 +220,11 @@ All audio is **Web Audio synthesis** (`AudioManager.js`). All motion is **tween 
 | Juggle chain | `juggle(n)` — pitch climbs with depth |
 | Knockout | `wowHit()` + `explode()` |
 | Near-miss | `clutch()` + CLUTCH! callout |
-| Nexus / slow-mo | `bulletTime()` wash |
+| Nexus / slow-mo | `bulletTime()` wash; player Nexus spend uses stronger slow-mo scale |
 | Boss clear | `fortressShatter()` + arena shard burst |
 | Level clear | 5-note `levelUp()` arpeggio |
 
-Background music: Am–F–C–G loop at 102 BPM with pad, bass, arp, and light drums.
+Background music: **Pixabay ambient loops** ([`MusicCatalog.js`](../src/config/MusicCatalog.js)) — rotates per level/biome. SFX remain procedural Web Audio in [`AudioManager.js`](../src/systems/AudioManager.js).
 
 ### Visual highlights
 
@@ -223,7 +245,7 @@ Full catalog: [`ARCHITECTURE.md` §18](./ARCHITECTURE.md#18-audio-vfx--animation
 
 ---
 
-## 14. Legacy prototype
+## 15. Legacy prototype
 
 `docs/GAME_MECHANICS.md` previously described the original 23-power canvas game. Fixed differences in v2:
 

@@ -23,7 +23,7 @@
   <meta property="og:description" content="Neon brick breaker with Nexus slow-mo, 27 power-ups, elemental balls, and infinite procedural levels. Play free in your browser."/>
   <!-- SEO:OG_URL -->
   <meta property="og:image" content="%OG_IMAGE%"/>
-  <meta property="og:image:alt" content="Neon Nexus — twilight garden brick breaker with golden neon glow"/>
+  <meta property="og:image:alt" content="Neon Nexus — teal and magenta neon brick breaker"/>
   <meta property="og:image:width" content="1200"/>
   <meta property="og:image:height" content="630"/>
   <meta property="og:image:type" content="image/png"/>
@@ -36,7 +36,7 @@
   <meta name="twitter:image:alt" content="Neon Nexus game preview — neon brick breaker"/>
 
   <link rel="manifest" href="./manifest.json"/>
-  <meta name="theme-color" content="#120818"/>
+  <meta name="theme-color" content="#0a0d1c"/>
   <meta name="color-scheme" content="dark"/>
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -47,9 +47,18 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/android/android-launchericon-192-192.png"/>
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/android/android-launchericon-192-192.png"/>
 
+  <script>
+    window.__neonInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      window.__neonInstallPrompt = e;
+      window.dispatchEvent(new Event('neon-install-ready'));
+    });
+  </script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Syne:wght@600;700;800&display=swap"
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
         rel="stylesheet">
 
   <script type="application/ld+json">
@@ -83,8 +92,8 @@
 
   <style>
     :root {
-      --accent: #e8b86d;
-      --bg: #08050c;
+      --accent: #2fe6c7;
+      --bg: #05060c;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
@@ -93,7 +102,7 @@
       overflow: hidden;
       background: var(--bg);
       color: #fafafa;
-      font-family: 'Orbitron', 'Major Mono Display', monospace;
+      font-family: 'Chakra Petch', system-ui, sans-serif;
       -webkit-tap-highlight-color: transparent;
       touch-action: none;
       user-select: none;
@@ -113,23 +122,27 @@
       display: block;
       touch-action: none;
       margin: 0 auto;
+      image-rendering: auto;
     }
     #boot-splash {
       position: fixed; inset: 0; z-index: 10;
       display: grid; place-items: center;
       background:
-        radial-gradient(circle at 50% 35%, #2a1838 0%, #120818 55%, #08050c 100%);
+        radial-gradient(circle at 50% 35%, #142038 0%, #0a0d1c 55%, #05060c 100%);
       transition: opacity .6s ease;
     }
     #boot-splash.hide { opacity: 0; pointer-events: none; }
     #boot-splash .title {
-      font-weight: 900; font-size: clamp(1.4rem, 5vw, 3rem);
-      letter-spacing: .08em; text-align: center; line-height: 1.3;
+      font-weight: 700; font-size: clamp(1.4rem, 5vw, 3rem);
+      letter-spacing: .06em; text-align: center; line-height: 1.25;
       color: var(--accent);
-      text-shadow: 0 0 18px var(--accent), 0 0 44px rgba(232,184,109,.45);
+      text-shadow: 0 0 18px var(--accent), 0 0 44px rgba(47,230,199,.45);
       animation: pulse 1.6s ease-in-out infinite alternate;
     }
-    #boot-splash .sub { margin-top: 1rem; opacity: .6; font-size: .8rem; letter-spacing: .3em; }
+    #boot-splash .sub {
+      margin-top: 1rem; opacity: .6; font-size: .75rem;
+      letter-spacing: .22em; font-family: 'DM Sans', system-ui, sans-serif; font-weight: 500;
+    }
     @keyframes pulse { from { opacity: .65; } to { opacity: 1; } }
     #ad-banner {
       position: fixed;
@@ -140,12 +153,12 @@
       align-items: center;
       justify-content: center;
       background: rgba(8, 5, 12, 0.92);
-      border-top: 1px solid rgba(232, 184, 109, 0.12);
-      font-family: Orbitron, monospace;
+      border-top: 1px solid rgba(47, 230, 199, 0.12);
+      font-family: 'Chakra Petch', system-ui, sans-serif;
       user-select: none;
       pointer-events: none;
     }
-    #ad-banner[data-adsense="1"] { border-top-color: rgba(232, 184, 109, 0.25); }
+    #ad-banner[data-adsense="1"] { border-top-color: rgba(47, 230, 199, 0.25); }
     #ad-banner.visible { display: flex; }
     #ad-banner ins.adsbygoogle { border: none; pointer-events: auto; }
     #ad-banner .ad-banner-placeholder {

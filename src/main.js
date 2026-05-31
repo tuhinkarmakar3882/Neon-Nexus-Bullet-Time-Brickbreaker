@@ -22,10 +22,15 @@ import {
   applyLogicalResize,
   isGameplayLocked,
   refreshDisplayScale,
-  syncSceneCameras,
   syncViewportLayout,
 } from './systems/LayoutManager.js';
 import { attachFullscreenListener, lockMobileViewport } from './systems/Fullscreen.js';
+import { initNativeBridge } from './systems/NativeBridge.js';
+import { audio } from './systems/AudioManager.js';
+import { syncPendingEntitlements } from './systems/WebUnlock.js';
+import { initInstallPrompt } from './systems/InstallPrompt.js';
+import { launchParallelScene } from './systems/SceneLaunch.js';
+import { Capacitor } from '@capacitor/core';
 
 const isMobile = typeof navigator !== 'undefined'
   && /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
@@ -35,6 +40,7 @@ let bootSettledAt = 0;
 
 function buildPhaserConfig() {
   syncViewportLayout();
+
   return {
     type: Phaser.AUTO,
     parent: 'game-root',
@@ -44,6 +50,7 @@ function buildPhaserConfig() {
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
+      autoRound: false,
       width: GAME.WIDTH,
       height: GAME.HEIGHT,
       parent: 'game-root',
@@ -53,7 +60,8 @@ function buildPhaserConfig() {
       touch: { capture: true },
     },
     render: {
-      antialias: !isMobile,
+      antialias: true,
+      antialiasGL: true,
       roundPixels: false,
       powerPreference: isMobile ? 'default' : 'high-performance',
       batchSize: isMobile ? 2048 : 4096,
@@ -87,6 +95,11 @@ function restartUiScenes() {
   }
 }
 
+function isMenuLaunching(game) {
+  const menu = game?.scene?.getScene(SCENES.MENU);
+  return !!menu?._launchingGame;
+}
+
 function handleViewportChange() {
   if (!game?.scale) return;
   if (isGameplayLocked(game)) {
@@ -98,11 +111,15 @@ function handleViewportChange() {
 
   if (layoutChanged) {
     applyLogicalResize(game);
-    refreshDisplayScale(game);
-    syncSceneCameras(game);
 
     // Skip UI scene restart during initial mobile viewport settle (address bar, safe area).
     if (Date.now() - bootSettledAt < 1800) return;
+
+    // Fullscreen / URL-bar collapse must not restart the menu mid fade-to-game.
+    if (isMenuLaunching(game)) {
+      refreshDisplayScale(game);
+      return;
+    }
 
     restartUiScenes();
 
@@ -111,11 +128,10 @@ function handleViewportChange() {
 
     if (game.scene.isActive(SCENES.HUD)) {
       game.scene.stop(SCENES.HUD);
-      game.scene.launch(SCENES.HUD);
+      launchParallelScene(game, SCENES.HUD);
     }
   } else {
     refreshDisplayScale(game);
-    syncSceneCameras(game);
   }
 }
 
@@ -136,8 +152,21 @@ function attachViewportListeners() {
   attachFullscreenListener(() => scheduleViewportChange());
 }
 
+function warnProductionConfig() {
+  if (!import.meta.env?.PROD) return;
+  const adMode = (import.meta.env.VITE_AD_PROVIDER || 'demo').toLowerCase();
+  if (adMode === 'demo') {
+    console.warn('[Neon Nexus] VITE_AD_PROVIDER=demo in production — set to google for ad-supported release.');
+  }
+  if (Capacitor.isNativePlatform() && !import.meta.env.VITE_REVENUECAT_ANDROID_KEY && Capacitor.getPlatform() === 'android') {
+    console.warn('[Neon Nexus] VITE_REVENUECAT_ANDROID_KEY missing — IAP will use demo store on Android.');
+  }
+}
+
 function bootGame() {
   lockMobileViewport();
+  warnProductionConfig();
+  audio.preloadMusicCatalog();
   game = new Phaser.Game(buildPhaserConfig());
   window.__NEON = game;
 
@@ -156,7 +185,9 @@ function bootGame() {
         Monetization.removeAds = SaveManager.getRemoveAds();
         try {
           await adProvider.init?.();
+          await initNativeBridge(game);
           await Monetization.syncStoreEntitlements();
+          await syncPendingEntitlements();
         } catch (e) {
           console.warn('[Monetization] init skipped', e);
         }
@@ -172,15 +203,12 @@ function bootGame() {
 }
 
 attachViewportListeners();
+initInstallPrompt();
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', bootGame, { once: true });
 } else {
   bootGame();
-}
-
-if ('serviceWorker' in navigator && import.meta.env && import.meta.env.PROD) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
 
 export default game;

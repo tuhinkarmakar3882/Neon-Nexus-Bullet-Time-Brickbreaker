@@ -5,6 +5,18 @@ const REF_W = 1280;
 const REF_H = 800;
 const REF_PORTRAIT_H = 844;
 
+/** Render Phaser text bitmaps at device density (safe — does not affect layout). */
+export function textResolution() {
+  if (typeof window === 'undefined') return 1;
+  return Math.min(window.devicePixelRatio || 1, 2);
+}
+
+/** Primary stacks — keep in sync with index.html Google Fonts link. */
+export const FONTS = {
+  display: '"Chakra Petch", system-ui, sans-serif',
+  body: '"DM Sans", system-ui, sans-serif',
+};
+
 /** Viewport scale factor — design px → device px. */
 export function uiScale() {
   const { WIDTH: W, HEIGHT: H, IS_PORTRAIT: p } = GAME;
@@ -38,9 +50,30 @@ export function arenaWidth() {
   return G.WIDTH - G.WALL_X * 2 - G.SAFE_LEFT - G.SAFE_RIGHT;
 }
 
-export function orbitronStyle(size, color, extra = {}) {
+/** Headlines, HUD scores, buttons, flash text. */
+export function displayStyle(size, color, extra = {}) {
   const px = typeof size === 'number' ? uiFont(size) : size;
-  return { fontFamily: 'Orbitron, monospace', fontSize: px, color, ...extra };
+  return { fontFamily: FONTS.display, fontSize: px, color, resolution: textResolution(), ...extra };
+}
+
+/** Codex descriptions, settings copy, long-form overlay text. */
+export function bodyStyle(size, color, extra = {}) {
+  const px = typeof size === 'number' ? uiFont(size) : size;
+  return { fontFamily: FONTS.body, fontSize: px, color, resolution: textResolution(), ...extra };
+}
+
+/** Back-compat alias used across scenes. */
+export function orbitronStyle(size, color, extra = {}) {
+  return displayStyle(size, color, extra);
+}
+
+/** Section labels / micro caps. */
+export function labelStyle(size, color, extra = {}) {
+  return displayStyle(size, color, {
+    fontStyle: '600',
+    letterSpacing: '0.08em',
+    ...extra,
+  });
 }
 
 /** Shrink a text object until it fits maxWidth. Returns final font size in px. */
@@ -78,4 +111,26 @@ export function overlayType(panel) {
     wrapFull: wrapWidth(0.88),
     btnH: (design) => uiPx(design, { min: Math.round(design * 0.55), max: design }),
   };
+}
+
+/** Canvas 2D ctx.font string (share cards, etc.). */
+export function canvasFont(sizePx, weight = '700', variant = 'display') {
+  const stack = variant === 'body' ? FONTS.body : FONTS.display;
+  return `${weight} ${sizePx}px ${stack.replace(/"/g, '')}`;
+}
+
+/** Wait for web fonts before first Phaser text render (avoids fallback flash). */
+export async function ensureFontsLoaded() {
+  if (typeof document === 'undefined' || !document.fonts?.load) return;
+  try {
+    await Promise.all([
+      document.fonts.load('600 16px Chakra Petch'),
+      document.fonts.load('700 16px Chakra Petch'),
+      document.fonts.load('500 16px "DM Sans"'),
+      document.fonts.load('600 16px "DM Sans"'),
+    ]);
+    await document.fonts.ready;
+  } catch {
+    /* offline / blocked CDN — fall back to system-ui */
+  }
 }

@@ -1,5 +1,5 @@
 /**
- * Procedural music profiles — melody, harmony, rhythm per biome/level.
+ * Procedural music profiles — upbeat major/lydian arcade feel per biome.
  * Consumed by AudioManager for Web Audio scheduling.
  */
 
@@ -7,87 +7,88 @@ export const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
 
 const SCALE_STEPS = {
   major: [0, 2, 4, 5, 7, 9, 11],
+  lydian: [0, 2, 4, 6, 7, 9, 11],
   mixolydian: [0, 2, 4, 5, 7, 9, 10],
   minor: [0, 2, 3, 5, 7, 8, 10],
   dorian: [0, 2, 3, 5, 7, 9, 10],
   phrygian: [0, 1, 3, 5, 7, 8, 10],
   pentatonic: [0, 2, 4, 7, 9],
-  lydian: [0, 2, 4, 6, 7, 9, 11],
 };
 
+/** Upbeat I–V–vi–IV / I–IV–V–I style progressions only. */
 const BIOME = {
   garden: {
-    roots: [57, 59, 60, 62],
+    roots: [60, 62, 64, 57],
     scale: 'major',
-    bpm: 112,
-    filter: 9800,
-    padMix: 0.05,
-    leadMix: 0.13,
-    arpMix: 0.06,
-    bassMix: 0.24,
-    drumMix: 0.72,
-    sidechain: 0.18,
-    progressions: [[0, 4, 5, 3], [0, 3, 4, 0], [0, 4, 3, 5]],
+    bpm: 124,
+    filter: 11200,
+    padMix: 0.048,
+    leadMix: 0.14,
+    arpMix: 0.068,
+    bassMix: 0.26,
+    drumMix: 0.78,
+    sidechain: 0.2,
+    progressions: [[0, 4, 5, 3], [0, 4, 3, 0], [0, 3, 4, 0]],
     melodies: [
-      [0, 2, 4, 4, 2, 4, 6, 4, 2, 4, 6, 4, 2, 0, 2, 4],
       [0, 2, 4, 6, 4, 2, 4, 6, 4, 2, 0, 2, 4, 6, 4, 2],
+      [0, 4, 2, 4, 6, 4, 2, 0, 4, 6, 4, 2, 4, 6, 4, 2],
     ],
     arp: [0, 2, 1, 2],
     kicks: [0, 4, 8, 12],
     snares: [4, 12],
   },
   nexus: {
-    roots: [57, 59, 60, 62],
-    scale: 'mixolydian',
-    bpm: 118,
-    filter: 11000,
-    padMix: 0.048,
-    leadMix: 0.14,
-    arpMix: 0.065,
-    bassMix: 0.26,
-    drumMix: 0.78,
-    sidechain: 0.2,
-    progressions: [[0, 3, 4, 0], [0, 4, 3, 5], [0, 5, 3, 4]],
+    roots: [60, 62, 64],
+    scale: 'lydian',
+    bpm: 128,
+    filter: 11800,
+    padMix: 0.046,
+    leadMix: 0.15,
+    arpMix: 0.072,
+    bassMix: 0.28,
+    drumMix: 0.82,
+    sidechain: 0.22,
+    progressions: [[0, 4, 5, 3], [0, 3, 4, 0], [0, 4, 3, 5]],
     melodies: [
       [0, 2, 4, 6, 4, 2, 4, 6, 4, 2, 0, 2, 4, 6, 4, 2],
-      [0, 4, 2, 4, 6, 4, 2, 0, 4, 6, 4, 2, 4, 6, 4, 2],
+      [0, 4, 6, 4, 2, 4, 6, 4, 2, 0, 4, 6, 4, 2, 4, 6],
     ],
     arp: [0, 2, 1, 2],
     kicks: [0, 3, 6, 8, 11, 14],
     snares: [4, 12],
   },
   frost: {
-    roots: [55, 57, 59, 60],
+    roots: [59, 60, 62],
     scale: 'lydian',
-    bpm: 108,
-    filter: 9200,
-    padMix: 0.052,
-    leadMix: 0.12,
-    arpMix: 0.058,
-    bassMix: 0.22,
-    drumMix: 0.68,
-    sidechain: 0.16,
-    progressions: [[0, 4, 5, 3], [0, 3, 5, 4], [0, 4, 3, 0]],
+    bpm: 122,
+    filter: 10800,
+    padMix: 0.05,
+    leadMix: 0.13,
+    arpMix: 0.065,
+    bassMix: 0.24,
+    drumMix: 0.74,
+    sidechain: 0.18,
+    progressions: [[0, 4, 5, 3], [0, 3, 4, 0], [0, 4, 3, 0]],
     melodies: [
       [0, 2, 4, 6, 4, 2, 4, 6, 4, 2, 0, 2, 4, 6, 4, 2],
       [0, 2, 4, 2, 4, 6, 4, 2, 0, 2, 4, 6, 4, 2, 4, 6],
     ],
-    arp: [0, 1, 2, 1],
+    arp: [0, 2, 1, 2],
     kicks: [0, 6, 8, 14],
     snares: [4, 12],
   },
   ember: {
-    roots: [50, 52, 53, 55],
-    scale: 'mixolydian',
-    bpm: 124,
-    filter: 12000,
-    padMix: 0.055,
-    leadMix: 0.15,
-    arpMix: 0.07,
-    bassMix: 0.28,
-    drumMix: 0.82,
-    sidechain: 0.22,
-    progressions: [[0, 3, 4, 0], [0, 4, 5, 3], [0, 5, 4, 3]],
+    roots: [55, 57, 59],
+    scale: 'major',
+    bpm: 132,
+    filter: 12400,
+    padMix: 0.052,
+    leadMix: 0.16,
+    arpMix: 0.075,
+    bassMix: 0.3,
+    drumMix: 0.85,
+    sidechain: 0.24,
+    progressions: [[0, 4, 5, 3], [0, 3, 4, 0], [0, 4, 3, 5]],
     melodies: [
       [0, 2, 4, 6, 4, 2, 4, 6, 4, 2, 0, 2, 4, 6, 4, 2],
       [0, 4, 6, 4, 2, 4, 6, 4, 2, 0, 4, 6, 4, 2, 4, 6],
@@ -99,16 +100,16 @@ const BIOME = {
 };
 
 const MENU = {
-  roots: [57, 60, 62],
+  roots: [60, 62, 64],
   scale: 'lydian',
-  bpm: 108,
-  filter: 9600,
-  padMix: 0.045,
-  leadMix: 0.11,
-  arpMix: 0.05,
-  bassMix: 0.2,
-  drumMix: 0.62,
-  sidechain: 0.14,
+  bpm: 120,
+  filter: 11000,
+  padMix: 0.042,
+  leadMix: 0.12,
+  arpMix: 0.055,
+  bassMix: 0.22,
+  drumMix: 0.68,
+  sidechain: 0.16,
   progressions: [[0, 4, 5, 3], [0, 3, 4, 0]],
   melodies: [[0, 2, 4, 6, 4, 2, 4, 6, 4, 2, 0, 2, 4, 6, 4, 2]],
   arp: [0, 2, 1, 2],
@@ -134,7 +135,7 @@ function triad(scale, degree) {
 }
 
 function clampBpm(v) {
-  return Math.max(96, Math.min(136, Math.round(v)));
+  return Math.max(118, Math.min(140, Math.round(v)));
 }
 
 /** Build a full music profile for one level or menu. */
@@ -142,7 +143,7 @@ export function buildMusicProfile(level, seed, menu = false, opts = {}) {
   const rng = mulberry32((seed ^ (menu ? 0x51ed270b : level * 0x9e3779b1)) >>> 0);
   const biomeKey = menu ? 'menu' : (opts.biome ?? 'garden');
   const cfg = menu ? MENU : (BIOME[biomeKey] ?? BIOME.garden);
-  const steps = SCALE_STEPS[cfg.scale] ?? SCALE_STEPS.pentatonic;
+  const steps = SCALE_STEPS[cfg.scale] ?? SCALE_STEPS.major;
   const root = cfg.roots[Math.floor(rng() * cfg.roots.length)];
   const scale = steps.map((s) => root + s);
 
@@ -153,29 +154,34 @@ export function buildMusicProfile(level, seed, menu = false, opts = {}) {
   });
 
   const melTemplate = cfg.melodies[Math.floor(rng() * cfg.melodies.length)];
-  const melShift = Math.floor(rng() * 3) - 1;
+  const melShift = Math.floor(rng() * 2);
   const melody = melTemplate.map((d) => Math.max(0, d + melShift));
 
   const boss = !!opts.isBoss && !menu;
-  const bpm = clampBpm(cfg.bpm + (level % 5) + (boss ? 8 : 0) + (seed % 3));
-  const intensity = menu ? 0.62 : Math.min(1, 0.58 + level * 0.01 + (boss ? 0.12 : 0));
+  const fallback = !!opts.fallback;
+  const bpm = clampBpm((fallback ? cfg.bpm * 0.82 : cfg.bpm) + (level % 4) + (boss ? 6 : 0));
+  const intensity = menu ? 0.68 : Math.min(1, 0.62 + level * 0.008 + (boss ? 0.12 : 0));
+  const drumScale = fallback ? 0.42 : 1;
+  const padScale = fallback ? 1.55 : 1;
+  const leadScale = fallback ? 0.55 : 1;
 
   return {
     scale,
     prog,
     melody,
     arp: cfg.arp,
-    kicks: boss ? [...cfg.kicks, 6, 14] : cfg.kicks,
-    snares: cfg.snares,
+    kicks: boss ? [...cfg.kicks, 6, 14] : (fallback ? [0, 8] : cfg.kicks),
+    snares: fallback ? [4, 12] : cfg.snares,
     bpm,
     intensity,
-    filterHz: cfg.filter,
-    padMix: cfg.padMix,
-    leadMix: cfg.leadMix,
-    arpMix: cfg.arpMix,
-    bassMix: cfg.bassMix * (boss ? 1.15 : 1),
-    drumMix: cfg.drumMix * (boss ? 1.1 : 1),
-    sidechain: cfg.sidechain,
+    filterHz: fallback ? cfg.filter * 0.92 : cfg.filter,
+    padMix: cfg.padMix * padScale,
+    leadMix: cfg.leadMix * leadScale,
+    arpMix: cfg.arpMix * (fallback ? 0.85 : 1),
+    bassMix: cfg.bassMix * (boss ? 1.12 : 1) * (fallback ? 0.75 : 1),
+    drumMix: cfg.drumMix * (boss ? 1.08 : 1) * drumScale,
+    sidechain: cfg.sidechain * (fallback ? 0.55 : 1),
+    useSoftLead: fallback,
     biome: biomeKey,
     menu,
     boss,

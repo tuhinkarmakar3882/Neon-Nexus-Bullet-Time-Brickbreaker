@@ -3,7 +3,7 @@ import { GAME } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { audio } from '../systems/AudioManager.js';
 import { clamp } from './Helpers.js';
-import { fitButtonLabel, parseDesignPx, uiFont, uiPx, overlayType } from './Typography.js';
+import { fitButtonLabel, parseDesignPx, uiFont, uiPx, overlayType, FONTS } from './Typography.js';
 
 // Robust button with padded hit areas, tap validation, ripples, and depth 1000+.
 export function makeButton(scene, x, y, label, onClick, opts = {}) {
@@ -11,7 +11,6 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
   let h = opts.height ?? 76;
   if (!opts.compact) h = Math.max(h, 48);
   const color = opts.color ?? PAL.accent;
-  const primary = opts.primary !== false;
   const hitPad = opts.hitPad ?? 14;
   const depth = opts.depth ?? 1000;
   const disabled = opts.disabled ?? false;
@@ -19,38 +18,39 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
   const container = scene.add.container(x, y).setDepth(depth);
   const bg = scene.add.graphics();
   let pressed = false;
-
-  const drawBg = (hover = false) => {
-    bg.clear();
-    if (primary) {
-      bg.fillStyle(color, hover ? 1 : 0.9);
-      bg.fillRoundedRect(-w / 2, -h / 2, w, h, 14);
-    } else {
-      bg.fillStyle(0x000000, 0.35);
-      bg.fillRoundedRect(-w / 2, -h / 2, w, h, 14);
-    }
-    bg.lineStyle(3, color, disabled ? 0.4 : 1);
-    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 14);
-  };
-  drawBg(false);
+  let selected = opts.primary !== false;
+  let btnColor = color;
 
   const designFs = parseDesignPx(opts.fontSize, Math.round(h * 0.38));
   const text = scene.add.text(0, 0, label, {
-    fontFamily: 'Orbitron, monospace',
+    fontFamily: FONTS.display,
     fontSize: opts.rawFont ? `${designFs}px` : uiFont(designFs, { min: 9, max: designFs }),
     fontStyle: 'bold',
-    color: primary ? PAL.textDark : cssHex(color),
+    color: selected ? PAL.textDark : cssHex(btnColor),
   }).setOrigin(0.5);
   if (disabled) text.setAlpha(0.4);
   if (label && opts.fitLabel !== false) fitButtonLabel(text, w, 9);
+
+  const redraw = (hover = false) => {
+    bg.clear();
+    if (selected) {
+      bg.fillStyle(btnColor, hover ? 1 : 0.92);
+      bg.fillRoundedRect(-w / 2, -h / 2, w, h, 14);
+    } else {
+      bg.fillStyle(0x0c1018, hover ? 0.95 : 0.82);
+      bg.fillRoundedRect(-w / 2, -h / 2, w, h, 14);
+    }
+    bg.lineStyle(selected ? 3 : 2, selected ? btnColor : 0x556677, selected ? 1 : 0.75);
+    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 14);
+    text.setColor(selected ? PAL.textDark : cssHex(btnColor));
+  };
+  redraw(false);
 
   container.add([bg, text]);
 
   if (!disabled) {
     const hitW = w + hitPad * 2;
     const hitH = h + hitPad * 2;
-    // Container input uses top-left origin; graphics are center-origin. A centered Zone
-    // matches the visible button and fixes corner-only touch targets on mobile.
     const zone = scene.add.zone(0, 0, hitW, hitH).setOrigin(0.5, 0.5);
     container.add(zone);
     zone.setInteractive({ useHandCursor: true });
@@ -58,7 +58,7 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
     const ripple = (lx, ly) => {
       if (!scene.textures.exists('soft')) return;
       const ring = scene.add.image(lx, ly, 'soft').setDepth(depth + 1)
-        .setTint(color).setBlendMode('ADD').setAlpha(0.6).setScale(0.05);
+        .setTint(btnColor).setBlendMode('ADD').setAlpha(0.6).setScale(0.05);
       container.add(ring);
       scene.tweens.add({
         targets: ring, scale: 0.5, alpha: 0, duration: 300,
@@ -67,35 +67,38 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
     };
 
     zone.on('pointerover', () => {
-      drawBg(true);
+      redraw(true);
       scene.tweens.add({ targets: container, scaleX: 1.04, scaleY: 1.04, duration: 120 });
     });
     zone.on('pointerout', () => {
-      pressed = false;
-      drawBg(false);
+      redraw(false);
       scene.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 120 });
     });
+    const activate = () => {
+      if (!pressed) return;
+      pressed = false;
+      onClick?.();
+      scene.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 100 });
+    };
     zone.on('pointerdown', (_ptr, lx, ly) => {
       pressed = true;
       ripple(lx, ly);
       scene.tweens.add({ targets: container, scaleX: 0.96, scaleY: 0.96, duration: 80 });
       audio.init();
       audio.blip(720);
+      if (opts.activateOnDown) activate();
     });
-    zone.on('pointerup', () => {
-      if (pressed) onClick?.();
-      pressed = false;
-      scene.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 100 });
-    });
-    zone.on('pointerupoutside', () => { pressed = false; });
+    zone.on('pointerup', activate);
+    zone.on('pointerupoutside', activate);
   }
 
   container.setAlpha(disabled ? 0.4 : 1);
-  container.setFocused = (focused) => {
-    drawBg(focused);
-    bg.lineStyle(focused ? 4 : 3, focused ? 0xffffff : color, 1);
-    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 14);
+  container.setSelected = (on, col) => {
+    if (col !== undefined) btnColor = col;
+    selected = !!on;
+    redraw(false);
   };
+  container.setFocused = (focused) => redraw(focused);
   return container;
 }
 
@@ -103,12 +106,12 @@ export function makeVolumeSlider(scene, x, y, label, value, onChange, opts = {})
   const depth = opts.depth ?? 1001;
   const c = scene.add.container(x, y).setDepth(depth);
   scene.add.text(-260, 0, label, {
-    fontFamily: 'Orbitron, monospace', fontSize: uiFont(22), color: '#cfe9ff',
+    fontFamily: FONTS.display, fontSize: uiFont(22), color: '#cfe9ff',
   }).setOrigin(0, 0.5).setDepth(depth);
 
   let vol = Math.max(0, Math.min(100, value ?? 100));
   const valText = scene.add.text(120, 0, `${vol}%`, {
-    fontFamily: 'Orbitron, monospace', fontSize: uiFont(22), color: cssHex(PAL.accent),
+    fontFamily: FONTS.display, fontSize: uiFont(22), color: cssHex(PAL.accent),
   }).setOrigin(0.5).setDepth(depth);
 
   const update = (v) => {
@@ -300,7 +303,8 @@ export function attachOverlayScroll(scene, opts = {}) {
     const dy = pointer.y - startY;
     if (!gestureDragged && Math.abs(dy) < dragThreshold) return;
     gestureDragged = true;
-    setScroll(clamp(scrollStart - dy, 0, getMaxScroll()));
+    // Pull content with finger; wheel scrolls down into list below.
+    setScroll(clamp(scrollStart + dy, 0, getMaxScroll()));
   };
 
   const onUp = () => {
@@ -311,7 +315,8 @@ export function attachOverlayScroll(scene, opts = {}) {
     if (getMaxScroll() <= 0) return;
     const ptr = scene.input.activePointer;
     if (!inBounds(ptr.x, ptr.y)) return;
-    setScroll(clamp(getScroll() - dy * wheelFactor, 0, getMaxScroll()));
+    // Native wheel: delta down (dy > 0) reveals content below.
+    setScroll(clamp(getScroll() + dy * wheelFactor, 0, getMaxScroll()));
   };
 
   scene.input.on('pointerdown', onDown);
@@ -438,37 +443,42 @@ export function staggerButtons(scene, buttons, delayMs = 80) {
   });
 }
 
-export function addCameraFx(scene, { bloom = 0.72, vignette = true, scanlines = false } = {}) {
-  const cam = scene.cameras.main;
-  if (!cam.postFX) return;
-  try {
-    cam.postFX.addBloom(0xffffff, 1, 1, bloom, 1.1);
-    if (vignette) cam.postFX.addVignette(0.5, 0.5, 0.85, 0.35);
-  } catch {
-    /* WebGL FX unavailable */
-  }
-  if (scanlines && !scene._scanlineGfx) {
-    const W = scene.scale.width;
-    const H = scene.scale.height;
-    const g = scene.add.graphics().setDepth(999).setScrollFactor(0);
-    g.fillStyle(0x000000, 0.04);
-    for (let y = 0; y < H; y += 4) g.fillRect(0, y, W, 1);
-    scene._scanlineGfx = g;
-  }
+import { applySceneVfx, updateSceneVfx } from './SceneVfx.js';
+import { fxConfettiCount } from './FxBudget.js';
+
+/** Apply camera bloom/vignette/overlays from full settings or legacy opts. */
+export function addCameraFx(scene, settingsOrOpts = {}) {
+  const settings = settingsOrOpts.vfxQuality != null
+    ? settingsOrOpts
+    : {
+      bloom: settingsOrOpts.bloom ?? 0.72,
+      vignette: settingsOrOpts.vignette ?? 0,
+      scanlines: settingsOrOpts.scanlines ?? false,
+      scanlineAlpha: settingsOrOpts.scanlineAlpha ?? 0.03,
+      grain: settingsOrOpts.grain ?? 0,
+      chroma: settingsOrOpts.chroma ?? false,
+    };
+  applySceneVfx(scene, settings);
+}
+
+/** Live VFX quality change while a scene is running. */
+export function updateCameraFx(scene, patch = {}) {
+  updateSceneVfx(scene, patch);
 }
 
 export function spawnConfetti(scene, x, y, count = 64) {
-  if (!scene.textures.exists('soft')) return;
+  const n = fxConfettiCount(scene, count);
+  if (n <= 0 || !scene.textures.exists('soft')) return;
   const tex = scene.textures.exists('spark-shard') ? ['soft', 'spark-shard', 'ember'] : ['soft'];
   scene.add.particles(x, y, tex, {
     speed: { min: 180, max: 520 },
     scale: { start: 0.7, end: 0 },
     lifespan: 900,
     blendMode: 'ADD',
-    quantity: count,
+    quantity: n,
     emitting: false,
     angle: { min: 200, max: 340 },
     rotate: { min: -360, max: 360 },
     tint: [PAL.accent, PAL.accent2, PAL.accent3, PAL.info],
-  }).explode(count);
+  }).explode(n);
 }

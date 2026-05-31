@@ -5,8 +5,9 @@ import { PANEL_SLICE } from '../utils/Textures.js';
 import { lerpColor, clamp } from '../utils/Helpers.js';
 import { difficultyFor } from '../systems/DifficultyScaler.js';
 import { popScale } from '../utils/MicroFx.js';
+import { displayStyle } from '../utils/Typography.js';
 
-const BOSS_COLORS = [0xffc8a0, 0xff9058, 0xff5030];
+const BOSS_COLORS = [0xffb080, 0xff7040, 0xff4020];
 const STEEL_TYPES = new Set(['gold', 'steel']);
 const INDESTRUCTIBLE_PANEL = {
   gold: 'panel-gold',
@@ -58,7 +59,7 @@ export class Brick {
     const panelKey = INDESTRUCTIBLE_PANEL[type] ?? 'panel';
     const useTint = !INDESTRUCTIBLE_PANEL[type];
     this.panel = scene.add.nineslice(this.cx, this.cy, panelKey, undefined, w, h, PANEL_SLICE, PANEL_SLICE, PANEL_SLICE, PANEL_SLICE)
-      .setDepth(10).setTint(useTint ? color : 0xffffff).setAlpha(0.98);
+      .setDepth(10).setTint(useTint ? color : 0xffffff).setAlpha(0.96);
     if (type === 'gold' || type === 'steel') {
       this.panel.setBlendMode(Phaser.BlendModes.NORMAL);
     }
@@ -66,10 +67,7 @@ export class Brick {
     this.fx = scene.add.graphics().setDepth(11);
     this.badge = (type === 'gold' || type === 'steel' || type === 'hostage')
       ? scene.add.text(this.cx, this.cy, type === 'gold' ? '✦' : type === 'steel' ? '⛨' : '⚠', {
-        fontFamily: 'Orbitron, monospace',
-        fontSize: `${Math.round(Math.min(w, h) * 0.38)}px`,
-        fontStyle: '900',
-        color: type === 'steel' ? '#d8e4f0' : type === 'gold' ? '#fff8d0' : '#ff9988',
+        ...displayStyle(Math.min(w, h) * 0.38, type === 'steel' ? '#d8e4f0' : type === 'gold' ? '#fff8d0' : '#ff9988', { fontStyle: '700' }),
       }).setOrigin(0.5).setDepth(12).setAlpha(this.revealed ? 0.92 : 0)
       : null;
     this.crackImg = null;
@@ -119,84 +117,55 @@ export class Brick {
     }
 
     if (this.type === 'gold') {
-      g.lineStyle(2.5, 0xfff0a0, 0.95);
-      g.strokeRoundedRect(2, 2, w - 4, h - 4, 6);
-      g.lineStyle(1, 0xffffff, 0.45);
-      g.strokeRoundedRect(6, 6, w - 12, h - 12, 4);
-      g.fillStyle(0xffe066, 0.35);
-      g.fillTriangle(w / 2, h * 0.18, w * 0.72, h * 0.5, w / 2, h * 0.82);
-      g.fillTriangle(w / 2, h * 0.18, w * 0.28, h * 0.5, w / 2, h * 0.82);
+      g.lineStyle(1.5, 0xffffff, 0.55);
+      g.strokeRoundedRect(4, 4, w - 8, h - 8, 5);
     } else if (this.type === 'steel') {
-      g.lineStyle(2, 0xc8d8e8, 0.9);
-      g.strokeRoundedRect(2, 2, w - 4, h - 4, 4);
-      g.fillStyle(0x404850, 0.85);
-      [[8, 8], [w - 8, 8], [8, h - 8], [w - 8, h - 8]].forEach(([rx, ry]) => g.fillCircle(rx, ry, 3));
-      g.lineStyle(1.5, 0x8898a8, 0.7);
-      g.lineBetween(8, h / 2, w - 8, h / 2);
-      g.lineBetween(w / 2, 8, w / 2, h - 8);
-    } else if (this.type === 'hostage') {
-      g.lineStyle(2, 0xff6644, 0.95);
-      g.strokeRoundedRect(2, 2, w - 4, h - 4, 5);
-      g.fillStyle(0xff4422, 0.3);
-      g.fillRoundedRect(w * 0.2, h * 0.15, w * 0.6, h * 0.7, 4);
-      g.lineStyle(1.5, 0xffaa88, 0.8);
-      for (let bx = w * 0.28; bx < w * 0.72; bx += w * 0.12) {
-        g.lineBetween(bx, h * 0.15, bx, h * 0.85);
-      }
-    } else if (this.type === 'silver' || this.type === 'boss' || this.type === 'reinforced') {
-      g.fillStyle(0xfff8ef, 0.85);
-      for (let i = 0; i < this.hp; i++) g.fillCircle(10 + i * 10, h - 7, 2.5);
-      g.lineStyle(1, 0xffffff, 0.35);
+      g.lineStyle(1, 0xa8d8ff, 0.45);
       g.strokeRoundedRect(4, 4, w - 8, h - 8, 4);
+    } else if (this.type === 'hostage') {
+      g.lineStyle(1.5, 0xff5a6e, 0.65);
+      g.strokeRoundedRect(4, 4, w - 8, h - 8, 5);
+    } else if (this.type === 'silver' || this.type === 'boss' || this.type === 'reinforced') {
+      g.fillStyle(0xffffff, 0.9);
+      for (let i = 0; i < this.hp; i++) g.fillCircle(10 + i * 10, h - 7, 2.5);
     } else if (this.type === 'explosive') {
-      g.fillStyle(0x3a1808, 0.75);
-      g.fillCircle(w / 2, h / 2, h * 0.24);
-      g.fillStyle(0xffd23d, 1);
-      g.fillCircle(w / 2, h / 2, h * 0.1);
-      g.lineStyle(2, 0xfff0c0, 0.85);
-      for (let a = 0; a < 8; a++) {
-        const ang = (a / 8) * Math.PI * 2;
-        g.lineBetween(w / 2, h / 2, w / 2 + Math.cos(ang) * h * 0.32, h / 2 + Math.sin(ang) * h * 0.32);
+      g.fillStyle(0xff7040, 0.85);
+      g.fillCircle(w / 2, h / 2, h * 0.12);
+      g.lineStyle(2, 0xfff0c0, 0.75);
+      for (let a = 0; a < 6; a++) {
+        const ang = (a / 6) * Math.PI * 2;
+        g.lineBetween(w / 2, h / 2, w / 2 + Math.cos(ang) * h * 0.28, h / 2 + Math.sin(ang) * h * 0.28);
       }
     } else if (this.type === 'nest') {
-      g.fillStyle(0x2a2038, 0.75);
-      g.fillEllipse(w / 2, h - 8, w * 0.38, h * 0.28);
-      g.lineStyle(2, 0x8b7fd4, 0.7);
-      g.strokeEllipse(w / 2, h - 8, w * 0.38, h * 0.28);
-    } else if (this.type === 'hostage') {
-      // badge + cage drawn above
+      g.lineStyle(2, 0xa78bfa, 0.75);
+      g.strokeEllipse(w / 2, h - 8, w * 0.34, h * 0.24);
     } else if (this.type === 'mirror') {
-      g.lineStyle(2, 0xaaaaff, 0.85);
-      g.strokeTriangle(w * 0.2, h * 0.2, w * 0.8, h * 0.5, w * 0.2, h * 0.8);
+      g.lineStyle(2, 0xc8c8ff, 0.85);
+      g.strokeTriangle(w * 0.22, h * 0.22, w * 0.78, h * 0.5, w * 0.22, h * 0.78);
     } else if (this.type === 'moss') {
-      g.fillStyle(0x3a6640, 0.55);
-      g.fillRoundedRect(4, h * 0.45, w - 8, h * 0.4, 4);
+      g.fillStyle(0x56d364, 0.35);
+      g.fillRoundedRect(4, h * 0.48, w - 8, h * 0.38, 4);
     } else if (this.type === 'beehive') {
-      g.fillStyle(0xffcc44, 0.85);
-      g.fillCircle(w / 2, h / 2, h * 0.22);
+      g.fillStyle(0xffb347, 0.9);
+      g.fillCircle(w / 2, h / 2, h * 0.18);
     } else if (this.type === 'seedpod') {
-      g.fillStyle(0x66aa44, 0.7);
-      g.fillEllipse(w / 2, h / 2, w * 0.35, h * 0.45);
+      g.fillStyle(0x56d364, 0.65);
+      g.fillEllipse(w / 2, h / 2, w * 0.32, h * 0.4);
     } else if (this.type === 'linked') {
-      g.lineStyle(2, 0xaa88ff, 0.9);
-      g.strokeCircle(w / 2, h / 2, h * 0.28);
-      g.lineBetween(w * 0.25, h / 2, w * 0.75, h / 2);
+      g.lineStyle(2, 0xa78bfa, 0.85);
+      g.strokeCircle(w / 2, h / 2, h * 0.26);
     } else if (this.type === 'portal') {
-      g.lineStyle(2.5, 0x72f2eb, 0.9);
-      g.strokeCircle(w / 2, h / 2, h * 0.36);
-      g.fillStyle(0x72f2eb, 0.2);
-      g.fillCircle(w / 2, h / 2, h * 0.26);
-      g.fillStyle(0xffffff, 0.5);
-      g.fillCircle(w / 2, h / 2, h * 0.08);
+      g.lineStyle(2, 0x2fe6c7, 0.9);
+      g.strokeCircle(w / 2, h / 2, h * 0.34);
+      g.fillStyle(0x2fe6c7, 0.22);
+      g.fillCircle(w / 2, h / 2, h * 0.22);
     } else if (this.type === 'invisible' && !this.revealed) {
-      g.lineStyle(1, 0xffffff, 0.12);
+      g.lineStyle(1, 0xffffff, 0.1);
       g.strokeRoundedRect(3, 3, w - 6, h - 6, 6);
-      g.fillStyle(0xffffff, 0.04);
-      g.fillRoundedRect(3, 3, w - 6, h - 6, 6);
     }
 
     if (this.isBonus) {
-      g.lineStyle(2, 0xe8b86d, 0.95);
+      g.lineStyle(2, PAL.accent3, 0.95);
       g.strokeRoundedRect(2, 2, w - 4, h - 4, 6);
     }
 

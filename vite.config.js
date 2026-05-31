@@ -1,3 +1,4 @@
+import { VitePWA } from 'vite-plugin-pwa';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +11,6 @@ function siteUrl() {
   return (process.env.VITE_GAME_URL || '').replace(/\/$/, '');
 }
 
-/** Inject canonical + absolute Open Graph URLs when VITE_GAME_URL is set at build time. */
 function htmlSeoInject() {
   return {
     name: 'html-seo-inject',
@@ -29,32 +29,45 @@ function htmlSeoInject() {
   };
 }
 
-// Cross-platform build config.
-// - `base: './'` keeps asset URLs relative so the same `dist/` works on web hosts,
-//   GitHub Pages, and inside a Capacitor (iOS/Android) or Electron webview.
 export default defineConfig({
   base: './',
-  plugins: [htmlSeoInject()],
+  plugins: [
+    htmlSeoInject(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['og-image.png', 'icons/android/android-launchericon-512-512.png'],
+      manifest: false,
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2,mp3}'],
+        navigateFallback: 'index.html',
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
+      devOptions: { enabled: false },
+    }),
+  ],
   resolve: {
     alias: admobInstalled
       ? {}
       : {
           '@capacitor-community/admob': resolve(root, 'src/stubs/capacitor-admob.js'),
+          '@revenuecat/purchases-capacitor': resolve(root, 'src/stubs/revenuecat.js'),
         },
   },
   optimizeDeps: {
-    exclude: ['@capacitor-community/admob'],
+    exclude: ['@capacitor-community/admob', '@revenuecat/purchases-capacitor'],
   },
   build: {
     target: 'es2020',
     outDir: 'dist',
     assetsInlineLimit: 4096,
+    esbuild: {
+      drop: process.env.NODE_ENV === 'production' ? ['debugger'] : [],
+    },
     rollupOptions: {
-      // AdMob plugin is installed only for native Google Ads builds (see docs/ADS.md).
       external: ['@capacitor-community/admob'],
       output: {
-        manualChunks: {
-          phaser: ['phaser'],
+        manualChunks(id) {
+          if (id.includes('node_modules/phaser')) return 'phaser';
         },
       },
     },

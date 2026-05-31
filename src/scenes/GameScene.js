@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME, SCENES, JARDINAIN, BRICK } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
-import { POWERS, powerFillColor, powerColorHex, resolvePowerKey, CANNON_TYPES, BALL_MODS, POWER_KEYS, powerDisplayName, powerPillLabel } from '../config/PowerUps.js';
+import { POWERS, powerFillColor, powerColorHex, resolvePowerKey, CANNON_TYPES, BALL_MODS, POWER_KEYS, powerDisplayName, powerPillLabel, powerHasBallMod, powerHasCannon, findActiveBallModKey, findActiveCannonKey } from '../config/PowerUps.js';
 import { rollPower, rollPowerDraft, rollPositivePowerDraft, rollCapsuleVariant, rollBlessedPower } from '../config/DropTables.js';
 import { mutatorDisplay } from '../config/Mutators.js';
 import { goalProgressText } from '../config/LevelGoals.js';
@@ -34,7 +34,8 @@ import { InputRouter } from '../systems/InputRouter.js';
 import { hapticPulse } from '../systems/Haptics.js';
 import { scaledBallBaseSpeed, difficultyFor } from '../systems/DifficultyScaler.js';
 import { addCameraFx, spawnConfetti, makeButton } from '../utils/UI.js';
-import { popScale, squashStretch, wobble, rippleRing, staggerDropIn, shardBurst, brickBreakFx, microShake, surgeText, hitSpark, brickNudge, launchBurst, risePop, tierPulse, dropIn, spinIn, powerAcquireBurst, powerPickupFx, explosiveImpactFx, fireImpactFx, electricImpactFx, frostImpactFx } from '../utils/MicroFx.js';
+import { applySceneVfx } from '../utils/SceneVfx.js';
+import { popScale, squashStretch, wobble, rippleRing, staggerDropIn, shardBurst, brickBreakFx, microShake, surgeText, hitSpark, brickNudge, launchBurst, risePop, tierPulse, dropIn, spinIn, powerAcquireBurst, powerPickupFx, explosiveImpactFx, fireImpactFx, electricImpactFx, frostImpactFx, comboFlare } from '../utils/MicroFx.js';
 import { initBulletTimeFx, setBulletTimeIntensity, screenPunch, impactFlash, radialBlast, resetGameplayCamera, clearBulletTimeFx } from '../utils/BulletTimeFx.js';
 import { pick, clamp, rand, mulberry32 } from '../utils/Helpers.js';
 import { fitTextWidth, orbitronStyle, uiPx, wrapWidth } from '../utils/Typography.js';
@@ -54,10 +55,16 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.settings = resolveSettings(SaveManager.loadSettings());
-    addCameraFx(this, { bloom: this.settings.bloom, scanlines: this.settings.scanlines });
+    const musicSettings = SaveManager.loadSettings();
+    this.musicVariant = musicSettings.musicVariant ?? 'auto';
+    audio.applyMusicSettings({
+      musicVariant: this.musicVariant,
+      musicVolume: musicSettings.musicVolume,
+    });
+    addCameraFx(this, this.settings);
     initBulletTimeFx(this);
 
-    this.bg = new Background(this, PAL.accent, { reducedFx: this.settings.bgReduced });
+    this.bg = new Background(this, PAL.accent, { preset: this.settings, gameplay: true });
     this.campaignSeed = this._resumeData?.campaignSeed ?? ((Date.now() ^ 0xdeadbeef) >>> 0);
     this.levelSeed = this._resumeData?.levelSeed ?? this.campaignSeed + 1;
 
@@ -125,7 +132,7 @@ export class GameScene extends Phaser.Scene {
     this.challengeSys = new ChallengeSystem(this);
 
     this.paddle = new Paddle(this);
-    this.balls = [new Ball(this, this.paddle)];
+    this.balls = [new Ball(this, this.paddle, 0)];
 
     if (this._resumeData?.activePowers) {
       this._resumeData.activePowers.forEach(({ key: rawKey, remaining }) => {
@@ -136,7 +143,7 @@ export class GameScene extends Phaser.Scene {
         }
       });
       this.balls.forEach((b) => this.applyActiveStateToBall(b));
-      this.activeBallMod = BALL_MODS.filter((k) => this.powerSys.isActive(k)).pop() ?? null;
+      this.activeBallMod = findActiveBallModKey(this.powerSys);
     } else if (this._resumeData?.ballElement) {
       const legacy = { cannon: 'electric', fire: 'explosive', nuke: 'nuke' };
       const el = legacy[this._resumeData.ballElement] ?? this._resumeData.ballElement;
@@ -191,6 +198,13 @@ export class GameScene extends Phaser.Scene {
     this.events.on('shutdown', () => this.cleanup());
   }
 
+  /** Live VFX quality update from Settings (works while paused). */
+  syncVfxSettings(settings) {
+    this.settings = settings;
+    applySceneVfx(this, settings);
+    this.bg?.applyVfxPreset?.(settings);
+  }
+
   relayout() {
     this.paddle.relayout();
     this.syncPaddleWidth();
@@ -241,6 +255,7 @@ export class GameScene extends Phaser.Scene {
 
   cleanup() {
     this.bus?.emit('hud:flash', { text: '', color: '#fff', ms: 0 });
+    this.bus?.emit('hud:toast', { text: '', ms: 0 });
     this.bus?.emit('hud:hint', false);
     this.bus?.emit('hud:bulletTime', { active: false, ratio: 0 });
     if (this._draftContainer?.active) this._draftContainer.destroy();
@@ -560,6 +575,7 @@ export class GameScene extends Phaser.Scene {
     audio.setLevelMusic(this.level, this.levelSeed, {
       biome: theme.biome ?? 'garden',
       isBoss,
+      musicVariant: this.musicVariant ?? 'auto',
     });
     this.applyBrickDamageSnapshot();
 
@@ -703,7 +719,7 @@ export class GameScene extends Phaser.Scene {
     this.btMeter = 0;
     this.emitBtMeter();
     const ratio = spent / GAME.BT_METER_MAX;
-    const ms = Math.round(GAME.BT_NEXUS_TIME_MS * (0.7 + ratio * 0.55));
+    const ms = Math.round(GAME.BT_NEXUS_TIME_MS * (0.85 + ratio * 0.75));
     const intensity = GAME.BT_NEXUS_INTENSITY_MIN
       + ratio * (GAME.BT_NEXUS_INTENSITY_MAX - GAME.BT_NEXUS_INTENSITY_MIN);
     this.triggerBulletTime(ms, { intensity, punch: true, player: true, nexus: true, wow: true });
@@ -1087,15 +1103,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   clearOtherCannons(keepKey) {
-    CANNON_TYPES.forEach((k) => {
-      if (k !== keepKey && this.powerSys.isActive(k)) this.powerSys.clear(k);
-    });
+    for (const k of this.powerSys.keys()) {
+      if (k !== keepKey && powerHasCannon(k)) this.powerSys.clear(k);
+    }
   }
 
   clearOtherBallMods(keepKey) {
-    BALL_MODS.forEach((k) => {
-      if (k !== keepKey && this.powerSys.isActive(k)) this.powerSys.clear(k);
-    });
+    for (const k of this.powerSys.keys()) {
+      if (k !== keepKey && powerHasBallMod(k)) this.powerSys.clear(k);
+    }
   }
 
   setCannonFromPower(key) {
@@ -1116,9 +1132,9 @@ export class GameScene extends Phaser.Scene {
     ball.echoMode = false;
     ball.heavyMode = false;
 
-    const modKey = this.activeBallMod && this.powerSys.isActive(this.activeBallMod)
+    const modKey = this.activeBallMod && this.powerSys.isActive(this.activeBallMod) && powerHasBallMod(this.activeBallMod)
       ? this.activeBallMod
-      : BALL_MODS.find((k) => this.powerSys.isActive(k));
+      : findActiveBallModKey(this.powerSys);
 
     if (modKey === 'ExplosiveBall') {
       this.activeBallMod = modKey;
@@ -1152,23 +1168,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   applyPowerSideEffects(key, silent = false) {
-    if (CANNON_TYPES.includes(key)) {
+    if (powerHasCannon(key)) {
       this.setCannonFromPower(key);
-    } else if (BALL_MODS.includes(key)) {
+    } else if (powerHasBallMod(key)) {
       this.clearOtherBallMods(key);
       this.activeBallMod = key;
     }
 
     switch (key) {
       case 'Laser':
+      case 'LaserII':
       case 'FireCannon':
       case 'IceCannon':
       case 'ShockCannon':
       case 'NapalmCannon':
         break;
       case 'Expand':
-      case 'Reduce': this.syncPaddleWidth(); break;
-      case 'Catch': this.paddle.sticky = true; break;
+      case 'WideGarden':
+      case 'Reduce':
+        this.syncPaddleWidth();
+        break;
+      case 'Catch':
+      case 'SuperCatch':
+        this.paddle.sticky = true;
+        break;
       case 'Magnet': this.paddle.magnet = true; break;
       case 'FastPaddle':
       case 'SlowPaddle': this.syncPaddleSpeedMult(); break;
@@ -1187,6 +1210,7 @@ export class GameScene extends Phaser.Scene {
       case 'NukeBall':
       case 'FrozenBall':
       case 'ElectricBall':
+      case 'ElectricBallII':
       case 'MegaBall':
       case 'HeavyBall':
       case 'Teleport':
@@ -1209,8 +1233,12 @@ export class GameScene extends Phaser.Scene {
       case 'Squeeze':
         this.applySqueeze(true);
         break;
+      case 'Shield':
+      case 'ShieldII':
+        this.shieldHitsLeft = POWERS[key]?.shieldHits ?? 1;
+        break;
     }
-    if (!silent && !BALL_MODS.includes(key)) {
+    if (!silent && !powerHasBallMod(key)) {
       this.balls.forEach((b) => this.applyActiveStateToBall(b));
     }
   }
@@ -1282,8 +1310,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (BALL_MODS.includes(key)) this.clearOtherBallMods(key);
-    if (CANNON_TYPES.includes(key)) this.clearOtherCannons(key);
+    if (powerHasBallMod(key)) this.clearOtherBallMods(key);
+    if (powerHasCannon(key)) this.clearOtherCannons(key);
 
     if (!this._seenPowers.has(key)) {
       this._seenPowers.add(key);
@@ -1304,7 +1332,7 @@ export class GameScene extends Phaser.Scene {
     const willBt = def.bulletTime && this.settings.bulletTime;
     if (willBt) this.triggerBulletTime(undefined, { punch: false, intensity: 0.9 });
     if (def.kind === 'timed') this.powerSys.activate(key, def.dur);
-    if (BALL_MODS.includes(key)) this.activeBallMod = key;
+    if (powerHasBallMod(key)) this.activeBallMod = key;
 
     switch (key) {
       case 'BallSplitter': this.doMulti(); break;
@@ -1335,21 +1363,28 @@ export class GameScene extends Phaser.Scene {
 
   onPowerExpire(key) {
     key = resolvePowerKey(key);
+    if (powerHasCannon(key)) {
+      const active = findActiveCannonKey(this.powerSys);
+      if (!active) this.paddle.setCannon(null);
+      else this.setCannonFromPower(active);
+    }
     switch (key) {
       case 'Laser':
+      case 'LaserII':
       case 'FireCannon':
       case 'IceCannon':
       case 'ShockCannon':
       case 'NapalmCannon':
-        if (!CANNON_TYPES.some((k) => this.powerSys.isActive(k))) this.paddle.setCannon(null);
-        else {
-          const active = CANNON_TYPES.find((k) => this.powerSys.isActive(k));
-          if (active) this.setCannonFromPower(active);
-        }
         break;
       case 'Expand':
-      case 'Reduce': this.syncPaddleWidth(); break;
-      case 'Catch': this.paddle.sticky = false; break;
+      case 'WideGarden':
+      case 'Reduce':
+        this.syncPaddleWidth();
+        break;
+      case 'Catch':
+      case 'SuperCatch':
+        this.paddle.sticky = false;
+        break;
       case 'Magnet': this.paddle.magnet = false; break;
       case 'FastPaddle':
       case 'SlowPaddle': this.syncPaddleSpeedMult(); break;
@@ -1361,10 +1396,15 @@ export class GameScene extends Phaser.Scene {
       case 'TimeFreeze': this.timeFreezeUntil = 0; break;
       case 'BlackHole': this.stopBlackHole(); break;
       case 'Squeeze': this.applySqueeze(false); break;
+      case 'Shield':
+      case 'ShieldII':
+        this.shieldHitsLeft = 0;
+        break;
       case 'ExplosiveBall':
       case 'NukeBall':
       case 'FrozenBall':
       case 'ElectricBall':
+      case 'ElectricBallII':
       case 'MegaBall':
       case 'HeavyBall':
       case 'Teleport':
@@ -1374,7 +1414,7 @@ export class GameScene extends Phaser.Scene {
       case 'ChargeShot':
       case 'Wrap':
         if (this.activeBallMod === key) {
-          this.activeBallMod = BALL_MODS.find((k) => k !== key && this.powerSys.isActive(k)) ?? null;
+          this.activeBallMod = findActiveBallModKey(this.powerSys);
         }
         break;
     }
@@ -1508,8 +1548,14 @@ export class GameScene extends Phaser.Scene {
     if (t === 'laser') {
       if (now < this.cannonCooldown) return;
       this.cannonCooldown = now + GAME.CANNON_FIRE_MS.laser;
-      this.spawnProjectile(this.paddle.left + 13, y, { type: 'laser', vy: -GAME.LASER_BULLET_SPEED });
-      this.spawnProjectile(this.paddle.right - 13, y, { type: 'laser', vy: -GAME.LASER_BULLET_SPEED });
+      const laserKey = this.powerSys.isActive('LaserII') ? 'LaserII' : 'Laser';
+      const widthMult = POWERS[laserKey]?.laserWidth ?? 1;
+      const spread = 13 * widthMult;
+      this.spawnProjectile(this.paddle.left + spread, y, { type: 'laser', vy: -GAME.LASER_BULLET_SPEED, laserWidth: widthMult });
+      this.spawnProjectile(this.paddle.right - spread, y, { type: 'laser', vy: -GAME.LASER_BULLET_SPEED, laserWidth: widthMult });
+      if (widthMult > 1.2) {
+        this.spawnProjectile(this.paddle.x, y, { type: 'laser', vy: -GAME.LASER_BULLET_SPEED * 1.04, laserWidth: widthMult * 0.85 });
+      }
       audio.laser();
     } else if (t === 'fire') {
       if (now < this.cannonCooldown) return;
@@ -1546,7 +1592,7 @@ export class GameScene extends Phaser.Scene {
     const src = [...this.balls];
     src.forEach((main) => {
       if (this.balls.length >= maxBalls) return;
-      const nb = new Ball(this, this.paddle);
+      const nb = new Ball(this, this.paddle, this.balls.length);
       nb.stuck = false; nb.x = main.x; nb.y = main.y;
       nb.vx = main.vx; nb.vy = main.vy;
       nb.setSpeed(main.speed);
@@ -1652,28 +1698,62 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  teleportEntityToPortal(entity, portal) {
-    const exit = portal?.portalLink;
-    if (!exit?.alive) return;
-    entity.x = exit.cx;
-    if (entity.r != null) entity.y = exit.y - entity.r;
-    else entity.y = exit.cy;
+  teleportEntityToPortal(entity, entryPortal) {
+    const exit = entryPortal?.portalLink;
+    if (!exit?.alive || exit === entryPortal) return false;
+
+    const now = this.time?.now ?? 0;
+    if ((entity._portalGraceUntil ?? 0) > now) return false;
+
+    const pos = this.portalExitPosition(exit, entryPortal, entity);
+    entity.x = pos.x;
+    entity.y = pos.y;
+    entity._portalGraceUntil = now + GAME.PORTAL_GRACE_MS;
     entity.syncPosition?.();
+    entity.sync?.();
     this.spawnRipple(exit.cx, exit.cy, 0x72f2eb);
+    audio.blip(660);
+    return true;
   }
 
-  checkBallPortal(ball) {
-    for (const br of this.bricks) {
-      if (!br.alive || br.type !== 'portal' || !br.portalLink) continue;
-      if (ball.x + ball.r > br.x && ball.x - ball.r < br.x + br.w &&
-        ball.y + ball.r > br.y && ball.y - ball.r < br.y + br.h) {
-        ball.x = br.portalLink.cx;
-        ball.y = br.portalLink.cy;
-        this.spawnRipple(ball.x, ball.y, 0x72f2eb);
-        return true;
+  /** Place entity outside exit portal AABB along tunnel / velocity vector. */
+  portalExitPosition(exit, entry, entity) {
+    let nx = exit.cx - entry.cx;
+    let ny = exit.cy - entry.cy;
+    const tunnel = Math.hypot(nx, ny);
+    if (tunnel > 10) {
+      nx /= tunnel;
+      ny /= tunnel;
+    } else if (entity.vx != null && entity.vy != null) {
+      const sp = Math.hypot(entity.vx, entity.vy);
+      if (sp > 1) {
+        nx = entity.vx / sp;
+        ny = entity.vy / sp;
+      } else {
+        nx = 0;
+        ny = -1;
       }
+    } else {
+      nx = 0;
+      ny = -1;
     }
-    return false;
+
+    const pad = (entity.r ?? 10) + 8;
+    const halfW = exit.w / 2 + pad;
+    const halfH = exit.h / 2 + pad;
+    const scale = Math.abs(nx) > Math.abs(ny) ? halfW / Math.max(Math.abs(nx), 0.001)
+      : halfH / Math.max(Math.abs(ny), 0.001);
+
+    return {
+      x: exit.cx + nx * scale,
+      y: exit.cy + ny * scale,
+    };
+  }
+
+  tryBallPortal(ball, entryPortal) {
+    if (!entryPortal?.portalLink?.alive) return false;
+    if (ball._portalGraceUntil > (this.time?.now ?? 0)) return false;
+    return this.teleportEntityToPortal(ball, entryPortal);
   }
 
   trackStuckBall(ball, dtMs) {
@@ -1998,7 +2078,7 @@ export class GameScene extends Phaser.Scene {
     RunPersistence.saveRun(this);
     if (this.lives <= 0) { this.gameOver(); return; }
     this.flash(pick(GAME_OVER_MESSAGES), '#ff5a6e', 1200);
-    this.balls.push(new Ball(this, this.paddle));
+    this.balls.push(new Ball(this, this.paddle, this.balls.length));
     this.balls.forEach((b) => { this.syncBallSpeed(b, { reset: true }); });
   }
 
@@ -2007,6 +2087,7 @@ export class GameScene extends Phaser.Scene {
     if (!milestones.includes(this.combo)) return;
     const mult = this.comboScoreMult();
     surgeText(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.38, `COMBO SURGE x${mult}`, '#ffd23d', 40);
+    comboFlare(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.42, 0xffd23d, this.combo);
     rippleRing(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.42, { tint: 0xffd23d, scale: 3.6, dur: 500 });
     if (this.combo >= 16 && !this.settings.reducedFx) {
       impactFlash(this, 0xff44aa, 0.18);
@@ -2061,7 +2142,7 @@ export class GameScene extends Phaser.Scene {
     if (this.continues <= 0) { this.doRestart(); return; }
     this.continues--; this.lives = GAME.STARTING_LIVES; this.over = false;
     this.powerSys.clearAll(); this.paddle.reset();
-    this.balls.forEach((b) => b.destroy()); this.balls = [new Ball(this, this.paddle)];
+    this.balls.forEach((b) => b.destroy()); this.balls = [new Ball(this, this.paddle, 0)];
     this.applyEquippedCosmetics();
     InputRouter.onOverlayClose();
     this.scene.resume(); this.emitStats();
@@ -2075,7 +2156,7 @@ export class GameScene extends Phaser.Scene {
     this.powerSys.clearAll();
     this.paddle.reset();
     this.balls.forEach((b) => b.destroy());
-    this.balls = [new Ball(this, this.paddle)];
+    this.balls = [new Ball(this, this.paddle, 0)];
     this.applyEquippedCosmetics();
     InputRouter.onOverlayClose();
     this.scene.resume();
@@ -2089,7 +2170,7 @@ export class GameScene extends Phaser.Scene {
     this.powerSys.clearAll();
     this.paddle.reset();
     this.balls.forEach((b) => b.destroy());
-    this.balls = [new Ball(this, this.paddle)];
+    this.balls = [new Ball(this, this.paddle, 0)];
     this.applyEquippedCosmetics();
     rollPowerDraft(this.level, this.nextPowerDropSeed(), 2).forEach((k) => this.applyPower(k));
     this.flash('REVIVED!', cssHex(PAL.accent2), 700);
@@ -2221,7 +2302,7 @@ export class GameScene extends Phaser.Scene {
     this.gems.forEach((gm) => gm.destroy()); this.gems = [];
     this.balls.forEach((b) => b.destroy());
     this.paddle.reset();
-    this.balls = [new Ball(this, this.paddle)];
+    this.balls = [new Ball(this, this.paddle, 0)];
     this.balls.forEach((b) => b.resetToLevelBase());
     this.applyEquippedCosmetics();
     this.spawnLevel();
@@ -2571,7 +2652,6 @@ export class GameScene extends Phaser.Scene {
       }
 
       this.ballBricks(ball);
-      this.checkBallPortal(ball);
       this.updateEchoOrbs(ball, dtSec);
       this.trackStuckBall(ball, dtSec * 1000);
     }
@@ -2620,7 +2700,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (br.type === 'portal' && br.portalLink) {
-          this.teleportEntityToPortal(ball, br);
+          this.tryBallPortal(ball, br);
           break;
         }
 
@@ -2663,7 +2743,7 @@ export class GameScene extends Phaser.Scene {
   projectileHitBrick(b) {
     for (const br of this.bricks) {
       if (!br.alive) continue;
-      if (b.x <= br.x || b.x >= br.x + br.w || b.y <= br.y || b.y >= br.y + br.h) continue;
+      if (b.x + (b.hitW ?? 4) <= br.x || b.x - (b.hitW ?? 4) >= br.x + br.w || b.y <= br.y || b.y >= br.y + br.h) continue;
 
       switch (b.type) {
         case 'laser':
@@ -2797,10 +2877,13 @@ export class GameScene extends Phaser.Scene {
       if (!b.trail) return;
       const mod = b.isModified();
       b.trail.frequency = bt ? 4 : (mod ? 10 : (b._trailId === 'nexus' ? 14 : 18));
-      b.trail.setAlpha(bt ? 0.98 : (mod ? 0.82 : 0.9));
+      b.trail.setAlpha(bt ? 0.98 : (mod ? 0.82 : 0.95));
       if (bt) {
         b.halo.setAlpha(0.88 + btRatio * 0.1);
         b.ring.setAlpha(0.28 + btRatio * 0.2);
+      } else if (!mod) {
+        b.rim?.setAlpha(0.95);
+        b.core?.setAlpha(1);
       }
     });
 

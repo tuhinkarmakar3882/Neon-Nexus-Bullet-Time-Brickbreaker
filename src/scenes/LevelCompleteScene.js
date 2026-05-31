@@ -7,7 +7,8 @@ import { Monetization } from '../systems/Monetization.js';
 import { isAdSurfaceEnabled } from '../config/AdsConfig.js';
 import { shareProgressScreenshot } from '../systems/ShareProgress.js';
 import { audio } from '../systems/AudioManager.js';
-import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
+import { fitTextWidth, orbitronStyle, uiPx, displayStyle } from '../utils/Typography.js';
+import { GAME } from '../config/Constants.js';
 
 export class LevelCompleteScene extends Phaser.Scene {
   constructor() { super(SCENES.LEVEL_COMPLETE); }
@@ -29,43 +30,63 @@ export class LevelCompleteScene extends Phaser.Scene {
     const game = this.scene.get(SCENES.GAME);
     let doubled = false;
 
+    const compact = GAME.IS_PORTRAIT || GAME.HEIGHT < 760;
+    const lineGap = uiPx(compact ? 16 : 22, { min: 12, max: 26 });
+
     let y = frame.titleY;
-    const title = this.add.text(frame.cx, y, `LEVEL ${d.level ?? 1}\nCLEARED`, {
-      ...orbitronStyle(40, cssHex(PAL.accent), { fontStyle: '900', align: 'center', wordWrap: { width: frame.wrap } }),
-    }).setOrigin(0.5, 0).setDepth(1001).setShadow(0, 0, cssHex(PAL.accent), 20, true, true).setScale(0.5).setAlpha(0);
-    fitTextWidth(title, frame.wrap, uiPx(26, { min: 22, max: 32 }));
-    y += uiPx(62, { min: 48, max: 68 });
+
+    const levelLabel = this.add.text(frame.cx, y, `LEVEL ${d.level ?? 1}`, {
+      ...displayStyle(uiPx(26, { min: 20, max: 30 }), cssHex(PAL.accent), {
+        fontStyle: '600',
+        align: 'center',
+        letterSpacing: '0.12em',
+      }),
+    }).setOrigin(0.5, 0).setDepth(1001).setAlpha(0).setScale(0.5);
+    fitTextWidth(levelLabel, frame.wrap, uiPx(16, { min: 14, max: 18 }));
+    y += levelLabel.height + uiPx(8, { min: 6, max: 10 });
+
+    const clearedLabel = this.add.text(frame.cx, y, 'CLEARED', {
+      ...displayStyle(uiPx(44, { min: 32, max: 50 }), cssHex(PAL.accent), {
+        fontStyle: '900',
+        align: 'center',
+        letterSpacing: '0.06em',
+      }),
+    }).setOrigin(0.5, 0).setDepth(1001)
+      .setShadow(0, 0, cssHex(PAL.accent), 20, true, true)
+      .setAlpha(0).setScale(0.5);
+    fitTextWidth(clearedLabel, frame.wrap, uiPx(28, { min: 24, max: 36 }));
+    y += clearedLabel.height + lineGap;
 
     spawnConfetti(this, frame.cx, frame.cardTop + uiPx(44, { min: 32, max: 48 }), 40);
 
-    const lineGap = uiPx(24, { min: 18, max: 28 });
     const addLine = (text, style, minPx) => {
-      if (y > frame.contentBottom - uiPx(100, { min: 88, max: 110 })) return;
+      if (!text || y > frame.contentBottom - uiPx(88, { min: 76, max: 96 })) return null;
       const t = this.add.text(frame.cx, y, text, {
         ...style, align: 'center', wordWrap: { width: frame.wrap },
       }).setOrigin(0.5, 0).setDepth(1001);
       fitTextWidth(t, frame.wrap, minPx);
-      y += t.height + lineGap * 0.65;
+      y += t.height + lineGap * 0.55;
+      return t;
     };
 
-    addLine(d.message || '', orbitronStyle(16, PAL.text), uiPx(12, { min: 11, max: 14 }));
+    addLine(d.message || '', orbitronStyle(15, PAL.text), uiPx(12, { min: 11, max: 14 }));
 
     this.bonusText = this.add.text(frame.cx, y, `CLEAR BONUS  +${d.bonus ?? 0}`, {
-      ...orbitronStyle(22, cssHex(PAL.accent3), { fontStyle: 'bold', align: 'center' }),
+      ...orbitronStyle(20, cssHex(PAL.accent3), { fontStyle: 'bold', align: 'center' }),
     }).setOrigin(0.5, 0).setDepth(1001);
-    fitTextWidth(this.bonusText, frame.wrap, uiPx(16, { min: 14, max: 20 }));
-    y += this.bonusText.height + lineGap * 0.5;
+    fitTextWidth(this.bonusText, frame.wrap, uiPx(15, { min: 13, max: 18 }));
+    y += this.bonusText.height + lineGap * 0.45;
 
     this.scoreText = this.add.text(frame.cx, y, `SCORE  ${(d.score ?? 0).toLocaleString()}`, {
-      ...orbitronStyle(18, PAL.textMuted, { align: 'center' }),
+      ...orbitronStyle(17, PAL.textMuted, { align: 'center' }),
     }).setOrigin(0.5, 0).setDepth(1001);
-    y += uiPx(24, { min: 20, max: 26 });
+    y += this.scoreText.height + lineGap * 0.5;
 
     const stars = d.stars ?? 1;
-    this.add.text(frame.cx, y, '★'.repeat(stars) + '☆'.repeat(3 - stars), {
-      ...orbitronStyle(28, cssHex(PAL.gold), { align: 'center' }),
+    const starText = this.add.text(frame.cx, y, '★'.repeat(stars) + '☆'.repeat(3 - stars), {
+      ...orbitronStyle(26, cssHex(PAL.gold), { align: 'center' }),
     }).setOrigin(0.5, 0).setDepth(1001);
-    y += uiPx(28, { min: 24, max: 30 });
+    y += starText.height + lineGap * 0.5;
 
     if (d.gemsEarned != null) {
       addLine(`+${d.gemsEarned} 💎 GEMS`, orbitronStyle(18, cssHex(PAL.info), { fontStyle: 'bold' }), uiPx(14, { min: 12, max: 16 }));
@@ -131,7 +152,13 @@ export class LevelCompleteScene extends Phaser.Scene {
       ...orbitronStyle(14, PAL.textMuted, { align: 'center' }),
     }).setOrigin(0.5, 1).setAlpha(0).setDepth(1002);
 
-    this.tweens.add({ targets: title, scale: 1, alpha: 1, duration: 420, ease: 'Back.easeOut' });
+    this.tweens.add({
+      targets: [levelLabel, clearedLabel],
+      scale: 1,
+      alpha: 1,
+      duration: 420,
+      ease: 'Back.easeOut',
+    });
     this.time.delayedCall(1200, () => {
       hint.setAlpha(0.7);
       this.tweens.add({ targets: hint, alpha: 0.25, yoyo: true, repeat: -1, duration: 700 });

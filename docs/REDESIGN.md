@@ -12,7 +12,7 @@ Technical detail: [`ARCHITECTURE.md`](./ARCHITECTURE.md) · Mechanics: [`GAME_ME
 | **Core loop** | Break bricks, clear level, lives/continues, procedural layouts, fortress every 5 |
 | **Jardinains** | Dynamic pop-up spawner, pot throws, dislodge/juggle/knockout → power drops |
 | **Powers** | 44 keys in catalog (paddle cannons, ball mods, env, wild + negatives + tier II) |
-| **Visual baseline** | White comet ball + plain wood paddle when unpowered; powers tint/glow on apply |
+| **Visual baseline** | High-contrast ball (dark rim + identity tints); plain wood paddle when unpowered; powers tint/glow on apply |
 | **Difficulty** | Level bands, mutators via `ChallengeSystem`, progressive brick/gnome pressure |
 | **FX / audio** | Synthesized SFX + music; micro-animations; Nexus overlay; category stingers — see [ARCHITECTURE §18](./ARCHITECTURE.md#18-audio-vfx--animation) |
 | **Mobile** | Safe-area insets, portrait paddle boost, rotation relayout, PWA/Capacitor |

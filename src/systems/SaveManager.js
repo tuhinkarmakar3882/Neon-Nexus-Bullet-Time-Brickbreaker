@@ -1,5 +1,6 @@
 import { STORAGE } from '../config/Constants.js';
 import { migrateVfxQuality, normalizeVfxQuality } from '../config/VfxQuality.js';
+import { normalizeMusicVariant } from '../config/MusicCatalog.js';
 
 const mem = {};
 
@@ -62,6 +63,7 @@ export const SaveManager = {
       sound,
       music,
       vfxQuality: storedQuality ? normalizeVfxQuality(storedQuality) : migrateVfxQuality(legacy),
+      musicVariant: normalizeMusicVariant(get(STORAGE.MUSIC_VARIANT, 'auto')),
       sfxVolume: this.getNumber(STORAGE.SFX_VOLUME, 100),
       musicVolume: this.getNumber(STORAGE.MUSIC_VOLUME, 100),
     };
@@ -70,6 +72,7 @@ export const SaveManager = {
     this.setBool(STORAGE.SOUND, s.sound);
     this.setBool(STORAGE.MUSIC, s.music);
     set(STORAGE.VFX_QUALITY, normalizeVfxQuality(s.vfxQuality));
+    set(STORAGE.MUSIC_VARIANT, normalizeMusicVariant(s.musicVariant));
     this.setNumber(STORAGE.SFX_VOLUME, s.sfxVolume ?? 100);
     this.setNumber(STORAGE.MUSIC_VOLUME, s.musicVolume ?? 100);
   },
@@ -84,6 +87,18 @@ export const SaveManager = {
   },
   setRemoveAds(v) {
     this.setBool(STORAGE.REMOVE_ADS, v);
+  },
+  getStripeRedeemedKeys() {
+    const list = this.getJson(STORAGE.STRIPE_REDEEMED, []);
+    return Array.isArray(list) ? list : [];
+  },
+  hasStripeRedeemedKey(key) {
+    return this.getStripeRedeemedKeys().includes(key);
+  },
+  addStripeRedeemedKey(key) {
+    if (!key || this.hasStripeRedeemedKey(key)) return;
+    const next = [...this.getStripeRedeemedKeys(), key];
+    this.setJson(STORAGE.STRIPE_REDEEMED, next);
   },
   loadRun() {
     return this.getJson(STORAGE.RUN, null);

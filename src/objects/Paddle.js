@@ -50,7 +50,10 @@ export class Paddle {
   }
 
   setWidth(w) {
-    const cap = GAME.IS_PORTRAIT ? GAME.WIDTH * 0.62 : GAME.WIDTH * 0.5;
+    const tb = GAME.TABLET_BOOST ?? 0;
+    const cap = GAME.IS_PORTRAIT
+      ? GAME.WIDTH * (0.62 + tb * 0.05)
+      : GAME.WIDTH * (0.48 + tb * 0.05);
     this.w = clamp(w, this.baseW * 0.45, Math.min(cap, this.baseW * 2.4));
   }
 
@@ -111,15 +114,15 @@ export class Paddle {
     this.body.setAngle(0);
     this.body.setSize(this.w, this.h);
     this.body.setPosition(this.x, this.y);
-    this.body.setTint(this.stunned ? 0xaa9080 : this._hullTint);
-    this.shadow.setPosition(this.x, this.y + this.h * 0.75).setDisplaySize(this.w * 1.08, this.h * 1.7);
+    this.body.setTint(this.stunned ? 0xff6b7a : this._hullTint);
+    this.shadow.setPosition(this.x, this.y + this.h * 0.75).setDisplaySize(this.w * 1.05, this.h * 1.55);
 
     const gc = this.glowColor();
     const active = this.sticky || this.hasCannon || this.magnet || this.stunned;
     this.glow.setPosition(this.x, this.y)
-      .setDisplaySize(this.w * 1.25, this.h * 3.8)
-      .setTint(active ? gc : 0xffffff)
-      .setAlpha(active ? 0.42 + 0.12 * Math.sin(this.scene.frame * 0.08) : 0);
+      .setDisplaySize(this.w * 1.2, this.h * 3.4)
+      .setTint(active ? gc : 0x5aa0ff)
+      .setAlpha(active ? 0.45 + 0.1 * Math.sin(this.scene.frame * 0.08) : 0.14);
 
     this.cannons.clear();
     if (!this.cannonType) return;

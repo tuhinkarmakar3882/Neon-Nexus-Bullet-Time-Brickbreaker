@@ -79,7 +79,7 @@ export class GameOverScene extends Phaser.Scene {
             kind: 'gameover',
             shareData: { score, highScore, isNewBest },
             badge: isNewBest ? 'NEW HIGH SCORE!' : 'GAME OVER',
-            badgeColor: isNewBest ? '#e8b86d' : '#ff6b7a',
+            badgeColor: isNewBest ? cssHex(PAL.gold) : '#ff6b7a',
             heroStat: `${score.toLocaleString()} PTS`,
             line2: `Best · ${highScore.toLocaleString()}`,
             line3: `💎 ${MetaProgress.getGems()} gems · Think you can beat me?`,

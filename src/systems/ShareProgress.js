@@ -1,6 +1,7 @@
 /** Branded social share card + Web Share API / download fallback. */
 
 import { buildShareMessage, getGameUrl, shareTitle } from '../config/ShareConfig.js';
+import { canvasFont } from '../utils/Typography.js';
 
 const CARD_W = 1080;
 const CARD_H = 1350;
@@ -78,7 +79,7 @@ function drawNeonBackground(ctx, w, h) {
 function drawPlaceholderGameplay(ctx, x, y, fw, fh) {
   const brickW = fw / 8;
   const brickH = fh * 0.11;
-  const colors = ['#c4785a', '#7eb87a', '#9b8cff', '#e8b86d', '#d45d8c'];
+  const colors = ['#2fe6c7', '#ff4fa3', '#5aa0ff', '#9b8cff', '#ff6f9c'];
   for (let row = 0; row < 4; row++) {
     for (let col = 0; col < 7; col++) {
       const bx = x + 24 + col * (brickW + 6);
@@ -96,7 +97,7 @@ function drawPlaceholderGameplay(ctx, x, y, fw, fh) {
   const ballY = y + fh * 0.62;
   const grd = ctx.createRadialGradient(ballX, ballY, 0, ballX, ballY, 28);
   grd.addColorStop(0, '#ffffff');
-  grd.addColorStop(0.45, '#e8b86d');
+  grd.addColorStop(0.45, '#2fe6c7');
   grd.addColorStop(1, 'rgba(232, 184, 109, 0)');
   ctx.fillStyle = grd;
   ctx.beginPath();
@@ -113,7 +114,7 @@ function drawPlaceholderGameplay(ctx, x, y, fw, fh) {
   ctx.fillStyle = '#8b6914';
   roundRect(ctx, padX, padY, padW, 18, 8);
   ctx.fill();
-  ctx.strokeStyle = '#e8b86d';
+  ctx.strokeStyle = '#2fe6c7';
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.fillStyle = 'rgba(232, 184, 109, 0.5)';
@@ -139,7 +140,7 @@ function drawSnapshotFrame(ctx, snapshot, x, y, fw, fh) {
   }
   ctx.restore();
 
-  ctx.strokeStyle = '#e8b86d';
+  ctx.strokeStyle = '#2fe6c7';
   ctx.lineWidth = 4;
   roundRect(ctx, x, y, fw, fh, 24);
   ctx.stroke();
@@ -150,7 +151,7 @@ function drawSnapshotFrame(ctx, snapshot, x, y, fw, fh) {
 }
 
 function drawBadge(ctx, text, cx, cy, color = '#d45d8c') {
-  ctx.font = '900 28px Orbitron, monospace';
+  ctx.font = canvasFont(28, '700');
   const tw = ctx.measureText(text).width;
   const pw = tw + 48;
   const ph = 52;
@@ -178,13 +179,13 @@ function drawShareCard(ctx, stats) {
 
   ctx.shadowColor = 'rgba(232, 184, 109, 0.85)';
   ctx.shadowBlur = 28;
-  ctx.fillStyle = '#e8b86d';
-  ctx.font = '900 72px Orbitron, monospace';
+  ctx.fillStyle = '#2fe6c7';
+  ctx.font = canvasFont(72, '700');
   ctx.fillText('NEON NEXUS', w / 2, 118);
   ctx.shadowBlur = 0;
 
-  ctx.fillStyle = '#d45d8c';
-  ctx.font = '700 26px Syne, Orbitron, monospace';
+  ctx.fillStyle = '#ff4fa3';
+  ctx.font = canvasFont(26, '600', 'body');
   ctx.fillText('JARDINAINS!  GARDEN SIEGE', w / 2, 162);
 
   if (stats.badge) {
@@ -198,24 +199,24 @@ function drawShareCard(ctx, stats) {
   drawSnapshotFrame(ctx, stats.snapshot, frameX, frameY, frameW, frameH);
 
   const statsY = frameY + frameH + 56;
-  ctx.fillStyle = '#f5ebe0';
-  ctx.font = '900 52px Orbitron, monospace';
+  ctx.fillStyle = '#e8eefc';
+  ctx.font = canvasFont(52, '700');
   ctx.fillText(stats.heroStat ?? stats.line1 ?? '', w / 2, statsY);
 
   if (stats.line2) {
-    ctx.fillStyle = '#e8b86d';
-    ctx.font = 'bold 34px Orbitron, monospace';
+    ctx.fillStyle = '#2fe6c7';
+    ctx.font = canvasFont(34, '700');
     ctx.fillText(stats.line2, w / 2, statsY + 52);
   }
 
   if (stats.line3) {
     ctx.fillStyle = '#9b8cff';
-    ctx.font = 'bold 28px Orbitron, monospace';
+    ctx.font = canvasFont(28, '700');
     ctx.fillText(stats.line3, w / 2, statsY + 98);
   }
 
   ctx.fillStyle = 'rgba(168, 152, 176, 0.95)';
-  ctx.font = '22px Orbitron, monospace';
+  ctx.font = canvasFont(22, '500', 'body');
   ctx.fillText(stats.hook ?? 'Bullet-time · 27 power-ups · Infinite levels', w / 2, statsY + 148);
 
   const ctaY = h - 148;
@@ -226,17 +227,17 @@ function drawShareCard(ctx, stats) {
   ctx.fillStyle = ctaGrad;
   ctx.fillRect(0, ctaY - 20, w, h - ctaY + 20);
 
-  ctx.fillStyle = '#7eb87a';
-  ctx.font = '900 36px Orbitron, monospace';
+  ctx.fillStyle = '#2fe6c7';
+  ctx.font = canvasFont(36, '700');
   ctx.fillText('▶  PLAY FREE', w / 2, h - 98);
 
   const url = getGameUrl().replace(/^https?:\/\//, '');
-  ctx.fillStyle = '#e8b86d';
-  ctx.font = 'bold 24px Orbitron, monospace';
+  ctx.fillStyle = '#2fe6c7';
+  ctx.font = canvasFont(24, '700');
   ctx.fillText(url, w / 2, h - 52);
 
   ctx.fillStyle = 'rgba(95, 112, 136, 0.85)';
-  ctx.font = '16px Orbitron, monospace';
+  ctx.font = canvasFont(16, '500', 'body');
   ctx.fillText('Neon Nexus · Bullet-Time Brickbreaker', w / 2, h - 22);
 }
 

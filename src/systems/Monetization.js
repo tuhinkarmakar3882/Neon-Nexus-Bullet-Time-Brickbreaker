@@ -6,6 +6,7 @@
 import { AdsConfig, isAdSurfaceEnabled } from '../config/AdsConfig.js';
 import { MetaProgress } from './MetaProgress.js';
 import { SaveManager } from './SaveManager.js';
+import * as PlayBilling from './PlayBilling.js';
 
 const DEFAULT_PROVIDER = {
   name: 'noop',
@@ -124,6 +125,7 @@ class MonetizationService {
   }
 
   isSimulatedStore() {
+    if (PlayBilling.isPlayBillingReady()) return false;
     const name = this.getProviderName();
     return name === 'demo-web' || name === 'demo';
   }
@@ -134,6 +136,9 @@ class MonetizationService {
 
   purchaseErrorMessage(res) {
     if (res?.cancelled) return '';
+    if (res?.pending) {
+      return res.message ?? 'Complete checkout in the browser tab, then Restore Purchases or redeem your unlock code in Settings.';
+    }
     if (res?.reason === 'store_unavailable') return 'Store unavailable — try again on a device build.';
     if (res?.message) return res.message;
     return 'Purchase could not be completed.';
@@ -161,6 +166,10 @@ class MonetizationService {
   }
 
   async syncStoreEntitlements() {
+    if (PlayBilling.isPlayBillingReady()) {
+      await PlayBilling.syncStoreEntitlements();
+      return { success: true };
+    }
     if (!this.isStoreAvailable()) return { success: false };
     try {
       const res = await this.provider.restore?.();
@@ -172,10 +181,17 @@ class MonetizationService {
   }
 
   async restorePurchases() {
+    const billing = await PlayBilling.restorePurchases();
+    if (billing) return billing;
     return this.syncStoreEntitlements();
   }
 
   async purchase(productId) {
+    const billing = await PlayBilling.purchaseProduct(productId);
+    if (billing) {
+      if (billing.success) this.applyEntitlements(productId);
+      return billing;
+    }
     if (!this.isStoreAvailable()) {
       return { success: false, reason: 'store_unavailable' };
     }

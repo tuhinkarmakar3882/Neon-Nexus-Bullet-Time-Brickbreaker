@@ -33,7 +33,7 @@ const evalState = (page) => page.evaluate(() => {
   if (!g?.scene) return { active: [], level: null, lives: null, continues: null, hasRun: false };
   const gs = g.scene.getScene('Game');
   return {
-    active: ['Menu', 'Game', 'HUD', 'GameOver', 'LevelComplete', 'Pause', 'Settings'].filter((k) => g.scene.isActive(k)),
+    active: ['Menu', 'Game', 'HUD', 'GameOver', 'LevelComplete', 'Pause', 'Settings', 'Shop', 'Purchase'].filter((k) => g.scene.isActive(k)),
     level: gs?.level,
     lives: gs?.lives,
     continues: gs?.continues,
@@ -99,6 +99,46 @@ async function runFlow(page, label) {
   });
   await sleep(400);
 
+  // Shop + Purchase via Monetization (full demo checkout flow)
+  await page.evaluate(() => {
+    const g = window.__NEON;
+    g.scene.getScene('Menu')?.scene.launch('Shop', { from: 'Menu' });
+    g.scene.getScene('Menu')?.scene.pause();
+  });
+  await sleep(400);
+  st = await waitFor(page, (s) => s.active.includes('Shop'), 3000);
+  if (!st.active.includes('Shop')) errors.push(`${label}: Shop did not open`);
+
+  const purchaseOk = await page.evaluate(async () => {
+    const g = window.__NEON;
+    const shop = g.scene.getScene('Shop');
+    if (!shop) return { ok: false, err: 'no shop' };
+    try {
+      const p = shop.buyStoreProduct('coins_small');
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 150));
+        if (g.scene.isActive('Purchase')) break;
+      }
+      if (!g.scene.isActive('Purchase')) return { ok: false, err: 'Purchase scene not open' };
+      g.scene.getScene('Purchase').confirmPurchase();
+      await p;
+      await new Promise((r) => setTimeout(r, 200));
+      return {
+        ok: g.scene.isActive('Shop') && !g.scene.isPaused('Shop'),
+        err: null,
+      };
+    } catch (e) {
+      return { ok: false, err: String(e?.message ?? e) };
+    }
+  });
+  if (!purchaseOk.ok) errors.push(`${label}: demo purchase flow failed — ${purchaseOk.err ?? 'unknown'}`);
+
+  await page.evaluate(() => {
+    window.__NEON.scene.stop('Shop');
+    window.__NEON.scene.wake('Menu');
+  });
+  await sleep(300);
+
   // Start game
   await clickAt(page, 0.5, 0.5);
   await sleep(800);
@@ -118,6 +158,8 @@ async function runFlow(page, label) {
     if (gs.balls[0].element !== 'electric') throw new Error('ElectricBall should replace FrozenBall');
     gs.applyPower('Laser');
     if (!gs.paddle.hasCannon) throw new Error('Laser should equip cannons');
+    gs.applyPower('Laser');
+    if (!gs.powerSys.isActive('LaserII')) throw new Error('Laser fusion should yield LaserII');
     gs.applyPower('Expand');
     gs.applyPower('Reduce');
     const w = gs.paddle.w;

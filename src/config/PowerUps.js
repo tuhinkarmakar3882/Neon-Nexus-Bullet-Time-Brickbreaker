@@ -5,9 +5,9 @@ import { PAL, cssHex } from './Palette.js';
 
 /** Visual stripe / chip accent by slot type */
 export const CATEGORY_COLORS = {
-  paddle: 0xe8b86d,
-  ball: 0xd45d8c,
-  env: 0x7eb87a,
+  paddle: 0x2fe6c7,
+  ball: 0xff4fa3,
+  env: 0x9ad24d,
   wild: 0x9b8cff,
 };
 
@@ -112,6 +112,30 @@ export const POWERS = {
 
 export const WEAPON_KEYS = [...CANNON_TYPES, ...BALL_MODS];
 export const POWER_KEYS = Object.keys(POWERS);
+
+export function powerHasBallMod(key) {
+  return !!POWERS[resolvePowerKey(key)]?.ballMod;
+}
+
+export function powerHasCannon(key) {
+  return !!POWERS[resolvePowerKey(key)]?.cannon;
+}
+
+export function findActiveBallModKey(powerSys) {
+  if (!powerSys?.keys) return null;
+  for (const k of powerSys.keys()) {
+    if (powerHasBallMod(k)) return k;
+  }
+  return null;
+}
+
+export function findActiveCannonKey(powerSys) {
+  if (!powerSys?.keys) return null;
+  for (const k of powerSys.keys()) {
+    if (powerHasCannon(k)) return k;
+  }
+  return null;
+}
 
 export function powerFillColor(key) {
   const k = resolvePowerKey(key);
