@@ -15,6 +15,7 @@ import { AdBreakScene } from './scenes/AdBreakScene.js';
 import { PurchaseScene } from './scenes/PurchaseScene.js';
 import { InputRouter } from './systems/InputRouter.js';
 import { RunPersistence } from './systems/RunPersistence.js';
+import { isIapEnabled } from './config/AdsConfig.js';
 import { Monetization } from './systems/Monetization.js';
 import { createAdProvider } from './systems/createAdProvider.js';
 import { SaveManager } from './systems/SaveManager.js';
@@ -26,6 +27,7 @@ import {
 } from './systems/LayoutManager.js';
 import { attachFullscreenListener, lockMobileViewport } from './systems/Fullscreen.js';
 import { initNativeBridge } from './systems/NativeBridge.js';
+import { attachAppLifecycle } from './systems/AppLifecycle.js';
 import { runMigrations } from './systems/SaveMigration.js';
 import { attachEscapeListener, attachNavigation, attachPopstateListener, goBack } from './systems/Navigation.js';
 import { audio } from './systems/AudioManager.js';
@@ -160,6 +162,7 @@ function warnProductionConfig() {
   if (adMode === 'demo') {
     console.warn('[Neon Nexus] VITE_AD_PROVIDER=demo in production — set to google for ad-supported release.');
   }
+  if (!isIapEnabled()) return;
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android' && !import.meta.env.VITE_REVENUECAT_ANDROID_KEY) {
     console.warn('[Neon Nexus] VITE_REVENUECAT_ANDROID_KEY missing — IAP will use demo store on Android.');
   }
@@ -175,6 +178,7 @@ function bootGame() {
   audio.preloadMusicCatalog();
   game = new Phaser.Game(buildPhaserConfig());
   window.__NEON = game;
+  window.__NEON_FLAGS = { iapEnabled: isIapEnabled() };
 
   game.events.once(Phaser.Core.Events.READY, () => {
     bootSettledAt = Date.now();
@@ -185,6 +189,7 @@ function bootGame() {
     attachNavigation(game);
     attachPopstateListener(game);
     attachEscapeListener(game);
+    attachAppLifecycle(game);
     if (typeof window !== 'undefined') {
       window.__neonGoBack = () => goBack(game);
     }

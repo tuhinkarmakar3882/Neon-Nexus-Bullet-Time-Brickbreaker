@@ -36,7 +36,8 @@ When docs disagree with code, trust `src/` and update these plans after implemen
 | Capacitor android/ios | `pnpm run cap:add:android` / `cap:add:ios` (gitignored); see [NATIVE.md](./NATIVE.md) |
 | Back navigation | Done — `Navigation.goBack` + native + PWA popstate |
 | Save migrations | Done — `SaveMigration.js` + `pnpm run test:migration` |
-| Store keys / live deploy | Configure env + Play Console / Vercel dashboard |
+| Store keys / live deploy | `pnpm run ship:check` + [SHIP.md](./SHIP.md) |
+| `app-ads.txt` + ship scripts | Done — `public/app-ads.txt`, `ship:web`, `ship:android` |
 
 ## Verify commands
 

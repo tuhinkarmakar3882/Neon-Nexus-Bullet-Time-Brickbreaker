@@ -23,6 +23,8 @@ export class AudioManager {
     this._musicVolScale = 1;
     this._tracksReady = false;
     this._currentTrackDef = null;
+    this._backgroundPaused = false;
+    this._sfxGainBeforeBg = null;
   }
 
   _initTracks() {
@@ -217,6 +219,52 @@ export class AudioManager {
 
   stopMusic() {
     [this._trackA, this._trackB].forEach((el) => el?.pause());
+  }
+
+  /** Suspend music + SFX when app/tab goes to background. */
+  pauseForBackground() {
+    if (this._backgroundPaused) return;
+    this._backgroundPaused = true;
+    this.stopMusic();
+    if (this.sfxGain) {
+      this._sfxGainBeforeBg = this.sfxGain.gain.value;
+      this.sfxGain.gain.value = 0;
+    }
+    if (this.ctx?.state === 'running') {
+      this.ctx.suspend().catch(() => {});
+    }
+  }
+
+  /**
+   * Restore audio after foreground — pass Phaser game to pick menu vs level music.
+   * @param {import('phaser').Game} [game]
+   */
+  resumeFromBackground(game) {
+    if (!this._backgroundPaused) return;
+    this._backgroundPaused = false;
+    if (this.ctx?.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+    if (this.sfxGain && this._sfxGainBeforeBg != null) {
+      this.sfxGain.gain.value = this.soundOn ? this._sfxGainBeforeBg : 0;
+      this._sfxGainBeforeBg = null;
+    }
+    if (!this.musicOn || !game?.scene) return;
+
+    const sm = game.scene;
+    if (sm.isActive('Menu')) {
+      this.setMenuMusic();
+      return;
+    }
+    if (sm.isActive('Game')) {
+      const gs = sm.getScene('Game');
+      if (gs?.sys?.isActive?.() && !gs.over) {
+        this.setLevelMusic(gs.level ?? 1, gs.levelSeed ?? gs.campaignSeed ?? 1, {
+          biome: gs.theme?.biome ?? 'garden',
+          isBoss: !!gs.isBoss,
+        });
+      }
+    }
   }
 
   // ---------- SFX voices ----------

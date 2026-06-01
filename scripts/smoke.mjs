@@ -129,7 +129,8 @@ async function runFlow(page, label) {
     errors.push(`${label}: Navigation goBack from Settings failed — active=${st.active.join(',')}`);
   }
 
-  // Shop + Purchase via Monetization (full demo checkout flow)
+  // Shop + Purchase via Monetization (skipped when VITE_IAP_ENABLED=false)
+  const iapEnabled = await page.evaluate(() => window.__NEON_FLAGS?.iapEnabled === true);
   await page.evaluate(() => {
     const g = window.__NEON;
     g.scene.getScene('Menu')?.scene.launch('Shop', { from: 'Menu' });
@@ -139,6 +140,7 @@ async function runFlow(page, label) {
   st = await waitFor(page, (s) => s.active.includes('Shop'), 3000);
   if (!st.active.includes('Shop')) errors.push(`${label}: Shop did not open`);
 
+  if (iapEnabled) {
   const purchaseOk = await page.evaluate(async () => {
     const g = window.__NEON;
     const shop = g.scene.getScene('Shop');
@@ -162,6 +164,7 @@ async function runFlow(page, label) {
     }
   });
   if (!purchaseOk.ok) errors.push(`${label}: demo purchase flow failed — ${purchaseOk.err ?? 'unknown'}`);
+  }
 
   await page.evaluate(() => {
     const g = window.__NEON;

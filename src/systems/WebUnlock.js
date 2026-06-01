@@ -2,6 +2,7 @@
  * Web PWA Stripe fulfillment — session redirect + signed unlock codes.
  */
 import { Capacitor } from '@capacitor/core';
+import { isIapEnabled } from '../config/AdsConfig.js';
 import { MetaProgress } from './MetaProgress.js';
 import { SaveManager } from './SaveManager.js';
 
@@ -76,7 +77,9 @@ function clearPendingEntitlement() {
 }
 
 export function isWebStripeEnabled() {
-  return !Capacitor.isNativePlatform() && !!import.meta.env.VITE_STRIPE_CHECKOUT_URL;
+  return isIapEnabled()
+    && !Capacitor.isNativePlatform()
+    && !!import.meta.env.VITE_STRIPE_CHECKOUT_URL;
 }
 
 export async function fulfillSession(sessionId) {

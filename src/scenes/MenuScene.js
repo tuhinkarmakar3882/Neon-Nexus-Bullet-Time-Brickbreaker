@@ -15,7 +15,9 @@ import { resolveSettings } from '../config/VfxQuality.js';
 import { shareProgressScreenshot } from '../systems/ShareProgress.js';
 import { displayStyle, bodyStyle, orbitronStyle, uiPx, wrapWidth } from '../utils/Typography.js';
 import { canOfferInstall, onInstallPromptReady, triggerInstallPrompt } from '../systems/InstallPrompt.js';
+import { establishMenuHistory } from '../systems/Navigation.js';
 import { APP_VERSION, BUILD_STAMP } from '../config/Version.js';
+import { openLegalPage } from '../utils/LegalLinks.js';
 
 const AD_BANNER_H = 50;
 
@@ -23,6 +25,7 @@ export class MenuScene extends Phaser.Scene {
   constructor() { super(SCENES.MENU); }
 
   create() {
+    establishMenuHistory();
     this.game.scale.refresh();
     syncSceneCameras(this.game);
     const W = GAME.WIDTH;
@@ -155,7 +158,7 @@ export class MenuScene extends Phaser.Scene {
     const footerLineH = uiPx(15, { min: 13, max: 16 });
     const footerPad = uiPx(10, { min: 8, max: 12 });
     const showGameplayTip = !portrait;
-    const footerStackH = footerPad + footerLineH * (showGameplayTip ? 3 : 2) + uiPx(6, { min: 4, max: 8 });
+    const footerStackH = footerPad + footerLineH * (showGameplayTip ? 4 : 3) + uiPx(6, { min: 4, max: 8 });
     const maxBottom = H - bottomPad - footerStackH;
     this.buttons = layoutButtonStack(this, panel, items, {
       gap,
@@ -177,6 +180,16 @@ export class MenuScene extends Phaser.Scene {
     this.add.text(cx, footY, `v${APP_VERSION} · ${BUILD_STAMP}`, {
       ...orbitronStyle(10, '#4a5a70', { align: 'center' }),
     }).setOrigin(0.5, 1).setDepth(1001);
+    footY -= footerLineH;
+
+    const legalStyle = orbitronStyle(10, '#5f7088', { align: 'center' });
+    const legalGap = uiPx(10, { min: 8, max: 12 });
+    const termsLink = this.add.text(cx - legalGap, footY, 'TERMS', legalStyle).setOrigin(1, 1).setDepth(1001)
+      .setInteractive({ useHandCursor: true });
+    const privacyLink = this.add.text(cx + legalGap, footY, 'PRIVACY', legalStyle).setOrigin(0, 1).setDepth(1001)
+      .setInteractive({ useHandCursor: true });
+    termsLink.on('pointerup', () => openLegalPage('terms.html'));
+    privacyLink.on('pointerup', () => openLegalPage('privacy.html'));
     footY -= footerLineH;
 
     this.add.text(cx, footY, 'Made with ♥ by Tuhin Karmakar', {

@@ -3,6 +3,9 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadEnvFiles } from './load-env.mjs';
+
+loadEnvFiles({ production: true });
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const plistPath = join(root, 'ios/App/App/Info.plist');

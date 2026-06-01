@@ -1,15 +1,62 @@
+# Dependencies & build output
 node_modules/
 dist/
+.vite/
+
+# OS / IDE
 .DS_Store
 *.log
-.vite/
 .idea/
 .vscode/
 
-# Capacitor native platforms (generated)
+# ── Environment & secrets (NEVER commit) ───────────────────────────────────
+# Only *.example templates are allowed in git.
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+.env.local
+.env.*.local
+.env.production
+.env.production.local
+.env.development
+.env.development.local
+.env.staging
+.env.staging.local
+
+secrets/
+**/secrets/
+
+# Android / iOS signing & store credentials
+*.keystore
+*.jks
+*.p8
+*.p12
+keystore.properties
+**/keystore.properties
+!**/keystore.properties.example
+
+# Native SDK config with API keys (defensive — android/ ios/ are gitignored)
+**/local.properties
+**/google-services.json
+**/GoogleService-Info.plist
+**/*service-account*.json
+**/*ServiceAccount*.json
+**/AuthKey_*.p8
+**/play-console-credentials*.json
+
+# Hosting CLI local state (may contain tokens)
+.vercel/
+.netlify/
+
+# Optional local Capacitor overrides
+capacitor.config.local.json
+
+# Capacitor native platforms (generated locally)
 /android
 /ios
 .capacitor/
 
-# local test screenshots
+# Local test artifacts
 .smoke-shots/

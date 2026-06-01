@@ -4,6 +4,7 @@ import { PAL, cssHex } from '../config/Palette.js';
 import { PADDLE_HULLS, BALL_TRAILS, GARDEN_THEMES } from '../config/Cosmetics.js';
 import { makeButton, makeResponsiveOverlayPanel, overlayFrame, attachOverlayScroll, clampOverlayScroll } from '../utils/UI.js';
 import { MetaProgress } from '../systems/MetaProgress.js';
+import { isIapEnabled } from '../config/AdsConfig.js';
 import { Monetization } from '../systems/Monetization.js';
 import { InputRouter } from '../systems/InputRouter.js';
 import { audio } from '../systems/AudioManager.js';
@@ -67,9 +68,11 @@ export class ShopScene extends Phaser.Scene {
     y += SECTION_GAP;
     y = this.addSection('GARDEN THEMES', y);
     GARDEN_THEMES.forEach((c) => { y = this.addCosmeticRow(c, 'theme', y); });
-    y += SECTION_GAP;
-    y = this.addSection('SUPPORT', y);
-    y = this.addSupportRow(y);
+    if (isIapEnabled()) {
+      y += SECTION_GAP;
+      y = this.addSection('SUPPORT', y);
+      y = this.addSupportRow(y);
+    }
 
     this.contentHeight = y + 8;
     this.maxScroll = Math.max(0, this.contentHeight - this.contentH);
@@ -259,7 +262,9 @@ export class ShopScene extends Phaser.Scene {
       return;
     }
     if (c.premium && !MetaProgress.isPremium()) {
-      this.status.setText('Requires Premium — tap PREMIUM below');
+      this.status.setText(
+        isIapEnabled() ? 'Requires Premium — tap PREMIUM below' : 'Premium unlock coming soon',
+      );
       this.status.setColor(cssHex(PAL.gold));
       return;
     }

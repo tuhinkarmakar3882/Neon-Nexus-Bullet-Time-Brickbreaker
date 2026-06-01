@@ -11,7 +11,9 @@ import { audio } from '../systems/AudioManager.js';
 import { InputRouter } from '../systems/InputRouter.js';
 import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 import { MUSIC_CREDITS } from '../config/MusicCatalog.js';
+import { isIapEnabled } from '../config/AdsConfig.js';
 import { isWebStripeEnabled, promptUnlockCode } from '../systems/WebUnlock.js';
+import { openLegalPage } from '../utils/LegalLinks.js';
 
 export class SettingsScene extends Phaser.Scene {
   constructor() {
@@ -160,7 +162,7 @@ export class SettingsScene extends Phaser.Scene {
     if (adsRemoved) {
       this.shopStatus.setText('Ads removed — thank you!');
       y += uiPx(28, { min: 22, max: 28 });
-    } else if (Monetization.isStoreAvailable()) {
+    } else if (isIapEnabled() && Monetization.isStoreAvailable()) {
       const removeAdsPrice = Monetization.formatPrice('remove_ads') || '$2.99';
       const removeBtn = makeButton(this, frame.cx, frame.contentTop + y + uiPx(24, { min: 20, max: 24 }), `REMOVE ADS — ${removeAdsPrice}`, () => {
         this.buyRemoveAds();
@@ -184,7 +186,7 @@ export class SettingsScene extends Phaser.Scene {
         redeemBtn.setPosition(0, y + uiPx(12, { min: 8, max: 14 }));
         y += uiPx(52, { min: 44, max: 56 });
       }
-    } else {
+    } else if (isIapEnabled()) {
       this.shopStatus.setText('Store unavailable in this build');
       y += uiPx(22, { min: 18, max: 24 });
     }
@@ -200,7 +202,18 @@ export class SettingsScene extends Phaser.Scene {
     addScroll(this.add.text(0, y + uiPx(8, { min: 4, max: 8 }), MUSIC_CREDITS, {
       ...orbitronStyle(10, PAL.textMuted, { align: 'center', wordWrap: { width: frame.wrap } }),
     }).setOrigin(0.5, 0).setAlpha(0.7));
-    y += uiPx(48, { min: 40, max: 52 });
+    y += uiPx(40, { min: 34, max: 44 });
+
+    const legalY = y + uiPx(6, { min: 4, max: 8 });
+    const legalStyle = orbitronStyle(10, PAL.textMuted, { align: 'center' });
+    const legalGap = uiPx(12, { min: 10, max: 14 });
+    const termsBtn = addScroll(this.add.text(-legalGap, legalY, 'TERMS', legalStyle).setOrigin(1, 0)
+      .setInteractive({ useHandCursor: true }));
+    const privacyBtn = addScroll(this.add.text(legalGap, legalY, 'PRIVACY', legalStyle).setOrigin(0, 0)
+      .setInteractive({ useHandCursor: true }));
+    termsBtn.on('pointerup', () => openLegalPage('terms.html'));
+    privacyBtn.on('pointerup', () => openLegalPage('privacy.html'));
+    y += uiPx(36, { min: 30, max: 40 });
 
     this.contentHeight = y + 8;
     this.maxScroll = Math.max(0, this.contentHeight - this.contentH);

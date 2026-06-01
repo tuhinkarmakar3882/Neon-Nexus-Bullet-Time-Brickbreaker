@@ -53,9 +53,12 @@ Scripts:
 
 | Script | Purpose |
 |--------|---------|
-| `cap:sync:all` | `build` → patch AdMob config from env → `cap sync` |
-| `sync-capacitor-admob.mjs` | Writes `VITE_ADMOB_APP_ID_*` into `capacitor.config.json` |
-| `patch-ios-admob-plist.mjs` | Sets `GADApplicationIdentifier` in `ios/App/App/Info.plist` |
+| `ship:android` | Validate `.env.production` → build → AdMob sync → manifest patch → `cap sync` |
+| `cap:sync:all` | `build` → AdMob sync → Android manifest patch → version sync → `cap sync` |
+| `sync-capacitor-admob.mjs` | Loads `.env.production`, writes AdMob IDs to `capacitor.config.json` |
+| `patch-android-admob-manifest.mjs` | Sets `APPLICATION_ID` in `AndroidManifest.xml` |
+| `patch-ios-admob-plist.mjs` | Sets `GADApplicationIdentifier` in `Info.plist` |
+| `sync-android-version.mjs` | `versionName` / `versionCode` from `package.json` |
 
 ## Environment (native builds)
 

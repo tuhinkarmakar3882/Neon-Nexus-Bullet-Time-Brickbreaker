@@ -1,5 +1,5 @@
 import { SCENES } from '../config/Constants.js';
-import { popOverlayHistory, pushOverlayHistory } from './Navigation.js';
+import { popOverlayHistory, pushOverlayHistory, pushPauseHistory } from './Navigation.js';
 
 const OVERLAY_SCENES = [
   SCENES.PAUSE,
@@ -30,7 +30,8 @@ class InputRouterService {
   onOverlayOpen(overlayKey) {
     if (!this.game) return;
     this._overlayActive = true;
-    pushOverlayHistory();
+    if (overlayKey === SCENES.PAUSE) pushPauseHistory();
+    else pushOverlayHistory();
     const sm = this.game.scene;
     // Clear any stuck flash/toast when an overlay takes focus.
     this.game.events.emit('hud:flash', { text: '', ms: 0 });
@@ -47,7 +48,7 @@ class InputRouterService {
    * @param {string|null|boolean} closingKey - overlay being closed, or legacy boolean resumeGame
    * @param {boolean} [resumeGame=true]
    */
-  onOverlayClose(closingKey = null, resumeGame = true) {
+  onOverlayClose(closingKey = null, resumeGame = true, syncHistory = true) {
     if (!this.game) return;
     if (typeof closingKey === 'boolean') {
       resumeGame = closingKey;
@@ -57,7 +58,7 @@ class InputRouterService {
     const stillOverlayed = OVERLAY_SCENES.some((k) => k !== closingKey && sm.isActive(k));
     this._overlayActive = stillOverlayed;
     if (stillOverlayed) return;
-    popOverlayHistory();
+    if (syncHistory) popOverlayHistory();
 
     const gameActive = sm.isActive(SCENES.GAME);
     if (gameActive && sm.isPaused(SCENES.HUD)) sm.resume(SCENES.HUD);

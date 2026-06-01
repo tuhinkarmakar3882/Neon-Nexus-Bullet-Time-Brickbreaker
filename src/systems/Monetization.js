@@ -3,7 +3,7 @@
 // Provider is selected at boot via createAdProvider() + AdsConfig (see config/AdsConfig.js).
 // Game scenes call Monetization.* only — swap Google AdMob / demo / noop via config.
 
-import { AdsConfig, isAdSurfaceEnabled } from '../config/AdsConfig.js';
+import { AdsConfig, isAdSurfaceEnabled, isIapEnabled } from '../config/AdsConfig.js';
 import { MetaProgress } from './MetaProgress.js';
 import { SaveManager } from './SaveManager.js';
 import * as PlayBilling from './PlayBilling.js';
@@ -131,10 +131,12 @@ class MonetizationService {
   }
 
   isStoreAvailable() {
+    if (!isIapEnabled()) return false;
     return this.getProviderName() !== 'noop';
   }
 
   purchaseErrorMessage(res) {
+    if (res?.reason === 'iap_disabled') return '';
     if (res?.cancelled) return '';
     if (res?.pending) {
       return res.message ?? 'Complete checkout in the browser tab, then Restore Purchases or redeem your unlock code in Settings.';
@@ -181,12 +183,14 @@ class MonetizationService {
   }
 
   async restorePurchases() {
+    if (!isIapEnabled()) return { success: false, reason: 'iap_disabled' };
     const billing = await PlayBilling.restorePurchases();
     if (billing) return billing;
     return this.syncStoreEntitlements();
   }
 
   async purchase(productId) {
+    if (!isIapEnabled()) return { success: false, reason: 'iap_disabled' };
     const billing = await PlayBilling.purchaseProduct(productId);
     if (billing) {
       if (billing.success) this.applyEntitlements(productId);

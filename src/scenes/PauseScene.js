@@ -3,6 +3,7 @@ import { SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { anchorButtonStack, makeResponsiveOverlayPanel, overlayFrame } from '../utils/UI.js';
 import { InputRouter } from '../systems/InputRouter.js';
+import { clearGameplayHistory } from '../systems/Navigation.js';
 import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 
 export class PauseScene extends Phaser.Scene {
@@ -35,10 +36,11 @@ export class PauseScene extends Phaser.Scene {
       {
         label: 'QUIT TO MENU', primary: false, color: PAL.danger, fontSize: '16px',
         onClick: () => {
-          InputRouter.onOverlayClose(SCENES.PAUSE, false);
+          InputRouter.onOverlayClose(SCENES.PAUSE, false, false);
           this.scene.stop(SCENES.HUD);
           this.scene.stop(SCENES.GAME);
           this.scene.stop();
+          clearGameplayHistory();
           this.scene.start(SCENES.MENU);
         },
       },
@@ -58,14 +60,14 @@ export class PauseScene extends Phaser.Scene {
     this.events.on('wake', () => {});
   }
 
-  resume() {
-    InputRouter.onOverlayClose(SCENES.PAUSE);
+  resume(syncHistory = true) {
+    InputRouter.onOverlayClose(SCENES.PAUSE, true, syncHistory);
     this.scene.resume(SCENES.GAME);
     this.scene.stop();
   }
 
   handleBack() {
-    this.resume();
+    this.resume(false);
     return true;
   }
 }

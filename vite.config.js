@@ -1,5 +1,5 @@
 import { VitePWA } from 'vite-plugin-pwa';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
@@ -16,6 +16,22 @@ function loadPwaManifest() {
 
 function siteUrl() {
   return (process.env.VITE_GAME_URL || '').replace(/\/$/, '');
+}
+
+function legalSupportEmail() {
+  const email = (process.env.VITE_SUPPORT_EMAIL || 'support@example.com').trim();
+  return {
+    name: 'legal-support-email',
+    closeBundle() {
+      for (const file of ['privacy.html', 'terms.html']) {
+        const p = resolve(root, 'dist', file);
+        if (!existsSync(p)) continue;
+        let html = readFileSync(p, 'utf8');
+        html = html.replaceAll('support@example.com', email);
+        writeFileSync(p, html);
+      }
+    },
+  };
 }
 
 function htmlSeoInject() {
@@ -40,12 +56,14 @@ export default defineConfig({
   base: './',
   plugins: [
     htmlSeoInject(),
+    legalSupportEmail(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: null,
       manifestFilename: 'manifest.json',
       manifest: loadPwaManifest(),
       includeAssets: [
+        'app-ads.txt',
         'og-image.png',
         'manifest.json',
         'icons/android/android-launchericon-192-192.png',

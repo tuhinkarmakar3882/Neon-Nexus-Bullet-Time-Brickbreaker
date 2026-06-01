@@ -2,10 +2,12 @@ import Phaser from 'phaser';
 import { SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { Capacitor } from '@capacitor/core';
+import { isIapEnabled } from '../config/AdsConfig.js';
 import { Monetization } from '../systems/Monetization.js';
 import { InputRouter } from '../systems/InputRouter.js';
 import { makeButton, makeResponsiveOverlayPanel, overlayFrame } from '../utils/UI.js';
 import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
+import { LEGAL_PURCHASE_NOTICE } from '../utils/LegalLinks.js';
 
 /** Modal checkout sheet — launched on top of Shop/Settings by the ad provider. */
 export class PurchaseScene extends Phaser.Scene {
@@ -20,6 +22,12 @@ export class PurchaseScene extends Phaser.Scene {
 
   create() {
     InputRouter.onOverlayOpen(SCENES.PURCHASE);
+    if (!isIapEnabled()) {
+      this.time.delayedCall(0, () => {
+        if (this.scene?.isActive?.()) this.closePurchase({ success: false, cancelled: true, productId: this.productId });
+      });
+      return;
+    }
     this.input.setTopOnly(true);
     const UI_DEPTH = 1200;
 
@@ -51,6 +59,10 @@ export class PurchaseScene extends Phaser.Scene {
     this._status = this.add.text(frame.cx, blurb.y + blurb.height + uiPx(20, { min: 16, max: 24 }), hint, {
       ...orbitronStyle(11, PAL.textMuted, { align: 'center', wordWrap: { width: wrap } }),
     }).setOrigin(0.5, 0).setDepth(UI_DEPTH + 1);
+
+    this.add.text(frame.cx, this._status.y + this._status.height + uiPx(12, { min: 10, max: 14 }), LEGAL_PURCHASE_NOTICE, {
+      ...orbitronStyle(9, PAL.textMuted, { align: 'center', wordWrap: { width: wrap } }),
+    }).setOrigin(0.5, 0).setDepth(UI_DEPTH + 1).setAlpha(0.85);
 
     const btnW = Math.min(frame.btnW, uiPx(280, { max: 300 }));
 

@@ -31,6 +31,7 @@ import { Monetization } from '../systems/Monetization.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { RunPersistence } from '../systems/RunPersistence.js';
 import { InputRouter } from '../systems/InputRouter.js';
+import { pushGameplayHistory } from '../systems/Navigation.js';
 import { hapticPulse } from '../systems/Haptics.js';
 import { scaledBallBaseSpeed, difficultyFor } from '../systems/DifficultyScaler.js';
 import { addCameraFx, spawnConfetti, makeButton } from '../utils/UI.js';
@@ -192,6 +193,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.time.delayedCall(80, () => this.levelFlash());
+    pushGameplayHistory();
     this.events.on('shutdown', () => this.cleanup());
   }
 

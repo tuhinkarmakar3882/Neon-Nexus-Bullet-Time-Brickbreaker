@@ -2,6 +2,13 @@
 import { Capacitor } from '@capacitor/core';
 import { SCENES } from '../config/Constants.js';
 
+export const NAV = {
+  MENU: 'menu',
+  GAME: 'game',
+  PAUSE: 'pause',
+  OVERLAY: 'overlay',
+};
+
 /** Always dismiss first (blocking gameplay). */
 const BLOCKING_OVERLAYS = [
   SCENES.GAMEOVER,
@@ -18,15 +25,75 @@ const MENU_OVERLAYS = [SCENES.SHOP, SCENES.SETTINGS, SCENES.CODEX];
 
 let gameRef = null;
 let lastMenuBackAt = 0;
-let overlayHistoryDepth = 0;
+let historyDepth = 0;
 let suppressNextHistoryPop = false;
+let skipNextHistorySync = false;
 
 export function attachNavigation(game) {
   gameRef = game;
 }
 
-function sm() {
-  return gameRef?.scene;
+function historyEnabled() {
+  return typeof window !== 'undefined' && !Capacitor.isNativePlatform();
+}
+
+function pushNavState(kind) {
+  if (!historyEnabled()) return;
+  try {
+    window.history.pushState({ neonNav: kind }, '');
+    historyDepth += 1;
+  } catch { /* private mode */ }
+}
+
+function syncHistoryPop() {
+  if (!historyEnabled() || historyDepth <= 0) return;
+  historyDepth -= 1;
+  suppressNextHistoryPop = true;
+  try {
+    window.history.back();
+  } catch { /* ignore */ }
+}
+
+/** Menu is the history baseline (not counted in depth). */
+export function establishMenuHistory() {
+  if (!historyEnabled()) return;
+  try {
+    window.history.replaceState({ neonNav: NAV.MENU }, '');
+    historyDepth = 0;
+  } catch { /* private mode */ }
+}
+
+/** New run / resume — push gameplay onto the stack (web/PWA back). */
+export function pushGameplayHistory() {
+  pushNavState(NAV.GAME);
+}
+
+/** Pause menu layer on top of gameplay. */
+export function pushPauseHistory() {
+  pushNavState(NAV.PAUSE);
+}
+
+/** Generic overlay (shop, settings from menu, etc.). */
+export function pushOverlayHistory() {
+  pushNavState(NAV.OVERLAY);
+}
+
+/** Returning to main menu — reset stack to menu baseline. */
+export function clearGameplayHistory() {
+  establishMenuHistory();
+}
+
+/** After programmatic close (Resume button) — sync browser stack. */
+export function popOverlayHistory() {
+  if (skipNextHistorySync) {
+    skipNextHistorySync = false;
+    return;
+  }
+  syncHistoryPop();
+}
+
+export function markHistorySyncSkipped() {
+  skipNextHistorySync = true;
 }
 
 function tryOverlayBack(scenes, keys) {
@@ -53,6 +120,18 @@ function isGameplayRunning(scenes) {
     && !gameScene.transitioning
     && !scenes.isPaused(SCENES.GAME)
   );
+}
+
+export function quitGameToMenu(game = gameRef) {
+  const scenes = game?.scene;
+  if (!scenes) return;
+  for (const key of [SCENES.PAUSE, ...PAUSE_CHILD_OVERLAYS, SCENES.GAMEOVER, SCENES.LEVEL_COMPLETE]) {
+    if (scenes.isActive(key)) scenes.stop(key);
+  }
+  if (scenes.isActive(SCENES.HUD)) scenes.stop(SCENES.HUD);
+  if (scenes.isActive(SCENES.GAME)) scenes.stop(SCENES.GAME);
+  clearGameplayHistory();
+  scenes.start(SCENES.MENU);
 }
 
 /**
@@ -94,6 +173,11 @@ export function goBack(game = gameRef) {
     return { handled: true, action: 'pause-game' };
   }
 
+  if (scenes.isActive(SCENES.GAME) && !scenes.isActive(SCENES.MENU)) {
+    quitGameToMenu(game);
+    return { handled: true, action: 'game-exit' };
+  }
+
   if (isMenuFlow(scenes)) {
     const menuOverlay = tryOverlayBack(scenes, MENU_OVERLAYS);
     if (menuOverlay) return menuOverlay;
@@ -130,38 +214,24 @@ export async function requestExitApp() {
   }
 }
 
-/** Push a history entry when an overlay opens (PWA browser back). */
-export function pushOverlayHistory() {
-  if (Capacitor.isNativePlatform() || typeof window === 'undefined') return;
-  try {
-    window.history.pushState({ neonOverlay: true }, '');
-    overlayHistoryDepth += 1;
-  } catch { /* private mode */ }
-}
-
-function syncHistoryAfterOverlayClose() {
-  if (Capacitor.isNativePlatform() || overlayHistoryDepth <= 0) return;
-  overlayHistoryDepth -= 1;
-  suppressNextHistoryPop = true;
-  try {
-    window.history.back();
-  } catch { /* ignore */ }
-}
-
-/** Call from InputRouter when an overlay closes via UI (not popstate). */
-export function popOverlayHistory() {
-  syncHistoryAfterOverlayClose();
-}
-
 export function attachPopstateListener(game) {
-  if (Capacitor.isNativePlatform() || typeof window === 'undefined') return;
+  if (!historyEnabled()) return;
   attachNavigation(game);
   window.addEventListener('popstate', () => {
     if (suppressNextHistoryPop) {
       suppressNextHistoryPop = false;
       return;
     }
-    if (overlayHistoryDepth > 0) overlayHistoryDepth -= 1;
+    if (historyDepth > 0) historyDepth -= 1;
+
+    const kind = window.history.state?.neonNav;
+    const scenes = game?.scene;
+    if (kind === NAV.MENU && scenes?.isActive(SCENES.GAME)) {
+      quitGameToMenu(game);
+      return;
+    }
+
+    markHistorySyncSkipped();
     goBack(game);
   });
 }

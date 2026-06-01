@@ -3,7 +3,7 @@
  * Falls back to demo purchase flow when keys are not configured.
  */
 import { Capacitor } from '@capacitor/core';
-import { AdsConfig } from '../config/AdsConfig.js';
+import { isIapEnabled } from '../config/AdsConfig.js';
 import { MetaProgress } from './MetaProgress.js';
 import { SaveManager } from './SaveManager.js';
 import { Monetization } from './Monetization.js';
@@ -40,6 +40,7 @@ function iosKey() {
 }
 
 export async function initPlayBilling() {
+  if (!isIapEnabled()) return false;
   const RC = await loadPurchases();
   if (!RC) return false;
   const platform = Capacitor.getPlatform();
@@ -64,6 +65,7 @@ function applyProduct(productId) {
 }
 
 export async function purchaseProduct(productId) {
+  if (!isIapEnabled()) return { success: false, reason: 'iap_disabled' };
   if (typeof window.__nativePurchase === 'function') {
     return window.__nativePurchase(productId);
   }

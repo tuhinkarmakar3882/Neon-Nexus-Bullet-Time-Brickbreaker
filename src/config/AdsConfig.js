@@ -77,6 +77,12 @@ export const AdsConfig = {
   /** 'demo' | 'google' | 'noop' */
   provider: envStr('VITE_AD_PROVIDER', 'demo'),
 
+  /**
+   * Real-money IAP (Remove Ads, gem packs, Premium). When false, only ad monetization
+   * and in-game gem cosmetics are available. Set VITE_IAP_ENABLED=true to ship purchases.
+   */
+  iapEnabled: envBool('VITE_IAP_ENABLED', false),
+
   /** When true, uses Google's official test ad unit IDs (safe for dev builds). */
   testMode: envBool('VITE_AD_TEST_MODE', true),
 
@@ -188,4 +194,9 @@ export function isAdSurfaceEnabled(type) {
 
 export function isAdsEnabled() {
   return AdsConfig.provider !== 'noop';
+}
+
+/** Real-money store (Play / App Store / Stripe). Independent of ad provider. */
+export function isIapEnabled() {
+  return AdsConfig.iapEnabled === true;
 }

@@ -65,18 +65,26 @@ src/
 
 ## Production release
 
-Full ship checklist and platform guides live in [`docs/`](docs/):
+```bash
+cp .env.production.example .env.production   # fill keys (gitignored — never commit)
+pnpm run check:secrets     # ensure no secrets in git
+pnpm run ship:check          # validate env
+pnpm run ship:web            # production PWA → dist/
+pnpm run ship:android        # validate + build + native sync
+pnpm run ship:android:bundle # signed AAB (after keystore setup)
+```
+
+**Click-ops checklist (dashboards only):** [`docs/SHIP.md`](docs/SHIP.md)
 
 | Doc | Topic |
 |-----|-------|
-| [**PRODUCTION_PLAN.md**](docs/PRODUCTION_PLAN.md) | Master roadmap (Phases 0–6) |
-| [**RELEASE.md**](docs/RELEASE.md) | Android / Google Play |
-| [**PWA.md**](docs/PWA.md) | Vercel & Netlify deploy |
+| [**SHIP.md**](docs/SHIP.md) | What you do vs what scripts do |
+| [**PRODUCTION_PLAN.md**](docs/PRODUCTION_PLAN.md) | Master roadmap |
+| [**RELEASE.md**](docs/RELEASE.md) | Android signing & Play |
+| [**PWA.md**](docs/PWA.md) | Vercel & Netlify |
 | [**IAP.md**](docs/IAP.md) | RevenueCat + Stripe |
-| [**MUSIC.md**](docs/MUSIC.md) | Pixabay ambient loops |
-| [**ADS.md**](docs/ADS.md) | Freemium AdMob / AdSense |
-
-Copy [`.env.production.example`](.env.production.example) for production env vars.
+| [**NATIVE.md**](docs/NATIVE.md) | Capacitor workflow |
+| [**ADS.md**](docs/ADS.md) | AdMob / AdSense |
 
 ---
 

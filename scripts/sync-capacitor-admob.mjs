@@ -6,6 +6,9 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadEnvFiles } from './load-env.mjs';
+
+loadEnvFiles({ production: true });
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const configPath = join(root, 'capacitor.config.json');
@@ -35,6 +38,7 @@ if (iosAppId) {
   config.plugins.AdMob.iosAppId = iosAppId;
 }
 config.plugins.AdMob.isTesting = testMode;
+config.plugins.AdMob.initializeForTesting = testMode;
 
 writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 console.log('[sync-capacitor-admob] Updated AdMob plugin config (isTesting=%s)', testMode);
