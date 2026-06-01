@@ -102,9 +102,7 @@ export const GAME = {
   GNOME_STREAK_JUGGLE: 2,
   GNOME_STREAK_KNOCKOUT: 5,
   GNOME_STREAK_LEVEL_BONUS: 24,
-  /** Chance a silver/explosive/reinforced brick drops a capsule */
-  BRICK_DROP_CHANCE_BASE: 0.05,
-  BRICK_DROP_CHANCE_MAX: 0.12,
+  /** Brick capsule drop curve lives in utils/Helpers.js `dropChance(level)`. */
   POWERUP_FALL_SPEED: 280,
   SCORE_STUN_PENALTY: 60,
   SCORE_LEVEL_CLEAR: 1000,
@@ -172,6 +170,8 @@ export const JARDINAIN = {
   MAX_ALIVE: 6,
   SIZE: 26,
   TAUNT_MS: 1400,
+  /** Freeze + gnome taunt after the last ball is lost (before respawn). */
+  BALL_LOSS_BEAT_MS: 1500,
   ROPE_CLIMB_MS: 900,
   /** Min ms between ball hits on same gnome */
   JUGGLE_HIT_COOLDOWN_MS: 300,
@@ -309,17 +309,15 @@ export function computeLayout(winW, winH, insets) {
   return { W, H };
 }
 
-/** Left/right clamp for paddle center — flush to #game-root when DOM HUD has side rails. */
+/** Left/right clamp for paddle — flush to playfield edges (bricks use playfieldSideInset). */
 export function paddleSideInset() {
-  if (GAME.USE_DOM_HUD) return GAME.PADDLE_INSET ?? 0;
+  if (GAME.USE_DOM_HUD) return 0;
   return GAME.PADDLE_INSET ?? GAME.WALL_X;
 }
 
-/** Ball side walls — inset by ball radius so the orb clears the edge glow. */
+/** Ball side walls — match paddle travel so walls and paddle align. */
 export function ballSideInset() {
-  if (GAME.USE_DOM_HUD) {
-    return Math.max(2, Math.round((GAME.BALL_RADIUS ?? 12) * 0.35));
-  }
+  if (GAME.USE_DOM_HUD) return 0;
   return GAME.WALL_X;
 }
 

@@ -28,14 +28,17 @@ export function difficultyFor(level) {
     bounceAccelMult: clamp(1 + t * 0.004, 1, 1.12),
     brickHpMult: clamp(1 + t * 0.018, 1, 1.55),
 
-    rowBonus: Math.min(10, Math.floor(t / 1.35)),
-    layoutRowBonus: mobile ? 2 + Math.floor(t / 2) : 1 + Math.floor(t / 5),
-    layoutMaxRows: mobile ? 20 : 18,
-    layoutDensityBoost: mobile ? 0.04 : 0.02,
+    rowBonus: Math.min(12, Math.floor(t / 1.05) + (level <= 2 ? 0 : 1)),
+    layoutRowBonus: mobile ? 3 + Math.floor(t / 1.4) : 2 + Math.floor(t / 3.5),
+    layoutMaxRows: mobile ? 22 : 20,
+    layoutDensityBoost: mobile ? 0.07 : 0.05,
     /** Small deterministic row wobble from level (not RNG) */
     rowJitter: (level % 3) - 1,
-    patternDensity: 1,
-    sparsePatternBoost: clamp(1.02 + t * 0.004, 1.02, 1.12),
+    patternDensity: clamp(1.06 + t * 0.011, 1.06, 1.2),
+    sparsePatternBoost: clamp(1.0 + t * 0.005, 1.0, 1.1),
+    /** Gnome pot cadence — slow early, ramps to full pressure (~level 22+). */
+    potThrowRateMult: clamp(0.42 + t * 0.028, 0.42, 1.05),
+    potSpeedMult: clamp(0.5 + t * 0.026, 0.5, 1.12),
     movingBoost: clamp(t * 0.008, 0, 0.28),
     moveSpeedMult: clamp(1 + t * 0.01, 1, 1.45),
 

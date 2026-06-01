@@ -189,7 +189,7 @@ export function buildLevel(level, campaignSeed = 12345) {
     : 7 + diff.rowBonus + diff.layoutRowBonus + (diff.rowJitter ?? 0) + (level % 2);
   const totalRows = clamp(baseRows, 7, rowCap);
 
-  const fillDensity = Math.min(1, diff.patternDensity + diff.layoutDensityBoost + (level <= 4 ? 0.02 : 0));
+  const fillDensity = Math.min(1, diff.patternDensity + diff.layoutDensityBoost + (level <= 12 ? 0.08 : 0.02));
 
   const twist = isBoss ? 'none' : pickWeighted(TWISTS.filter((t) => level >= t.minLevel), rng);
   const mutators = pickMutators(level, rng, diff, isBoss);
@@ -219,7 +219,7 @@ export function buildLevel(level, campaignSeed = 12345) {
       arenaLeft: gridLeft, top, level, levelSeed, noise, theme, rng, diff,
     });
   } else {
-    const zoneCount = diff.zoneCount;
+    const zoneCount = Math.min(diff.zoneCount, Math.max(1, Math.floor(totalRows / 2)));
     const zoneRows = splitRows(totalRows, zoneCount, rng);
     const zonePatterns = pickZonePatterns(level, levelSeed, zoneCount, rng);
     let rowOffset = 0;
@@ -283,13 +283,13 @@ export function buildLevel(level, campaignSeed = 12345) {
 
 function splitRows(total, zones, rng) {
   if (zones <= 1) return [total];
-  const minPerZone = total >= zones * 3 ? 3 : 2;
-  const out = new Array(zones).fill(minPerZone);
-  let rem = total - minPerZone * zones;
-  while (rem > 0) {
-    const i = Math.floor(rng() * zones);
-    if (out[i] < Math.ceil(total / zones) + 3) { out[i]++; rem--; }
-    else rem--;
+  zones = Math.min(zones, Math.max(1, total));
+  const out = new Array(zones).fill(1);
+  let rem = total - zones;
+  let guard = 0;
+  while (rem > 0 && guard++ < 512) {
+    out[Math.floor(rng() * zones)]++;
+    rem--;
   }
   return out;
 }
@@ -317,9 +317,12 @@ function pickZonePatterns(level, levelSeed, zoneCount, rng) {
   const out = [];
 
   const earlyIds = new Set(['rows', 'pyramid', 'checker', 'columns', 'chevron', 'wave', 'frame']);
+  const denseOnly = (list) => list.filter((p) => !SPARSE_PATTERN_IDS.has(p.id));
   const sigPool = level <= 6
     ? eligible.filter((p) => earlyIds.has(p.id))
-    : eligible;
+    : level <= 14
+      ? denseOnly(eligible)
+      : eligible;
   const sigIdx = (level * 23 + (levelSeed >>> 4) + (levelSeed & 0xff)) % Math.max(1, sigPool.length);
   const signature = sigPool[sigIdx]?.id ?? eligible[0]?.id;
   if (signature) {
@@ -330,6 +333,7 @@ function pickZonePatterns(level, levelSeed, zoneCount, rng) {
 
   while (out.length < zoneCount) {
     let pool = eligible.filter((p) => !used.has(p.id));
+    if (level <= 14) pool = pool.filter((p) => !SPARSE_PATTERN_IDS.has(p.id));
     const altGroup = pool.filter((p) => !usedGroups.has(patternGroup(p.id)));
     if (altGroup.length >= 2) pool = altGroup;
     if (!pool.length) {

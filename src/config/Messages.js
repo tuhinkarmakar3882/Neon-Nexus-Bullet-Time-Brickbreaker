@@ -1,5 +1,15 @@
 /** Flavor lines for level clear and game over — themed, concise, shareable. */
 
+/** Gnome taunts when the player loses a life. */
+export const GNOME_TAUNT_MESSAGES = [
+  'Ha! Missed!',
+  'The gnomes laugh!',
+  'Try again, gardener!',
+  'Too slow!',
+  'Our garden, our rules!',
+  'Pot luck next time!',
+];
+
 export const GAME_OVER_MESSAGES = [
   'The garden wins this round. Your rematch starts now.',
   'Bricks held the line. Ready when you are.',

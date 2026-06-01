@@ -3,7 +3,7 @@
 import { SCENES } from '../config/Constants.js';
 import { buildShareMessage, getGameUrl, MARKETING, shareTitle } from '../config/ShareConfig.js';
 import { MetaProgress } from './MetaProgress.js';
-import { canvasFont } from '../utils/Typography.js';
+import { canvasFont, ensureFontsLoaded } from '../utils/Typography.js';
 
 const CARD_W = 1080;
 const CARD_H = 1350;
@@ -382,185 +382,388 @@ function drawBrickField(ctx, px, py, pw, ph) {
   }
 }
 
-/**
- * Renders the in-game UIScene layout (compact header, edge meters, play field, paddle strip).
- * Live snapshot is composited into the play area when available.
- */
-function drawGameplayPreview(ctx, x, y, fw, fh, ui = {}) {
-  const headerH = Math.max(44, fh * 0.065);
-  const floorH = fh * 0.11;
-  const edgeW = Math.max(11, Math.round(fw * 0.036));
-  const wallX = Math.max(14, Math.round(fw * 0.022));
-  const headerGap = Math.max(6, Math.round(fh * 0.01));
-  const headerTop = y + 6;
-  const headerBottom = y + headerH;
-  const playTop = headerBottom + headerGap;
-  const playBottom = y + fh - floorH;
-  const playH = playBottom - playTop;
-  const playLeft = x + wallX;
-  const playRight = x + fw - wallX;
-  const playX = playLeft;
-  const playW = playRight - playLeft;
+/** Map normalized arena coords (0–1) to faux-3D screen space (narrower toward top). */
+function arenaPoint(px, py, ox, oy, ow, oh) {
+  const depth = clamp01(py);
+  const scaleX = 0.62 + depth * 0.38;
+  const x = ox + ow * 0.5 + (px - 0.5) * ow * scaleX;
+  const y = oy + oh * depth;
+  return { x, y, scale: scaleX };
+}
 
-  ctx.fillStyle = '#08050c';
-  roundRect(ctx, x, y, fw, fh, 22);
-  ctx.fill();
-
-  const playBg = ctx.createLinearGradient(playX, playTop, playX, playBottom);
-  playBg.addColorStop(0, '#120a1e');
-  playBg.addColorStop(0.55, '#0a0614');
-  playBg.addColorStop(1, '#040208');
-  ctx.fillStyle = playBg;
-  ctx.fillRect(playX, playTop, playW, playH);
-
+function drawBootStyleGrid(ctx, w, h) {
   ctx.save();
-  ctx.strokeStyle = 'rgba(47, 230, 199, 0.55)';
-  ctx.lineWidth = 3;
-  ctx.shadowColor = NEON.teal;
-  ctx.shadowBlur = 12;
-  ctx.beginPath();
-  ctx.moveTo(playLeft + 1, playTop + 8);
-  ctx.lineTo(playLeft + 1, playBottom - 8);
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(90, 160, 255, 0.55)';
-  ctx.shadowColor = NEON.sky;
-  ctx.beginPath();
-  ctx.moveTo(playRight - 1, playTop + 8);
-  ctx.lineTo(playRight - 1, playBottom - 8);
-  ctx.stroke();
+  ctx.strokeStyle = 'rgba(47, 230, 199, 0.08)';
+  ctx.lineWidth = 1;
+  const step = 36;
+  for (let gx = 0; gx < w + h; gx += step) {
+    ctx.beginPath();
+    ctx.moveTo(gx, 0);
+    ctx.lineTo(gx - h * 0.35, h);
+    ctx.stroke();
+  }
+  for (let gy = 0; gy < h; gy += step) {
+    ctx.beginPath();
+    ctx.moveTo(0, gy);
+    ctx.lineTo(w, gy);
+    ctx.stroke();
+  }
   ctx.restore();
+}
 
-  const snapshot = ui.snapshot;
-  const snapOk = snapshot && canvasHasContent(snapshot);
-  if (snapOk) {
-    ctx.save();
-    roundRect(ctx, playX, playTop, playW, playH, 8);
-    ctx.clip();
-    const scale = Math.max(playW / snapshot.width, playH / snapshot.height);
-    const dw = snapshot.width * scale;
-    const dh = snapshot.height * scale;
-    ctx.drawImage(snapshot, playX + (playW - dw) / 2, playTop + (playH - dh) / 2, dw, dh);
-    ctx.fillStyle = 'rgba(8, 5, 12, 0.25)';
-    ctx.fillRect(playX, playTop, playW, playH);
-    ctx.restore();
+function drawMiniGnome(ctx, cx, cy, s, hat = '#c84040') {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(s, s);
+  ctx.fillStyle = 'rgba(8, 5, 12, 0.35)';
+  ctx.beginPath();
+  ctx.ellipse(0, 14, 16, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#e8dcc8';
+  ctx.beginPath();
+  ctx.arc(0, 4, 11, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = hat;
+  ctx.beginPath();
+  ctx.moveTo(-12, -2);
+  ctx.lineTo(12, -2);
+  ctx.lineTo(0, -18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#7eb87a';
+  ctx.fillRect(-2, -10, 4, 8);
+  ctx.fillStyle = '#5a9a56';
+  ctx.beginPath();
+  ctx.ellipse(-5, -6, 4, 6, -0.4, 0, Math.PI * 2);
+  ctx.ellipse(5, -6, 4, 6, 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawMiniEnemy(ctx, cx, cy, s, kind = 'drifter') {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(s, s);
+  const c = kind === 'chaser' ? '#ff6b7a' : kind === 'zigzag' ? '#5aa0ff' : '#9b8cff';
+  ctx.fillStyle = c;
+  ctx.shadowColor = c;
+  ctx.shadowBlur = 12;
+  if (kind === 'chaser') {
+    ctx.beginPath();
+    ctx.moveTo(0, -14);
+    ctx.lineTo(12, 10);
+    ctx.lineTo(-12, 10);
+    ctx.closePath();
+    ctx.fill();
   } else {
-    drawBrickField(ctx, playX, playTop, playW, playH);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 14, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(-4, -2, 3, 0, Math.PI * 2);
+    ctx.arc(4, -2, 3, 0, Math.PI * 2);
+    ctx.fill();
   }
-
-  for (const [ex, label, ratio, color] of [
-    [playLeft + edgeW / 2, 'GNOME', ui.gnomeRatio ?? 0.55, '#7eb87a'],
-    [playRight - edgeW / 2, 'NEXUS', ui.nexusRatio ?? 0.72, '#4488ff'],
-  ]) {
-    drawEdgeMeter(ctx, ex, playTop + 12, playH - 24, ratio, color, label);
-  }
-
-  ctx.fillStyle = 'rgba(8, 11, 22, 0.9)';
-  roundRect(ctx, x + 8, headerTop, fw - 16, headerH - 8, 14);
-  ctx.fill();
-
-  const headerCy = headerTop + (headerH - 8) / 2;
-  const pad = 12;
-  const pauseReserve = 44;
-  const innerW = fw - pad * 2 - pauseReserve;
-  const slotW = innerW / 4;
-  const slotX = (i) => x + pad + slotW * (i + 0.5);
-
-  const lives = Math.max(0, Math.min(5, Number(ui.lives ?? 3)));
-  let hx = slotX(0) - (lives - 1) * 8;
-  for (let i = 0; i < lives; i++) {
-    drawHeart(ctx, hx, headerCy, 12);
-    hx += 16;
-  }
-  if (ui.showSlow) drawStatusPill(ctx, 'SLOW', hx + 20, headerCy, NEON.teal);
-  if (ui.showPotted) drawStatusPill(ctx, 'POTTED!', hx + 56, headerCy, NEON.amber);
-
-  const scoreStr = String(ui.score ?? '0');
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = NEON.cream;
-  ctx.font = canvasFont(Math.min(22, fw * 0.055), '800');
-  ctx.shadowColor = NEON.teal;
-  ctx.shadowBlur = 10;
-  ctx.fillText(scoreStr, slotX(1), headerCy);
   ctx.shadowBlur = 0;
+  ctx.restore();
+}
 
-  const pauseCx = x + fw - 22;
-  drawMetricPill(ctx, '💎', String(ui.gems ?? '0'), slotX(2) - 18, headerCy, '#66ccff');
-  drawMetricPill(ctx, '🌿', String(ui.treasury ?? '0'), slotX(2) + 18, headerCy, '#7eb87a');
-
-  const metricsX = slotX(3);
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = 'rgba(139, 155, 180, 0.9)';
-  ctx.font = canvasFont(8, '700');
-  ctx.fillText('LV', metricsX - 18, headerCy);
-  ctx.fillStyle = NEON.cream;
-  ctx.font = canvasFont(14, '800');
-  ctx.fillText(String(ui.level ?? 1), metricsX - 6, headerCy);
-  ctx.fillStyle = 'rgba(139, 155, 180, 0.9)';
-  ctx.font = canvasFont(8, '700');
-  ctx.fillText('◆', metricsX + 14, headerCy);
-  ctx.fillStyle = NEON.teal;
-  ctx.font = canvasFont(12, '800');
-  ctx.fillText(String(ui.bricks ?? '12'), metricsX + 22, headerCy);
-
-  ctx.fillStyle = 'rgba(20, 28, 48, 0.95)';
+function drawMiniBall(ctx, x, y, r, trail = []) {
+  for (let i = 0; i < trail.length; i++) {
+    const t = trail[i];
+    const a = 0.15 + (1 - i / trail.length) * 0.35;
+    const gr = ctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, r * 2.2);
+    gr.addColorStop(0, `rgba(47, 230, 199, ${a})`);
+    gr.addColorStop(1, 'rgba(47, 230, 199, 0)');
+    ctx.fillStyle = gr;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, r * 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const glow = ctx.createRadialGradient(x, y, 0, x, y, r * 2.8);
+  glow.addColorStop(0, '#ffffff');
+  glow.addColorStop(0.35, NEON.teal);
+  glow.addColorStop(1, 'rgba(47, 230, 199, 0)');
+  ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.arc(pauseCx, headerCy, 14, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(pauseCx - 4, headerCy - 6);
-  ctx.lineTo(pauseCx - 4, headerCy + 6);
-  ctx.moveTo(pauseCx + 4, headerCy - 6);
-  ctx.lineTo(pauseCx + 4, headerCy + 6);
-  ctx.stroke();
-
-  const padW = playW * 0.42;
-  const padH = 18;
-  const padX = playX + (playW - padW) / 2;
-  const padY = playBottom - 34;
-  const padGrad = ctx.createLinearGradient(padX, padY, padX + padW, padY);
-  padGrad.addColorStop(0, '#2a1a08');
-  padGrad.addColorStop(0.35, '#e8c040');
-  padGrad.addColorStop(0.5, '#fff0a8');
-  padGrad.addColorStop(0.65, '#e8c040');
-  padGrad.addColorStop(1, '#2a1a08');
-  ctx.shadowColor = NEON.amber;
-  ctx.shadowBlur = 18;
-  ctx.fillStyle = padGrad;
-  roundRect(ctx, padX, padY, padW, padH, 9);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = NEON.teal;
-  ctx.lineWidth = 2.5;
-  roundRect(ctx, padX, padY, padW, padH, 9);
-  ctx.stroke();
-
-  const ballX = padX + padW * 0.5;
-  const ballY = padY - 18;
-  const ballGlow = ctx.createRadialGradient(ballX, ballY, 0, ballX, ballY, 22);
-  ballGlow.addColorStop(0, '#ffffff');
-  ballGlow.addColorStop(0.4, NEON.teal);
-  ballGlow.addColorStop(1, 'rgba(47, 230, 199, 0)');
-  ctx.fillStyle = ballGlow;
-  ctx.beginPath();
-  ctx.arc(ballX, ballY, 22, 0, Math.PI * 2);
+  ctx.arc(x, y, r * 2.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#fff8ee';
   ctx.beginPath();
-  ctx.arc(ballX, ballY, 9, 0, Math.PI * 2);
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawMiniPot(ctx, x, y, s, rot = 0) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.scale(s, s);
+  ctx.fillStyle = '#c87848';
+  ctx.beginPath();
+  ctx.moveTo(-10, 6);
+  ctx.lineTo(10, 6);
+  ctx.lineTo(8, 14);
+  ctx.lineTo(-8, 14);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#5ecf5a';
+  ctx.beginPath();
+  ctx.ellipse(0, -2, 5, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawLaserFan(ctx, px, py, pw) {
+  const beams = [
+    { ox: -0.22, color: NEON.teal },
+    { ox: 0, color: '#ffffff' },
+    { ox: 0.22, color: NEON.magenta },
+  ];
+  for (const b of beams) {
+    const x0 = px + pw * (0.5 + b.ox);
+    const g = ctx.createLinearGradient(x0, py, x0, py - pw * 1.1);
+    g.addColorStop(0, b.color);
+    g.addColorStop(0.55, `${b.color}88`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = b.color;
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(x0, py);
+    ctx.lineTo(x0 + pw * b.ox * 0.8, py - pw * 0.95);
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+}
+
+function drawShareSparkles(ctx, w, h, count = 48) {
+  for (let i = 0; i < count; i++) {
+    const x = ((i * 173) % 1000) / 1000 * w;
+    const y = ((i * 97 + 41) % 1000) / 1000 * h;
+    const r = 1 + (i % 3);
+    const colors = [NEON.teal, NEON.magenta, NEON.amber, NEON.sky];
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.globalAlpha = 0.2 + (i % 5) * 0.08;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPerspectiveBrickRows(ctx, ox, oy, ow, oh) {
+  const palette = [
+    ['#ff6f9c', '#ff4fa3'],
+    ['#2fd9c7', '#1ab89e'],
+    ['#ffc04d', '#e89a20'],
+    ['#8a7bff', '#6a5fd4'],
+    ['#5aa0ff', '#3d7fd4'],
+  ];
+  const rows = 7;
+  const cols = 9;
+  for (let row = 0; row < rows; row++) {
+    const py = 0.06 + row * 0.1;
+    const depth = arenaPoint(0.5, py, ox, oy, ow, oh);
+    const rowCols = cols - Math.floor(row * 0.6);
+    for (let col = 0; col < rowCols; col++) {
+      if ((row * 7 + col * 5) % 19 === 0) continue;
+      const px = 0.08 + (col + 0.5) / rowCols * 0.84;
+      const p = arenaPoint(px, py, ox, oy, ow, oh);
+      const brickW = 28 * depth.scale;
+      const brickH = brickW * 0.42;
+      const [fill, glow] = palette[(row + col) % palette.length];
+      drawNeonBrick(ctx, p.x - brickW / 2, p.y - brickH / 2, brickW, brickH, fill, glow);
+      if ((row + col) % 5 === 0 && row < 5) {
+        drawMiniGnome(ctx, p.x, p.y - brickH * 0.85, 0.55 + depth.scale * 0.15, col % 3 === 0 ? '#d45d8c' : '#c84040');
+      }
+    }
+  }
+}
+
+/** Skewed predrawn arena — bricks, gnomes, balls, lasers, pots, enemies, particles. */
+function drawPredrawnArena(ctx, w, h, ui = {}) {
+  const pad = 12;
+  const ox = pad;
+  const oy = pad + 8;
+  const ow = w - pad * 2;
+  const oh = h - pad * 2 - 16;
+
+  const arenaBg = ctx.createLinearGradient(0, oy, 0, oy + oh);
+  arenaBg.addColorStop(0, '#1a0a28');
+  arenaBg.addColorStop(0.45, '#0c0614');
+  arenaBg.addColorStop(1, '#040208');
+  ctx.fillStyle = arenaBg;
+  roundRect(ctx, ox - 4, oy - 4, ow + 8, oh + 8, 16);
   ctx.fill();
 
-  ctx.fillStyle = 'rgba(232, 238, 252, 0.88)';
-  ctx.font = canvasFont(14, '800');
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillText('TAP TO LAUNCH', playX + playW / 2, padY - 32);
+  const tealGlow = ctx.createRadialGradient(ox + ow * 0.2, oy, 0, ox + ow * 0.2, oy, ow * 0.7);
+  tealGlow.addColorStop(0, 'rgba(47, 230, 199, 0.12)');
+  tealGlow.addColorStop(1, 'rgba(47, 230, 199, 0)');
+  ctx.fillStyle = tealGlow;
+  ctx.fillRect(ox, oy, ow, oh);
 
-  ctx.fillStyle = 'rgba(8, 5, 12, 0.06)';
-  for (let sy = y; sy < y + fh; sy += 3) {
+  const magGlow = ctx.createRadialGradient(ox + ow * 0.85, oy + oh, 0, ox + ow * 0.85, oy + oh, ow * 0.55);
+  magGlow.addColorStop(0, 'rgba(255, 79, 163, 0.14)');
+  magGlow.addColorStop(1, 'rgba(255, 79, 163, 0)');
+  ctx.fillStyle = magGlow;
+  ctx.fillRect(ox, oy, ow, oh);
+
+  ctx.save();
+  ctx.translate(ox, oy);
+  drawBootStyleGrid(ctx, ow, oh);
+  ctx.restore();
+  drawPerspectiveBrickRows(ctx, ox, oy, ow, oh);
+
+  drawMiniEnemy(ctx, ox + ow * 0.18, oy + oh * 0.32, 0.9, 'drifter');
+  drawMiniEnemy(ctx, ox + ow * 0.78, oy + oh * 0.38, 0.85, 'chaser');
+  drawMiniEnemy(ctx, ox + ow * 0.62, oy + oh * 0.22, 0.75, 'zigzag');
+
+  drawMiniPot(ctx, ox + ow * 0.35, oy + oh * 0.48, 0.95, 0.4);
+  drawMiniPot(ctx, ox + ow * 0.58, oy + oh * 0.55, 0.85, -0.5);
+  drawMiniPot(ctx, ox + ow * 0.72, oy + oh * 0.42, 0.7, 0.2);
+
+  const ball1 = arenaPoint(0.42, 0.72, ox, oy, ow, oh);
+  drawMiniBall(ctx, ball1.x, ball1.y, 10, [
+    { x: ball1.x - 18, y: ball1.y + 12 },
+    { x: ball1.x - 32, y: ball1.y + 28 },
+    { x: ball1.x - 42, y: ball1.y + 48 },
+  ]);
+  const ball2 = arenaPoint(0.68, 0.58, ox, oy, ow, oh);
+  drawMiniBall(ctx, ball2.x, ball2.y, 8, [
+    { x: ball2.x + 14, y: ball2.y + 18 },
+    { x: ball2.x + 28, y: ball2.y + 34 },
+  ]);
+
+  const padW = ow * 0.38;
+  const padX = ox + (ow - padW) / 2;
+  const padY = oy + oh * 0.9;
+  const padH = 14;
+  const padGrad = ctx.createLinearGradient(padX, padY, padX + padW, padY);
+  padGrad.addColorStop(0, '#1a2030');
+  padGrad.addColorStop(0.4, '#3a4860');
+  padGrad.addColorStop(0.55, '#5aa0ff');
+  padGrad.addColorStop(1, '#1a2030');
+  ctx.shadowColor = NEON.sky;
+  ctx.shadowBlur = 16;
+  ctx.fillStyle = padGrad;
+  roundRect(ctx, padX, padY, padW, padH, 7);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = NEON.teal;
+  ctx.lineWidth = 2;
+  roundRect(ctx, padX, padY, padW, padH, 7);
+  ctx.stroke();
+
+  drawLaserFan(ctx, padX, padY, padW);
+
+  const spikeN = 7;
+  const step = padW / (spikeN + 1);
+  ctx.fillStyle = '#d8f4ff';
+  for (let i = 1; i <= spikeN; i++) {
+    const sx = padX + step * i;
+    ctx.beginPath();
+    ctx.moveTo(sx - 5, padY);
+    ctx.lineTo(sx, padY - 10);
+    ctx.lineTo(sx + 5, padY);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  drawShareSparkles(ctx, w, h, 56);
+
+  const snapshot = ui.snapshot;
+  if (snapshot && canvasHasContent(snapshot)) {
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.globalCompositeOperation = 'screen';
+    roundRect(ctx, ox, oy, ow, oh, 12);
+    ctx.clip();
+    const sc = Math.max(ow / snapshot.width, oh / snapshot.height);
+    const dw = snapshot.width * sc;
+    const dh = snapshot.height * sc;
+    ctx.drawImage(snapshot, ox + (ow - dw) / 2, oy + (oh - dh) / 2, dw, dh);
+    ctx.restore();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.strokeStyle = 'rgba(47, 230, 199, 0.45)';
+  ctx.lineWidth = 2;
+  roundRect(ctx, ox - 2, oy - 2, ow + 4, oh + 4, 14);
+  ctx.stroke();
+}
+
+/**
+ * Skewed predrawn game preview for share cards (boot-splash neon aesthetic).
+ * Optional live snapshot is blended in softly under the illustration.
+ */
+function drawGameplayPreview(ctx, x, y, fw, fh, ui = {}) {
+  ctx.fillStyle = '#060a14';
+  roundRect(ctx, x, y, fw, fh, 22);
+  ctx.fill();
+
+  const inset = 10;
+  const innerX = x + inset;
+  const innerY = y + inset;
+  const innerW = fw - inset * 2;
+  const innerH = fh - inset * 2;
+
+  ctx.save();
+  ctx.translate(innerX + innerW / 2, innerY + innerH / 2);
+  ctx.transform(1, 0.07, -0.18, 0.92, -innerW / 2, -innerH / 2);
+  drawPredrawnArena(ctx, innerW, innerH, ui);
+  ctx.restore();
+
+  const edgeW = Math.max(10, Math.round(fw * 0.034));
+  for (const [ex, label, ratio, color] of [
+    [x + edgeW, 'GNOME', ui.gnomeRatio ?? 0.55, '#7eb87a'],
+    [x + fw - edgeW, 'NEXUS', ui.nexusRatio ?? 0.72, '#4488ff'],
+  ]) {
+    drawEdgeMeter(ctx, ex, y + 18, fh - 36, ratio, color, label);
+  }
+
+  const headerH = 36;
+  ctx.fillStyle = 'rgba(8, 11, 22, 0.88)';
+  roundRect(ctx, x + 8, y + 8, fw - 16, headerH, 12);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(47, 230, 199, 0.35)';
+  ctx.lineWidth = 1;
+  roundRect(ctx, x + 8, y + 8, fw - 16, headerH, 12);
+  ctx.stroke();
+
+  const headerCy = y + 8 + headerH / 2;
+  const lives = Math.max(0, Math.min(4, Number(ui.lives ?? 3)));
+  let hx = x + 28;
+  for (let i = 0; i < lives; i++) {
+    drawHeart(ctx, hx, headerCy, 10);
+    hx += 14;
+  }
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = NEON.cream;
+  ctx.font = canvasFont(Math.min(20, fw * 0.048), '800');
+  ctx.shadowColor = NEON.teal;
+  ctx.shadowBlur = 8;
+  if (ui.hidePreviewScore) {
+    ctx.fillText(`LV ${ui.level ?? 1} SIEGE`, x + fw / 2, headerCy);
+  } else {
+    ctx.fillText(String(ui.score ?? '0'), x + fw / 2, headerCy);
+  }
+  ctx.shadowBlur = 0;
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = NEON.teal;
+  ctx.font = canvasFont(11, '700');
+  if (!ui.hidePreviewScore) {
+    ctx.fillText(`LV ${ui.level ?? 1}`, x + fw - 16, headerCy);
+  }
+
+  ctx.fillStyle = 'rgba(8, 5, 12, 0.05)';
+  for (let sy = y; sy < y + fh; sy += 4) {
     ctx.fillRect(x, sy, fw, 1);
   }
 }
@@ -660,25 +863,229 @@ function drawStatChip(ctx, label, value, cx, cy, w, accent) {
   ctx.fillText(value, cx, cy + 32);
 }
 
-function drawCtaButton(ctx, text, cx, cy, w) {
-  const h = 64;
+function drawCtaButton(ctx, text, cx, cy, w, opts = {}) {
+  const h = opts.height ?? 64;
   const x = cx - w / 2;
   const y = cy - h / 2;
   const g = ctx.createLinearGradient(x, y, x + w, y + h);
-  g.addColorStop(0, NEON.teal);
-  g.addColorStop(0.5, '#5dffe8');
-  g.addColorStop(1, NEON.teal);
-  ctx.shadowColor = NEON.teal;
+  g.addColorStop(0, opts.accent ?? NEON.teal);
+  g.addColorStop(0.5, opts.mid ?? '#5dffe8');
+  g.addColorStop(1, opts.accent ?? NEON.teal);
+  ctx.shadowColor = opts.accent ?? NEON.teal;
   ctx.shadowBlur = 28;
   ctx.fillStyle = g;
-  roundRect(ctx, x, y, w, h, 32);
+  roundRect(ctx, x, y, w, h, h / 2);
   ctx.fill();
   ctx.shadowBlur = 0;
-  ctx.fillStyle = '#041210';
-  ctx.font = canvasFont(30, '800');
+  ctx.fillStyle = opts.textColor ?? '#041210';
+  ctx.font = canvasFont(opts.fontSize ?? 30, '800');
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, cx, cy);
+}
+
+function drawOutlineCta(ctx, text, cx, cy, w) {
+  const h = 52;
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+  ctx.fillStyle = 'rgba(8, 5, 12, 0.55)';
+  roundRect(ctx, x, y, w, h, 26);
+  ctx.fill();
+  ctx.strokeStyle = NEON.teal;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = NEON.teal;
+  ctx.shadowBlur = 12;
+  roundRect(ctx, x, y, w, h, 26);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = NEON.cream;
+  ctx.font = canvasFont(24, '700');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, cx, cy);
+}
+
+function drawChallengeBanner(ctx, text, cx, cy, w) {
+  const h = 58;
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+  ctx.fillStyle = 'rgba(255, 79, 163, 0.14)';
+  roundRect(ctx, x, y, w, h, 16);
+  ctx.fill();
+  ctx.strokeStyle = NEON.magenta;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = NEON.magenta;
+  ctx.shadowBlur = 14;
+  roundRect(ctx, x, y, w, h, 16);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = NEON.cream;
+  ctx.font = canvasFont(28, '800');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, cx, cy);
+}
+
+function drawCompactStat(ctx, label, value, cx, cy, w, accent) {
+  const h = 76;
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+  ctx.fillStyle = 'rgba(8, 5, 12, 0.82)';
+  roundRect(ctx, x, y, w, h, 16);
+  ctx.fill();
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.9;
+  roundRect(ctx, x, y, w, h, 16);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = 'rgba(168, 180, 210, 0.92)';
+  ctx.font = canvasFont(16, '600', 'body');
+  ctx.fillText(label, cx, cy - 6);
+  ctx.fillStyle = NEON.cream;
+  ctx.font = canvasFont(28, '800');
+  ctx.fillText(value, cx, cy + 28);
+}
+
+function displayShareUrl() {
+  const url = getGameUrl();
+  if (/localhost|127\.0\.0\.1/i.test(url)) return 'Play free — link in share caption';
+  return url.replace(/^https?:\/\//, '');
+}
+
+/** Game-over share layout — hero score, clear stats, challenge CTA. */
+function drawGameOverShareCard(ctx, stats) {
+  const w = CARD_W;
+  const h = CARD_H;
+  const ui = stats.ui ?? uiFromStats(stats);
+  ui.hidePreviewScore = true;
+
+  drawChaosField(ctx, w, h);
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+
+  fillGradientText(
+    ctx,
+    'NEON NEXUS',
+    w / 2,
+    96,
+    canvasFont(72, '900'),
+    [[0, NEON.teal], [0.45, '#ffffff'], [1, NEON.magenta]],
+  );
+
+  ctx.fillStyle = NEON.cream;
+  ctx.font = canvasFont(26, '700');
+  ctx.shadowColor = NEON.teal;
+  ctx.shadowBlur = 10;
+  ctx.fillText('Bullet-Time Brickbreaker', w / 2, 138);
+  ctx.shadowBlur = 0;
+
+  let frameY = 168;
+  if (stats.badge) {
+    drawBadge(ctx, stats.badge, w / 2, 198, stats.badgeColor ?? NEON.amber);
+    frameY = 232;
+  }
+
+  const frameX = 52;
+  const frameW = w - 104;
+  const frameH = 400;
+  drawSnapshotFrame(ctx, null, frameX, frameY, frameW, frameH, ui);
+
+  const panelY = frameY + frameH + 36;
+  const panelX = 48;
+  const panelW = w - 96;
+  const panelH = 418;
+  ctx.fillStyle = 'rgba(8, 5, 12, 0.78)';
+  roundRect(ctx, panelX, panelY, panelW, panelH, 28);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(47, 230, 199, 0.4)';
+  ctx.lineWidth = 2;
+  roundRect(ctx, panelX, panelY, panelW, panelH, 28);
+  ctx.stroke();
+
+  const heroCy = panelY + 118;
+  const heroLabel = stats.heroLabel ?? 'FINAL SCORE';
+  ctx.fillStyle = 'rgba(190, 205, 230, 0.9)';
+  ctx.font = canvasFont(22, '700', 'body');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(heroLabel, w / 2, heroCy - 52);
+
+  const heroAccent = stats.isNewBest ? NEON.amber : NEON.teal;
+  fillGradientText(
+    ctx,
+    stats.heroStat ?? '0',
+    w / 2,
+    heroCy + 24,
+    canvasFont(108, '900'),
+    [[0, heroAccent], [0.45, '#ffffff'], [1, NEON.magenta]],
+  );
+
+  const statY = panelY + 218;
+  const statW = (panelW - 56) / 3;
+  const statCx = (i) => panelX + 28 + statW / 2 + i * (statW + 14);
+  drawCompactStat(
+    ctx,
+    stats.line2Label ?? 'PERSONAL BEST',
+    stats.line2 ?? '0',
+    statCx(0),
+    statY,
+    statW - 8,
+    NEON.magenta,
+  );
+  drawCompactStat(
+    ctx,
+    stats.line3Label ?? 'LEVEL',
+    stats.line3 ?? '1',
+    statCx(1),
+    statY,
+    statW - 8,
+    NEON.sky,
+  );
+  drawCompactStat(
+    ctx,
+    stats.line4Label ?? 'GEMS BANKED',
+    stats.line4 ?? fmtStat(stats.gems),
+    statCx(2),
+    statY,
+    statW - 8,
+    NEON.amber,
+  );
+
+  const gemHint = stats.gemHint ?? '';
+  if (gemHint) {
+    ctx.fillStyle = 'rgba(168, 180, 210, 0.88)';
+    ctx.font = canvasFont(20, '600', 'body');
+    ctx.textAlign = 'center';
+    ctx.fillText(gemHint, w / 2, panelY + 278);
+  }
+
+  const challenge = stats.challengeLine ?? `Can you beat ${stats.heroStat ?? '0'}?`;
+  drawChallengeBanner(ctx, challenge, w / 2, panelY + 328, panelW - 64);
+
+  const ctaY = panelY + panelH - 52;
+  drawCtaButton(
+    ctx,
+    `BEAT MY SCORE  →`,
+    w / 2,
+    ctaY - 44,
+    panelW - 80,
+    { accent: NEON.magenta, mid: '#ff7ab8', fontSize: 28, height: 58 },
+  );
+  drawOutlineCta(ctx, 'PLAY FREE', w / 2, ctaY + 18, 280);
+
+  ctx.fillStyle = NEON.teal;
+  ctx.font = canvasFont(20, '700');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(displayShareUrl(), w / 2, h - 42);
+
+  ctx.fillStyle = 'rgba(95, 112, 136, 0.9)';
+  ctx.font = canvasFont(15, '500', 'body');
+  ctx.fillText('Neon Nexus · Bullet-Time Brick Breaker', w / 2, h - 18);
 }
 
 /**
@@ -718,6 +1125,11 @@ export function buildProgressSharePayload({ gems, highScore, run }) {
 }
 
 function drawShareCard(ctx, stats) {
+  if (stats.kind === 'gameover') {
+    drawGameOverShareCard(ctx, stats);
+    return;
+  }
+
   const w = CARD_W;
   const h = CARD_H;
   drawChaosField(ctx, w, h);
@@ -734,17 +1146,17 @@ function drawShareCard(ctx, stats) {
     [[0, NEON.teal], [0.45, '#ffffff'], [1, NEON.magenta]],
   );
 
-  ctx.fillStyle = NEON.magenta;
-  ctx.font = canvasFont(28, '700');
-  ctx.shadowColor = NEON.magenta;
-  ctx.shadowBlur = 12;
-  ctx.fillText('BULLET-TIME · TWILIGHT GARDEN SIEGE', w / 2, 158);
+  ctx.fillStyle = NEON.cream;
+  ctx.font = canvasFont(24, '700');
+  ctx.shadowColor = NEON.teal;
+  ctx.shadowBlur = 10;
+  ctx.fillText('Bullet-Time Brickbreaker', w / 2, 152);
   ctx.shadowBlur = 0;
 
   let frameY = 188;
   if (stats.badge) {
-    drawBadge(ctx, stats.badge, w / 2, 218, stats.badgeColor ?? NEON.magenta);
-    frameY = 258;
+    drawBadge(ctx, stats.badge, w / 2, 228, stats.badgeColor ?? NEON.magenta);
+    frameY = 268;
   }
 
   const frameX = 52;
@@ -771,17 +1183,16 @@ function drawShareCard(ctx, stats) {
   drawStatChip(ctx, stats.line2Label ?? 'BEST', stats.line2 ?? '0', panelX + 24 + chipW + chipW / 2, chipY, chipW - 8, NEON.magenta);
   drawStatChip(ctx, stats.line3Label ?? 'RUN', stats.line3 ?? '—', panelX + 24 + chipW * 2 + chipW / 2, chipY, chipW - 8, NEON.amber);
 
-  ctx.fillStyle = NEON.violet;
-  ctx.font = canvasFont(24, '700');
+  ctx.fillStyle = 'rgba(168, 180, 210, 0.9)';
+  ctx.font = canvasFont(22, '600', 'body');
   ctx.fillText(stats.hook ?? MARKETING.hook, w / 2, panelY + panelH + 48);
 
   const ctaY = h - 118;
-  drawCtaButton(ctx, '▶  PLAY FREE', w / 2, ctaY, 420);
+  drawCtaButton(ctx, 'PLAY FREE', w / 2, ctaY, 420);
 
-  const url = getGameUrl().replace(/^https?:\/\//, '');
   ctx.fillStyle = NEON.teal;
   ctx.font = canvasFont(22, '700');
-  ctx.fillText(url, w / 2, h - 52);
+  ctx.fillText(displayShareUrl(), w / 2, h - 52);
 
   ctx.fillStyle = 'rgba(95, 112, 136, 0.9)';
   ctx.font = canvasFont(16, '500', 'body');
@@ -800,6 +1211,11 @@ function statsFromPayload(stats) {
     line2Label: stats.line2Label,
     line3: stats.line3,
     line3Label: stats.line3Label,
+    line4: stats.line4,
+    line4Label: stats.line4Label,
+    challengeLine: stats.challengeLine,
+    gemHint: stats.gemHint,
+    isNewBest: stats.isNewBest ?? stats.shareData?.isNewBest,
     hook: stats.hook,
     ui: stats.ui ?? uiFromStats(stats),
   };
@@ -837,6 +1253,8 @@ async function copyShareCaption(text) {
 }
 
 export async function shareProgressScreenshot(game, stats = {}) {
+  await ensureFontsLoaded();
+
   let snapshot = stats.snapshot ?? null;
   if (!snapshot && game) {
     snapshot = await captureGameSnapshot(game);
@@ -853,6 +1271,7 @@ export async function shareProgressScreenshot(game, stats = {}) {
   canvas.width = CARD_W;
   canvas.height = CARD_H;
   const ctx = canvas.getContext('2d');
+  if (!ctx) return { ok: false, reason: 'canvas-ctx-failed' };
   drawShareCard(ctx, payload);
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png', 0.96));

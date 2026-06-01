@@ -8,6 +8,7 @@ import {
   resolveAppId,
 } from '../config/AdsConfig.js';
 import { applyBannerPlaceholder, hideWebBannerBar, showWebBannerBar } from './AdBannerSlot.js';
+import { withAdOverlayTimeout } from './AdOverlay.js';
 import { launchParallelScene } from './SceneLaunch.js';
 
 let AdMobModule = null;
@@ -140,10 +141,15 @@ export function createGoogleAdProvider(game) {
         }
       }
 
-      // Web interstitial — requires Ad Manager unit + custom bridge (see docs/ADS.md)
+      // Web interstitial — GAM when configured, else Phaser AdBreak overlay (see docs/ADS.md)
       if (typeof window.__googleShowInterstitial === 'function') {
-        const shown = await window.__googleShowInterstitial();
-        return { shown: !!shown, native: true };
+        try {
+          const shown = await window.__googleShowInterstitial();
+          return { shown: !!shown, native: true };
+        } catch (e) {
+          console.warn('[Ads] web interstitial failed', e);
+          return { shown: false };
+        }
       }
       return { shown: false };
     },
@@ -173,7 +179,7 @@ export function createGoogleAdProvider(game) {
           const timer = setTimeout(() => {
             rewardedReady = false;
             prepareRewarded(AdMob);
-            finish({ rewarded: false, placement, timeout: true });
+            finish({ rewarded: false, placement, timeout: true, unavailable: true });
           }, 120_000);
 
           const add = (event, fn) => {
@@ -190,19 +196,19 @@ export function createGoogleAdProvider(game) {
           add('onRewardedVideoAdFailedToShow', async () => {
             rewardedReady = false;
             prepareRewarded(AdMob);
-            finish({ rewarded: false, placement });
+            finish({ rewarded: false, placement, native: true });
           });
           add('onRewardedAdFailedToLoad', async () => {
             rewardedReady = false;
             prepareRewarded(AdMob);
-            finish({ rewarded: false, placement });
+            finish({ rewarded: false, placement, unavailable: true });
           });
 
           (async () => {
             try {
               if (!rewardedReady) await prepareRewarded(AdMob);
               if (!rewardedReady) {
-                finish({ rewarded: false, placement });
+                finish({ rewarded: false, placement, unavailable: true });
                 return;
               }
               await AdMob.showRewardVideoAd();
@@ -210,17 +216,22 @@ export function createGoogleAdProvider(game) {
               console.warn('[Ads] showRewarded failed', e);
               rewardedReady = false;
               prepareRewarded(AdMob);
-              finish({ rewarded: false, placement });
+              finish({ rewarded: false, placement, unavailable: true });
             }
           })();
         });
       }
 
       if (typeof window.__googleShowRewarded === 'function') {
-        const rewarded = await window.__googleShowRewarded(placement);
-        return { rewarded: !!rewarded, placement, native: true };
+        try {
+          const rewarded = await window.__googleShowRewarded(placement);
+          return { rewarded: !!rewarded, placement, native: true };
+        } catch (e) {
+          console.warn('[Ads] web rewarded failed', e);
+          return { rewarded: false, placement, unavailable: true };
+        }
       }
-      return { rewarded: false, placement };
+      return { rewarded: false, placement, unavailable: true };
     },
 
     purchase: async (productId) => {
@@ -274,10 +285,13 @@ export function createGoogleAdProvider(game) {
       hideWebBannerBar();
     },
 
-    showInterstitialOverlay: (g = game) => new Promise((resolve) => {
-      g.events.once('ad:break:done', resolve);
-      if (g.scene.isActive(SCENES.AD_BREAK)) g.scene.stop(SCENES.AD_BREAK);
-      launchParallelScene(g, SCENES.AD_BREAK, { provider: 'google' });
-    }),
+    showInterstitialOverlay: (g = game) => {
+      const overlay = new Promise((resolve) => {
+        g.events.once('ad:break:done', resolve);
+        if (g.scene.isActive(SCENES.AD_BREAK)) g.scene.stop(SCENES.AD_BREAK);
+        launchParallelScene(g, SCENES.AD_BREAK, { provider: 'google' });
+      });
+      return withAdOverlayTimeout(g, overlay).then((r) => r?.value);
+    },
   };
 }

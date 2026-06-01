@@ -8,6 +8,8 @@ export const AD_PLACEMENTS = {
   SHELL_BOTTOM_BANNER: 'shell-bottom-banner',
   /** Rectangle inside the in-game pause overlay (Phaser PauseScene). */
   PAUSE_MENU_BANNER: 'pause-menu-banner',
+  /** Rectangle inside the React game-over overlay. */
+  GAME_OVER_MENU_BANNER: 'game-over-menu-banner',
   /** Full-screen interstitial between levels (Phaser AdBreakScene). */
   GAME_INTERSTITIAL: 'game-interstitial',
   /** Rewarded continue on game over (Phaser GameOverScene). */

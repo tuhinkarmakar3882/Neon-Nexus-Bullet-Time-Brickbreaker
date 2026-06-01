@@ -11,10 +11,10 @@ import { goalProgressText } from '../config/LevelGoals.js';
 import { rollContract } from '../config/GnomeContracts.js';
 import { fusionTarget } from '../config/PowerFusion.js';
 import { cosmeticById, PADDLE_HULLS, BALL_TRAILS, GARDEN_THEMES } from '../config/Cosmetics.js';
-import { applyEquippedCosmeticsToGame } from '../systems/CosmeticsBridge.js';
+import { applyCosmeticsToGameScene } from '../systems/CosmeticsBridge.js';
 import { seasonalMutatorForDate } from '../config/SeasonalMutators.js';
 import { MetaProgress } from '../systems/MetaProgress.js';
-import { GAME_OVER_MESSAGES, LEVEL_CLEARED_MESSAGES } from '../config/Messages.js';
+import { GAME_OVER_MESSAGES, GNOME_TAUNT_MESSAGES, LEVEL_CLEARED_MESSAGES } from '../config/Messages.js';
 import { Background } from '../objects/Background.js';
 import { Paddle } from '../objects/Paddle.js';
 import { Ball } from '../objects/Ball.js';
@@ -44,11 +44,12 @@ import { addCameraFx, spawnConfetti, makeButton } from '../utils/UI.js';
 import { applySceneVfx } from '../utils/SceneVfx.js';
 import { popScale, squashStretch, wobble, rippleRing, staggerDropIn, shardBurst, brickBreakFx, microShake, surgeText, hitSpark, brickNudge, launchBurst, risePop, tierPulse, dropIn, spinIn, powerAcquireBurst, powerPickupFx, explosiveImpactFx, fireImpactFx, electricImpactFx, frostImpactFx, comboFlare } from '../utils/MicroFx.js';
 import { initBulletTimeFx, setBulletTimeIntensity, screenPunch, impactFlash, radialBlast, resetGameplayCamera, clearBulletTimeFx } from '../utils/BulletTimeFx.js';
-import { pick, clamp, rand, mulberry32 } from '../utils/Helpers.js';
+import { pick, clamp, rand, mulberry32, dropChance as brickDropChanceForLevel } from '../utils/Helpers.js';
 import { fitTextWidth, orbitronStyle, uiPx, wrapWidth } from '../utils/Typography.js';
 import { resolveSettings } from '../config/VfxQuality.js';
 import { gemsForLevelClear } from '../config/GemRewards.js';
 import { dismissBootSplash, setBootSplash } from '../shell/BootSplash.js';
+import { clearTransitionFlags } from '../systems/GameGuard.js';
 
 const SCORE_ENEMY = 220;
 const GEM_VALUE = 150;
@@ -116,6 +117,10 @@ export class GameScene extends Phaser.Scene {
     this._draftQueue = [];
     this.btMeter = 0;
     this._pendingCompleteLevel = false;
+    this._levelCompleteQueued = false;
+    this._levelCompleteRetrying = false;
+    this._ballLossBeat = false;
+    this._ballLossTimer = null;
     this.levelKnockouts = 0;
     this.levelStartTime = 0;
     this.potHitLevel = false;
@@ -228,8 +233,8 @@ export class GameScene extends Phaser.Scene {
     const sx = GAME.WIDTH / (this._layoutW || GAME.WIDTH);
     const sy = GAME.HEIGHT / (this._layoutH || GAME.HEIGHT);
 
-    const pin = paddleSideInset();
-    this.paddle.x = clamp(this.paddle.x * sx, pin + this.paddle.w / 2, GAME.WIDTH - pin - this.paddle.w / 2);
+    const { min, max } = this.paddle._xLimits();
+    this.paddle.x = clamp(this.paddle.x * sx, min, max);
 
     this.balls.forEach((ball) => {
       const bx = ballSideInset();
@@ -282,6 +287,8 @@ export class GameScene extends Phaser.Scene {
     this.draftOpen = false;
     this._draftQueue = [];
     this._pendingCompleteLevel = false;
+    this._levelCompleteQueued = false;
+    this._levelCompleteRetrying = false;
     if (this.btFx?.overlay?.active) this.btFx.overlay.destroy();
     if (this.btFx?.streaks?.active) this.btFx.streaks.destroy();
     this.btFx = null;
@@ -324,7 +331,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   applyEquippedCosmetics() {
-    applyEquippedCosmeticsToGame(this.game);
+    try {
+      applyCosmeticsToGameScene(this);
+    } catch (e) {
+      console.warn('[Game] cosmetics apply failed', e);
+    }
   }
 
   drawGhostPath(path) {
@@ -352,7 +363,7 @@ export class GameScene extends Phaser.Scene {
   spawnPowerCapsule(x, y, keyOverride) {
     if (this.powers.length >= GAME.MAX_POWERS) return null;
     const seed = this.nextPowerDropSeed();
-    const blessings = MetaProgress.getBlessings?.() ?? [];
+    const blessings = MetaProgress.getBlessings();
     const variant = rollCapsuleVariant(this.level, seed);
     let key = resolvePowerKey(keyOverride ?? rollPower(this.level, seed, blessings));
     if (variant === 'blessed') key = resolvePowerKey(rollBlessedPower(this.level, seed ^ 0xb1e55, blessings));
@@ -565,6 +576,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   spawnLevel() {
+    try {
+      this._spawnLevelCore();
+    } catch (e) {
+      console.error('[Game] spawnLevel failed', e);
+      clearTransitionFlags(this);
+      try {
+        this._spawnLevelCore();
+      } catch (e2) {
+        console.error('[Game] spawnLevel retry failed', e2);
+      }
+    }
+  }
+
+  _spawnLevelCore() {
     const { bricks, isBoss, theme, levelSeed, gravityScale, mutator, mutators, goal, difficulty, layoutLabel, twistLabel } = buildLevel(this.level, this.campaignSeed);
     this.difficulty = difficulty;
     this.bounceAccelMult = difficulty.bounceAccelMult;
@@ -584,6 +609,8 @@ export class GameScene extends Phaser.Scene {
     this.contract = rollContract(this.level, this.levelSeed);
     this.contractDone = false;
     this.potThrowMult = 1;
+    this.potThrowRateMult = this.difficulty?.potThrowRateMult ?? 1;
+    this.potSpeedMult = this.difficulty?.potSpeedMult ?? 1;
     this.jugglePointMult = 1;
     this.scoreMultLevel = 1;
     this.gambitAtCombo = 0;
@@ -599,7 +626,9 @@ export class GameScene extends Phaser.Scene {
     this.scheduleIntroGnomes();
     this.bricks.forEach((b) => this.telegraphBrick(b));
 
-    this.bg.setAccent(theme.bg);
+    const gardenTheme = cosmeticById(GARDEN_THEMES, MetaProgress.getEquipped().theme);
+    this.bg?.setAccent?.(gardenTheme?.accent ?? theme?.bg ?? PAL.accent);
+    this.applyEquippedCosmetics();
     this.drawArena();
     let activeMutators = mutators ?? (mutator ? [mutator] : []);
     if (this.level >= 3 && this.level % 7 === 0) {
@@ -733,11 +762,15 @@ export class GameScene extends Phaser.Scene {
     this.bus?.emit('hud:btMeter', { value: this.btMeter, max: GAME.BT_METER_MAX });
   }
 
-  addBtMeter(amount) {
+  addBtMeter(amount, opts = {}) {
     const prev = this.btMeter;
     this.btMeter = Math.min(GAME.BT_METER_MAX, this.btMeter + amount);
     this.emitBtMeter();
     if (prev < GAME.BT_METER_MAX && this.btMeter >= GAME.BT_METER_MAX) {
+      if (opts.deferDraft || this.transitioning || this._completingLevel) {
+        this.requestPowerDraft('nexus');
+        return;
+      }
       this.flash('NEXUS FULL!', '#8ec5ff', 900);
       this.bus?.emit('hud:achieve', { meter: 'nexus' });
       audio.wowHit?.();
@@ -851,18 +884,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   emitGnomeStreak() {
-    this.bus.emit('hud:gnomeStreak', {
+    this.bus?.emit('hud:gnomeStreak', {
       value: this.gnomeStreak,
       max: GAME.GNOME_STREAK_MAX,
     });
   }
 
-  addGnomeStreak(amount) {
+  addGnomeStreak(amount, opts = {}) {
     if (this.draftOpen || this.over) return;
     const prev = this.gnomeStreak;
     this.gnomeStreak = Math.min(GAME.GNOME_STREAK_MAX, this.gnomeStreak + amount);
     this.emitGnomeStreak();
     if (prev < GAME.GNOME_STREAK_MAX && this.gnomeStreak >= GAME.GNOME_STREAK_MAX) {
+      if (opts.deferDraft || this.transitioning || this._completingLevel) {
+        this.requestPowerDraft('gnome');
+        return;
+      }
       this.flash('GNOME STREAK READY!', cssHex(PAL.accent2), 900);
       this.bus?.emit('hud:achieve', { meter: 'gnome' });
       audio.wowHit?.();
@@ -905,12 +942,33 @@ export class GameScene extends Phaser.Scene {
   }
 
   openPowerDraft(source = 'gnome') {
-    if (this.draftOpen || this.over || this.transitioning) return;
+    if (this.draftOpen || this.over) return;
+    if (this.transitioning && !this._pendingCompleteLevel) return;
+    try {
+      this._openPowerDraftCore(source);
+    } catch (e) {
+      console.error('[Game] openPowerDraft failed', e);
+      this.draftOpen = false;
+      this._draftContainer = null;
+      if (this._pendingCompleteLevel) {
+        this.time.delayedCall(120, () => this.requestLevelComplete());
+      } else {
+        this.flushPendingDrafts();
+      }
+    }
+  }
+
+  _openPowerDraftCore(source = 'gnome') {
     this.draftOpen = true;
     this._draftSource = source;
     const W = GAME.WIDTH;
     const H = GAME.HEIGHT;
     const picks = rollPositivePowerDraft(this.level, this.nextPowerDropSeed(), 3);
+    if (!picks?.length) {
+      this.draftOpen = false;
+      if (this._pendingCompleteLevel) this.time.delayedCall(120, () => this.requestLevelComplete());
+      return;
+    }
     const container = this.add.container(0, 0).setDepth(2100);
     this._draftContainer = container;
 
@@ -959,6 +1017,22 @@ export class GameScene extends Phaser.Scene {
 
   pickDraftPower(key) {
     if (!this.draftOpen) return;
+    try {
+      this._pickDraftPowerCore(key);
+    } catch (e) {
+      console.error('[Game] pickDraftPower failed', e);
+      this.draftOpen = false;
+      this._draftContainer = null;
+      if (this._pendingCompleteLevel) {
+        this.time.delayedCall(120, () => this.requestLevelComplete());
+      } else {
+        clearTransitionFlags(this);
+        this.flushPendingDrafts();
+      }
+    }
+  }
+
+  _pickDraftPowerCore(key) {
     this.draftOpen = false;
     if (this._draftSource === 'nexus') {
       this.btMeter = 0;
@@ -989,7 +1063,11 @@ export class GameScene extends Phaser.Scene {
       this.time.delayedCall(320, () => this.openPowerDraft(next));
     } else if (deferToNext) {
       this._pendingCompleteLevel = false;
-      this.time.delayedCall(250, () => this.completeLevel());
+      this.time.delayedCall(250, () => {
+        this._completingLevel = false;
+        this._levelCompleteQueued = false;
+        this.requestLevelComplete();
+      });
     }
   }
 
@@ -1100,7 +1178,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   destructiblesLeft() {
-    return this.bricks.filter((b) => b.alive && !b.indestructible).length;
+    if (!Array.isArray(this.bricks)) return 0;
+    return this.bricks.filter((b) => b?.alive && !b.indestructible).length;
+  }
+
+  /** Single entry from the update loop — prevents completeLevel() every frame. */
+  requestLevelComplete() {
+    if (this._completingLevel || this._levelCompleteQueued || this._pendingCompleteLevel) return;
+    if (this.draftOpen) {
+      this._pendingCompleteLevel = true;
+      return;
+    }
+    if (!this.canCompleteLevel()) return;
+    this._levelCompleteQueued = true;
+    void this.completeLevel();
   }
 
   isBallBreakable(br) {
@@ -1365,6 +1456,7 @@ export class GameScene extends Phaser.Scene {
         this.paddle.sticky = true;
         break;
       case 'Magnet': this.paddle.magnet = true; break;
+      case 'PaddleSpikes': this.paddle.setSpikesActive(true); break;
       case 'FastPaddle':
       case 'SlowPaddle': this.syncPaddleSpeedMult(); break;
       case 'Flip': this.controlsInverted = true; break;
@@ -1410,6 +1502,9 @@ export class GameScene extends Phaser.Scene {
       case 'Shield':
       case 'ShieldII':
         this.shieldHitsLeft = POWERS[key]?.shieldHits ?? 1;
+        break;
+      case 'PaddleSpikes':
+        this.paddle.setSpikesActive(true);
         break;
     }
     // Always sync ball modifiers after any power change (covers resume + edge cases).
@@ -1519,7 +1614,7 @@ export class GameScene extends Phaser.Scene {
 
     if (!this._seenPowers.has(key)) {
       this._seenPowers.add(key);
-      this.bus.emit('hud:toast', { text: def.desc, ms: 2200 });
+      this.bus?.emit('hud:toast', { text: def.desc, ms: 2200 });
     }
 
     const neg = def.polarity === 'neg';
@@ -1542,15 +1637,13 @@ export class GameScene extends Phaser.Scene {
       case 'BallSplitter': this.doMulti(); break;
       case 'ExtraPaddle':
         this.lives++;
-        this.bus.emit('hud:life');
+        this.emitLifeHud();
         rippleRing(this, this.paddle.x, this.paddle.y, { tint: powerFillColor('ExtraPaddle'), scale: 3, dur: 480 });
         break;
       case 'InstantWin':
         this.forceClearDestructibles();
         this.flash('LEVEL CLEAR!', cssHex(PAL.accent2), 650, 'high');
-        this.time.delayedCall(250, () => {
-          if (!this.transitioning && !this.draftOpen) this.completeLevel();
-        });
+        this.time.delayedCall(250, () => this.requestLevelComplete());
         break;
       case 'Earthquake': this.doEarthquake(); break;
       case 'Shuffle': this.doShuffle(); break;
@@ -1559,6 +1652,9 @@ export class GameScene extends Phaser.Scene {
       case 'Shield':
       case 'ShieldII':
         this.shieldHitsLeft = def.shieldHits ?? 1;
+        break;
+      case 'PaddleSpikes':
+        this.paddle.setSpikesActive(true);
         break;
       default: this.applyPowerSideEffects(key);
     }
@@ -1591,6 +1687,7 @@ export class GameScene extends Phaser.Scene {
         this.paddle.sticky = false;
         break;
       case 'Magnet': this.paddle.magnet = false; break;
+      case 'PaddleSpikes': this.paddle.setSpikesActive(false); break;
       case 'FastPaddle':
       case 'SlowPaddle': this.syncPaddleSpeedMult(); break;
       case 'Flip': this.controlsInverted = false; break;
@@ -2219,7 +2316,58 @@ export class GameScene extends Phaser.Scene {
     ball._orbitHits = 0;
   }
 
+  ballOverlapsProjectile(ball, proj) {
+    if (!ball || !proj || proj.dead) return false;
+    const pr = proj.r ?? 12;
+    return Math.hypot(ball.x - proj.x, ball.y - proj.y) < ball.r + pr * 0.9;
+  }
+
+  /** Ball shatters gnome pots/projectiles — no bounce, passes through. */
+  shatterProjectileFromBall(ball, p) {
+    const tint = p.type === 'phone' ? 0x66ccff : p.type === 'anchor' ? 0xaabbcc : 0xe8a060;
+    this.burst(p.x, p.y, tint, this.settings.reducedFx ? 6 : 12);
+    shardBurst(this, p.x, p.y, tint, this.settings.reducedFx ? 4 : 8);
+    audio.blip(720);
+    this.score += p.type === 'pot' ? 55 : 35;
+    if (p.type === 'anchor') {
+      this.floatText(p.x, p.y, 'ANCHOR SMASH', '#aabbcc', 18);
+    } else if (p.type === 'phone') {
+      this.floatText(p.x, p.y, 'SHATTERED', '#66ccff', 18);
+    } else {
+      this.floatText(p.x, p.y, '+POT', '#e8a060', 20);
+    }
+    p.dead = true;
+    p.destroy();
+  }
+
+  hasPaddleSpikes() {
+    return this.powerSys?.isActive('PaddleSpikes');
+  }
+
+  /** Spiked paddle — destroy hazard, no stun / shrink / scramble. */
+  deflectProjectileWithSpikes(p) {
+    const tint = p.type === 'phone' ? 0x66ccff : p.type === 'anchor' ? 0xaabbcc : 0xe8a060;
+    this.burst(p.x, p.y, tint, this.settings.reducedFx ? 8 : 14);
+    shardBurst(this, p.x, p.y, tint, this.settings.reducedFx ? 5 : 9);
+    rippleRing(this, this.paddle.x, this.paddle.top, { tint: 0x88ddff, scale: 2.2, dur: 280 });
+    wobble(this, this.paddle.body, { angle: 3, dur: 100, repeat: 0 });
+    audio.spikeDeflect?.();
+    this.score += p.type === 'anchor' ? 45 : 40;
+    const label = p.type === 'anchor' ? 'ANCHOR SPIKED' : p.type === 'phone' ? 'PHONE SPIKED' : 'POT SPIKED';
+    this.floatText(p.x, p.y - 8, label, '#88ddff', 20);
+  }
+
+  spikeDeflectEnemy(e) {
+    this.killEnemy(e);
+    rippleRing(this, this.paddle.x, this.paddle.top, { tint: 0x88ddff, scale: 2.4, dur: 300 });
+    audio.spikeDeflect?.();
+  }
+
   handleProjectileHit(p) {
+    if (this.hasPaddleSpikes()) {
+      this.deflectProjectileWithSpikes(p);
+      return;
+    }
     if (p.type === 'anchor') {
       this.paddle.applyAnchorShrink();
       this.syncPaddleWidth();
@@ -2235,11 +2383,11 @@ export class GameScene extends Phaser.Scene {
       } else {
         this.uiScrambleUntil = this.time.now + GAME.PHONE_SCRAMBLE_MS;
         this._uiScrambleTimer?.remove(false);
-        this.bus.emit('hud:scramble', true);
+        this.bus?.emit('hud:scramble', true);
         this._uiScrambleTimer = this.time.delayedCall(GAME.PHONE_SCRAMBLE_MS, () => {
           this.uiScrambleUntil = 0;
           this._uiScrambleTimer = null;
-          this.bus.emit('hud:scramble', false);
+          this.bus?.emit('hud:scramble', false);
         });
         this.toast('HUD glitch — stats flicker briefly', 1200);
       }
@@ -2394,12 +2542,9 @@ export class GameScene extends Phaser.Scene {
     this.tryBrickPowerDrop(brick);
   }
 
-  dropChance() {
-    return clamp(
-      GAME.BRICK_DROP_CHANCE_BASE + this.level * 0.002,
-      GAME.BRICK_DROP_CHANCE_BASE,
-      GAME.BRICK_DROP_CHANCE_MAX,
-    );
+  /** Per-brick capsule chance — decays with level (see Helpers.dropChance). */
+  brickDropChance() {
+    return brickDropChanceForLevel(this.level);
   }
 
   tryBrickPowerDrop(brick) {
@@ -2407,14 +2552,14 @@ export class GameScene extends Phaser.Scene {
     const noDrop = ['gold', 'steel', 'boss', 'portal', 'hostage'];
     if (noDrop.includes(brick.type)) return;
 
-    let chanceMult = 0.7;
-    if (brick.type === 'normal' || brick.type === 'invisible') chanceMult = 0.4;
-    else if (['silver', 'explosive', 'reinforced'].includes(brick.type)) chanceMult = 1;
-    else if (['nest', 'shifting', 'moss', 'mirror'].includes(brick.type)) chanceMult = 0.55;
+    let chanceMult = 1;
+    if (['silver', 'explosive', 'reinforced'].includes(brick.type)) chanceMult = 1.2;
+    else if (['nest', 'shifting', 'moss', 'mirror'].includes(brick.type)) chanceMult = 0.9;
 
     const seed = this.nextPowerDropSeed();
     const rng = mulberry32(seed);
-    if (rng() >= this.dropChance() * chanceMult) return;
+    const chance = Math.min(1, this.brickDropChance() * chanceMult);
+    if (rng() >= chance) return;
     const cap = this.spawnPowerCapsule(brick.cx, brick.cy);
     if (!cap) return;
     this.floatText(brick.cx, brick.cy - 20, 'DROP!', powerColorHex(cap.key), 18);
@@ -2427,21 +2572,69 @@ export class GameScene extends Phaser.Scene {
   }
 
   ballLost(ball) {
+    if (this._ballLossBeat || this.over) return;
     ball.destroy();
     this.balls = this.balls.filter((b) => b !== ball);
     if (this.balls.length > 0) return;
-    audio.lose();
+
     hapticPulse(40);
     microShake(this, 0.012, 220);
-    this.combo = 0; this.lives--; this.bus.emit('hud:life');
+    this.combo = 0;
+    this.lives--;
+    this.emitLifeHud();
     this.gnomeStreak = 0;
     this.emitGnomeStreak();
-    this.powerSys.clearAll(); this.paddle.reset();
+    this.powerSys.clearAll();
+    this.paddle.reset();
+    this.bullets.forEach((b) => b.destroy());
+    this.bullets = [];
+    this.pots.forEach((p) => p.destroy());
+    this.pots = [];
+    this.bulletTimeRemaining = 0;
+    this.timeScale = 1;
     RunPersistence.saveRun(this);
-    if (this.lives <= 0) { this.gameOver(); return; }
+
+    this.playBallLossBeat(() => this.finishBallLossRespawn());
+  }
+
+  /** Brief beat: freeze play, stop music, gnomes taunt, then respawn or game over. */
+  playBallLossBeat(onDone) {
+    const ms = JARDINAIN.BALL_LOSS_BEAT_MS ?? JARDINAIN.TAUNT_MS;
+    this._ballLossBeat = true;
+    audio.stopMusic();
+    audio.gnomeLaugh?.();
+
+    const alive = this.jardinains.filter((j) => !j._destroyed);
+    alive.forEach((j) => j.playTauntLaugh?.());
+    const taunt = pick(GNOME_TAUNT_MESSAGES);
+    this.floatText(GAME.WIDTH / 2, GAME.HEIGHT * 0.4, taunt, '#7eb87a', 26);
+    if (alive.length) {
+      rippleRing(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.38, { tint: 0x7eb87a, scale: 2.6, dur: ms * 0.7 });
+    }
+
+    this._ballLossTimer?.remove(false);
+    this._ballLossTimer = this.time.delayedCall(ms, () => {
+      this._ballLossTimer = null;
+      if (!this.sys?.isActive?.() || this.over) return;
+      this._ballLossBeat = false;
+      onDone?.();
+    });
+  }
+
+  finishBallLossRespawn() {
+    if (this.lives <= 0) {
+      this.gameOver();
+      return;
+    }
+    audio.setLevelMusic(this.level, this.levelSeed, {
+      biome: this.theme?.biome ?? 'garden',
+      isBoss: !!this.isBoss,
+    });
     this.flash(pick(GAME_OVER_MESSAGES), '#ff5a6e', 1000, 'high');
-    this.balls.push(new Ball(this, this.paddle, this.balls.length));
+    this.balls.push(new Ball(this, this.paddle, 0));
     this.balls.forEach((b) => { this.syncBallSpeed(b, { reset: true }); });
+    this.applyEquippedCosmetics();
+    this.emitStats();
   }
 
   checkComboWow() {
@@ -2551,6 +2744,7 @@ export class GameScene extends Phaser.Scene {
   doResume() { InputRouter.onOverlayClose(); this.scene.resume(); }
 
   async completeLevel() {
+    this._levelCompleteQueued = false;
     if (this._completingLevel) return;
     if (this.draftOpen) {
       this._pendingCompleteLevel = true;
@@ -2560,15 +2754,69 @@ export class GameScene extends Phaser.Scene {
       this.flash('GOAL INCOMPLETE', '#ff8899', 800, 'high');
       return;
     }
-    // Meter bonuses before transition lock so a full meter can open the draft overlay.
-    this.addGnomeStreak(GAME.GNOME_STREAK_LEVEL_BONUS);
-    this.addBtMeter(GAME.BT_METER_LEVEL_FILL);
+    this._completingLevel = true;
+    this.transitioning = true;
+    try {
+      await this._completeLevelCore();
+    } catch (e) {
+      console.error('[Game] completeLevel failed', e);
+      if (this.destructiblesLeft() <= 0) {
+        this._retryLevelCompleteOverlay();
+        return;
+      }
+      clearTransitionFlags(this);
+      try {
+        if (this.scene?.isPaused?.()) this.scene.resume();
+        InputRouter.onOverlayClose();
+      } catch { /* ignore */ }
+    }
+  }
+
+  _retryLevelCompleteOverlay() {
+    if (this._levelCompleteRetrying) return;
+    this._levelCompleteRetrying = true;
+    this._completingLevel = true;
+    this.transitioning = true;
+    if (!this.scene?.isPaused?.()) this.scene.pause();
+    this.time.delayedCall(400, () => {
+      this._levelCompleteRetrying = false;
+      try {
+        const bonus = this._lastLevelBonus ?? Math.round(GAME.SCORE_LEVEL_CLEAR + this.lives * 200);
+        this.scene.launch(SCENES.LEVEL_COMPLETE, {
+          level: this.level,
+          message: pick(LEVEL_CLEARED_MESSAGES),
+          bonus,
+          score: this.score,
+          stars: this.evaluateStars(),
+          lives: this.lives,
+          continues: this.continues,
+          goal: this.goal?.label,
+          treasury: MetaProgress.getTreasury(),
+          gems: MetaProgress.getGems(),
+        });
+        InputRouter.onOverlayOpen(SCENES.LEVEL_COMPLETE);
+      } catch (e) {
+        console.error('[Game] level complete retry failed', e);
+        clearTransitionFlags(this);
+        try {
+          this._startNextLevelCore();
+        } catch (e2) {
+          console.error('[Game] emergency startNextLevel failed', e2);
+          clearTransitionFlags(this);
+          this.scene?.resume?.();
+        }
+      }
+    });
+  }
+
+  async _completeLevelCore() {
+    // Meter fill — queue draft picks until after the level-clear overlay (never block on draft here).
+    this.addGnomeStreak(GAME.GNOME_STREAK_LEVEL_BONUS, { deferDraft: true });
+    this.addBtMeter(GAME.BT_METER_LEVEL_FILL, { deferDraft: true });
     if (this.draftOpen) {
       this._pendingCompleteLevel = true;
       return;
     }
-    this._completingLevel = true;
-    this.transitioning = true;
     this.combo = 0;
     const stars = this.evaluateStars();
     const levelKey = `L${this.level}`;
@@ -2621,15 +2869,14 @@ export class GameScene extends Phaser.Scene {
     try {
       this.scene.launch(SCENES.LEVEL_COMPLETE, {
         level: this.level, message: pick(LEVEL_CLEARED_MESSAGES), bonus, score: this.score, stars,
+        lives: this.lives, continues: this.continues,
         goal: this.goal?.label, treasury: MetaProgress.getTreasury(),
         gemsEarned, gems: MetaProgress.getGems(),
       });
       InputRouter.onOverlayOpen(SCENES.LEVEL_COMPLETE);
     } catch (e) {
       console.warn('[Game] level complete overlay failed', e);
-      this._completingLevel = false;
-      this.transitioning = false;
-      this.scene.resume();
+      this._retryLevelCompleteOverlay();
     }
   }
 
@@ -2644,9 +2891,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   startNextLevel() {
+    try {
+      this._startNextLevelCore();
+    } catch (e) {
+      console.error('[Game] startNextLevel failed', e);
+      clearTransitionFlags(this);
+      try {
+        InputRouter.onOverlayClose();
+        if (this.scene?.isPaused?.()) this.scene.resume();
+      } catch { /* ignore */ }
+    }
+  }
+
+  _startNextLevelCore() {
     this.level++;
     const nd = difficultyFor(this.level);
-    if (this.level > 1 && this.level % nd.lifeRewardEvery === 0) this.lives++;
+    if (this.level > 1 && this.level % nd.lifeRewardEvery === 0) {
+      this.lives++;
+      this.emitLifeHud();
+    }
+    if (this.arenaGfx?.active) {
+      this.arenaGfx.setAlpha(1);
+      this.arenaGfx.setScale(1);
+    }
     this.powerDropSeq = 0;
     this.powerSys.clearAll();
     this.statusSys.clear();
@@ -2676,9 +2943,19 @@ export class GameScene extends Phaser.Scene {
     if (this._carryOverPower) {
       const k = this._carryOverPower;
       this._carryOverPower = null;
-      this.applyPower(k);
+      try {
+        this.applyPower(k);
+      } catch (e) {
+        console.warn('[Game] carry-over power failed', e);
+      }
     }
     this.flushPendingDrafts();
+  }
+
+  /** Push lives to DOM/canvas HUD immediately (stats + life pulse). */
+  emitLifeHud() {
+    this.bus?.emit('hud:life', { lives: this.lives });
+    this.emitStats();
   }
 
   emitStats() {
@@ -2775,16 +3052,43 @@ export class GameScene extends Phaser.Scene {
 
   update(time, delta) {
     const realDt = delta;
-    this.tickBulletTime(realDt);
-    this.bg.update(realDt / 1000, this.isBoss);
+    try {
+      this.tickBulletTime(realDt);
+      this.bg?.update?.(realDt / 1000, this.isBoss);
+    } catch (e) {
+      console.warn('[Game] tickBulletTime failed', e);
+    }
     if (this.over || this.scene.isPaused()) return;
+    if (this._ballLossBeat) {
+      try {
+        this.paddle?.sync?.();
+        this.jardinains.forEach((j) => { if (!j._destroyed) j.syncPosition?.(); });
+        this.renderFx?.();
+      } catch { /* beat teardown */ }
+      return;
+    }
     if (this.transitioning && !this._completingLevel) return;
     if (this.draftOpen) {
-      this.paddle.sync();
-      this.balls.forEach((b) => b.sync());
+      try {
+        this.paddle.sync();
+        this.balls.forEach((b) => b.sync());
+      } catch { /* ignore */ }
       return;
     }
 
+    try {
+      this._updateGameplay(realDt);
+    } catch (e) {
+      const now = this.time?.now ?? 0;
+      if (now - (this._lastUpdateErrorLog ?? 0) > 2000) {
+        this._lastUpdateErrorLog = now;
+        console.error('[Game] update failed', e);
+      }
+    }
+  }
+
+  _updateGameplay(realDt) {
+    if (!this.paddle || !this.powerSys || !this.statusSys) return;
     const ts = this.timeScale;
     const dtSec = Math.min(realDt / 1000, 1 / 20) * ts;
     const dtMs = realDt * ts;
@@ -2799,8 +3103,8 @@ export class GameScene extends Phaser.Scene {
 
     const inv = this.controlsInverted ? -1 : 1;
     const dtSecKb = realDt / 1000;
-    if (this.cursors.left.isDown || isArrowHeld('left')) this.paddle.moveByKeyboard(-1 * inv, dtSecKb, ts);
-    if (this.cursors.right.isDown || isArrowHeld('right')) this.paddle.moveByKeyboard(1 * inv, dtSecKb, ts);
+    if (this.cursors?.left?.isDown || isArrowHeld('left')) this.paddle.moveByKeyboard(-1 * inv, dtSecKb, ts);
+    if (this.cursors?.right?.isDown || isArrowHeld('right')) this.paddle.moveByKeyboard(1 * inv, dtSecKb, ts);
 
     if (this.paddle.hasCannon && !this.paddle.stunned) {
       const aimX = this.paddle.cannonType === 'shock'
@@ -2853,10 +3157,13 @@ export class GameScene extends Phaser.Scene {
     this.renderFx();
 
     const anyStuck = this.balls.some((b) => b.stuck);
-    if (anyStuck !== this._hintShown) { this._hintShown = anyStuck; this.bus.emit('hud:hint', anyStuck); }
+    if (anyStuck !== this._hintShown) {
+      this._hintShown = anyStuck;
+      this.bus?.emit('hud:hint', anyStuck);
+    }
 
-    if (this.destructiblesLeft() === 0 && !this._completingLevel) {
-      this.completeLevel();
+    if (this.destructiblesLeft() === 0) {
+      this.requestLevelComplete();
       return;
     }
     if (this.destructiblesLeft() > 0) {
@@ -2914,7 +3221,17 @@ export class GameScene extends Phaser.Scene {
       const e = this.enemies[i];
       if (e._d) { this.enemies.splice(i, 1); continue; }
       const res = e.update(dtSec * env, this.paddle);
-      if (res === 'attack') { this.stunPaddle('HIT!'); this.burst(e.x, e.y, e.color, 8); e.destroy(); this.enemies.splice(i, 1); }
+      if (res === 'attack') {
+        if (this.hasPaddleSpikes()) {
+          this.spikeDeflectEnemy(e);
+          this.enemies.splice(i, 1);
+        } else {
+          this.stunPaddle('HIT!');
+          this.burst(e.x, e.y, e.color, 8);
+          e.destroy();
+          this.enemies.splice(i, 1);
+        }
+      }
       else if (res === 'gone') { e.destroy(); this.enemies.splice(i, 1); }
     }
   }
@@ -3060,12 +3377,8 @@ export class GameScene extends Phaser.Scene {
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const ball = this.balls[i];
       if (ball.stuck) {
-        const pin = paddleSideInset();
-        ball.x = clamp(
-          this.paddle.x + ball.stuckOffset,
-          pin + ball.r,
-          GAME.WIDTH - pin - ball.r,
-        );
+        const { min, max } = this.paddle._xLimits();
+        ball.x = clamp(this.paddle.x + ball.stuckOffset, min - this.paddle.w / 2 + ball.r, max + this.paddle.w / 2 - ball.r);
         ball.y = this.paddle.top - ball.r;
         continue;
       }
@@ -3085,6 +3398,12 @@ export class GameScene extends Phaser.Scene {
         ball.y += sy;
         this.resolveBallWalls(ball, lw, rw, tw);
         if (this.tryPaddleBounce(ball, prevY)) paddleHit = true;
+        for (let pi = this.pots.length - 1; pi >= 0; pi--) {
+          const p = this.pots[pi];
+          if (!this.ballOverlapsProjectile(ball, p)) continue;
+          this.shatterProjectileFromBall(ball, p);
+          this.pots.splice(pi, 1);
+        }
       }
 
       const floorY = GAME.ARENA_FLOOR ?? GAME.HEIGHT;

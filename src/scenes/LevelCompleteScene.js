@@ -10,6 +10,8 @@ import { shareProgressScreenshot } from '../systems/ShareProgress.js';
 import { audio } from '../systems/AudioManager.js';
 import { fitTextWidth, orbitronStyle, uiPx, displayStyle } from '../utils/Typography.js';
 import { AdBreakPolicy } from '../systems/AdBreakPolicy.js';
+import { getGameScene } from '../utils/SceneRefs.js';
+import { resumeGameScene, safeStartNextLevel } from '../systems/GameGuard.js';
 
 export class LevelCompleteScene extends Phaser.Scene {
   constructor() { super(SCENES.LEVEL_COMPLETE); }
@@ -19,6 +21,7 @@ export class LevelCompleteScene extends Phaser.Scene {
     InputRouter.onOverlayOpen(SCENES.LEVEL_COMPLETE);
     this.input.setTopOnly(true);
     const d = this.d;
+    const gs = getGameScene(this);
     const panel = makeResponsiveOverlayPanel(this, { maxCardW: 680 });
     const frame = overlayFrame(panel, { footerReserve: uiPx(130, { min: 110, max: 140 }) });
     const showAdBtn = !Monetization.removeAds && isAdSurfaceEnabled('rewarded');
@@ -28,7 +31,6 @@ export class LevelCompleteScene extends Phaser.Scene {
     const btnH = uiPx(44, { min: 40, max: 48 });
     const btnGap = uiPx(12, { min: 8, max: 14 });
     const actionsY = frame.cardBot - uiPx(72, { min: 64, max: 80 });
-    const game = this.scene.get(SCENES.GAME);
     let doubled = false;
 
     const compact = GAME.IS_PORTRAIT || GAME.HEIGHT < 760;
@@ -78,7 +80,8 @@ export class LevelCompleteScene extends Phaser.Scene {
     fitTextWidth(this.bonusText, frame.wrap, uiPx(15, { min: 13, max: 18 }));
     y += this.bonusText.height + lineGap * 0.45;
 
-    this.scoreText = this.add.text(frame.cx, y, `SCORE  ${(d.score ?? 0).toLocaleString()}`, {
+    const displayScore = d.score ?? gs?.score ?? 0;
+    this.scoreText = this.add.text(frame.cx, y, `SCORE  ${displayScore.toLocaleString()}`, {
       ...orbitronStyle(17, PAL.textMuted, { align: 'center' }),
     }).setOrigin(0.5, 0).setDepth(1001);
     y += this.scoreText.height + lineGap * 0.5;
@@ -109,20 +112,32 @@ export class LevelCompleteScene extends Phaser.Scene {
     const rowW = showAdBtn ? btnW * 2 + btnGap : btnW;
     const leftX = frame.cx - rowW / 2 + btnW / 2;
     const rightX = frame.cx + rowW / 2 - btnW / 2;
+    const lives = d.lives ?? gs?.lives ?? 0;
 
     if (showAdBtn) {
       makeButton(this, leftX, actionsY, '2× BONUS', async () => {
-        if (doubled) return;
+        if (doubled || !gs?.applyLevelBonusDouble) return;
         this.doubleStatus.setText('Loading video…');
-        const granted = await Monetization.offerRewardedDoubleBonus();
-        if (granted && game.applyLevelBonusDouble()) {
-          doubled = true;
-          this.bonusText.setText(`CLEAR BONUS  +${(d.bonus ?? 0) * 2}  (DOUBLED!)`);
-          this.scoreText.setText(`SCORE  ${game.score.toLocaleString()}`);
-          this.doubleStatus.setText('Bonus doubled!');
-          audio.blip(880);
-        } else {
-          this.doubleStatus.setText('Ad unavailable');
+        try {
+          const res = await Monetization.offerRewarded('double_bonus');
+          if (res.granted && gs.applyLevelBonusDouble()) {
+            doubled = true;
+            this.bonusText.setText(`CLEAR BONUS  +${(d.bonus ?? 0) * 2}  (DOUBLED!)`);
+            this.scoreText.setText(`SCORE  ${gs.score.toLocaleString()}`);
+            this.doubleStatus.setText('Bonus doubled!');
+            audio.blip(880);
+          } else if (res.unavailable) {
+            this.doubleStatus.setText('Video unavailable — bonus unchanged');
+            audio.blip(220);
+          } else if (res.cancelled) {
+            this.doubleStatus.setText('Watch the full video for 2× bonus');
+            audio.blip(220);
+          } else {
+            this.doubleStatus.setText('Could not apply bonus — try again');
+            audio.blip(220);
+          }
+        } catch {
+          this.doubleStatus.setText('Video unavailable — bonus unchanged');
           audio.blip(220);
         }
       }, { width: btnW, height: btnH, fontSize: '13px', primary: false });
@@ -134,19 +149,19 @@ export class LevelCompleteScene extends Phaser.Scene {
         kind: 'levelComplete',
         shareData: {
           level: d.level ?? 1,
-          score: d.score ?? 0,
-          lives: game.lives,
+          score: displayScore,
+          lives,
           stars,
           gemsEarned: d.gemsEarned,
         },
-        uiScore: d.score ?? 0,
+        uiScore: displayScore,
         level: d.level ?? 1,
-        lives: game.lives,
+        lives,
         gems: MetaProgress.getGems(),
         treasury: d.treasury ?? MetaProgress.getTreasury(),
         badge: `🌿 LEVEL ${d.level ?? 1} CLEARED`,
         badgeColor: '#7eb87a',
-        heroStat: (d.score ?? 0).toLocaleString(),
+        heroStat: displayScore.toLocaleString(),
         heroLabel: 'SCORE',
         line2: `${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`,
         line2Label: `BONUS +${d.bonus ?? 0}`,
@@ -181,12 +196,19 @@ export class LevelCompleteScene extends Phaser.Scene {
       advanced = true;
       InputRouter.onOverlayClose(SCENES.LEVEL_COMPLETE);
       this.scene.stop();
+      if (!gs?.startNextLevel) {
+        console.warn('[LevelComplete] Game scene unavailable — resuming');
+        resumeGameScene(this.game);
+        return;
+      }
       try {
         await AdBreakPolicy.onContinueAfterLevelClear(this.game);
       } catch (e) {
         console.warn('[LevelComplete] ad break skipped', e);
       }
-      game.startNextLevel();
+      if (!safeStartNextLevel(gs)) {
+        resumeGameScene(this.game);
+      }
     };
     this._advance = advance;
     this.time.delayedCall(4200, advance);

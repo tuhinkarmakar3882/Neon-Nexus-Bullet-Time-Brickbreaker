@@ -115,7 +115,7 @@ Full ad architecture: [ADS.md](./ADS.md).
 - [ ] **Category** — Games → Arcade or Casual
 - [ ] **IAP products** — remove_ads, coins_small, premium (non-consumable / consumable)
 - [ ] **Ads declaration** — yes, contains ads (unless testing remove-ads build)
-- [ ] **Target API level** — meet Play Store current requirement (check Android Studio SDK manager)
+- [ ] **Target API level** — `pnpm run ship:android` runs `patch-android-sdk.mjs` (`targetSdkVersion` / `compileSdkVersion` **35**). Verify in `android/variables.gradle` after sync.
 - [ ] **Internal testing track** — upload AAB, add testers, verify ads + IAP
 
 ## Version bumps

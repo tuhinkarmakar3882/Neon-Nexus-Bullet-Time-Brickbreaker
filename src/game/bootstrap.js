@@ -47,6 +47,7 @@ import { Capacitor } from '@capacitor/core';
 import { getEnv } from '../config/env.js';
 import { peekPlayIntent } from '../shell/playIntent.js';
 import { setBootSplash } from '../shell/BootSplash.js';
+import { attachRuntimeGuards } from '../systems/GameGuard.js';
 
 const isMobile = typeof navigator !== 'undefined'
   && /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
@@ -117,6 +118,15 @@ function restartUiScenes() {
 
 function handleViewportChange() {
   if (!game?.scale) return;
+  try {
+    handleViewportChangeInner();
+  } catch (e) {
+    console.warn('[Neon Nexus] viewport layout failed', e);
+  }
+}
+
+function handleViewportChangeInner() {
+  if (!game?.scale) return;
   if (isGameplayLocked(game)) {
     refreshDisplayScale(game);
     return;
@@ -186,7 +196,11 @@ export function destroyGame() {
 
 export function bootPlayGame() {
   if (game) return game;
-  runMigrations();
+  try {
+    runMigrations();
+  } catch (e) {
+    console.warn('[Neon Nexus] save migration skipped', e);
+  }
   warnProductionConfig();
   audio.preloadMusicCatalog();
 
@@ -214,6 +228,7 @@ export function bootPlayGame() {
       window.dispatchEvent(new CustomEvent('neon:game-ready', { detail: { game } }));
     }
 
+    attachRuntimeGuards(game);
     InputRouter.attach(game);
     attachNavigation(game);
     wireLegalShellNavigation({

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PlayBootSplash } from '@/components/shell/PlayBootSplash';
 import { GameplayHudBridge } from '@/components/play/GameplayHudBridge';
 import { PauseOverlayBridge } from '@/components/play/PauseOverlayBridge';
+import { GameOverOverlayBridge } from '@/components/play/GameOverOverlayBridge';
 import { WebAdBridge } from '@/components/ads/WebAdBridge';
 import { registerWebAdBridge } from '@/lib/ads/webAdBridge';
 import { waitForPlayFrame } from '@/lib/shell/waitForPlayFrame';
@@ -90,6 +91,7 @@ export default function PlayClient() {
       <PlayBootSplash />
       <WebAdBridge />
       <PauseOverlayBridge />
+      <GameOverOverlayBridge />
       {bootError ? (
         <p className="play-boot-error" role="alert">
           {bootError}

@@ -13,9 +13,10 @@ export const randInt = (a, b) => Math.floor(rand(a, b + 1));
 export const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
 export const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 
-// Power-up drop chance decays as levels rise (max ~0.55 -> floor 0.12).
-export function dropChance(level, min = 0.12, max = 0.55, rate = 0.08) {
-  return Math.max(min, max * Math.exp(-rate * level));
+// Brick power-up drop chance — ~30% at level 1, exponential decay to 12% floor.
+export function dropChance(level, min = 0.12, max = 0.3, rate = 0.08) {
+  const t = Math.max(0, (level ?? 1) - 1);
+  return Math.max(min, max * Math.exp(-rate * t));
 }
 
 // Cannon fire-rate / black-hole scaling: shrinks toward `min` as level rises.

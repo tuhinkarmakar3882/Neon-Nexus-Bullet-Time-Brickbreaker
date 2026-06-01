@@ -6,6 +6,7 @@ import { AppShell } from '@/components/shell/AppShell';
 import { useGameMeta } from '@/components/shell/useGameMeta';
 import { COSMETIC_SECTIONS } from '@/src/config/Cosmetics.js';
 import { MetaProgress } from '@/src/systems/MetaProgress.js';
+import { emitCosmeticsChanged } from '@/src/systems/CosmeticsBridge.js';
 import { Monetization } from '@/src/systems/Monetization.js';
 import { isIapEnabled } from '@/src/config/AdsConfig.js';
 import { audio } from '@/src/systems/AudioManager.js';
@@ -32,9 +33,14 @@ function ShopContent() {
     }
     const owned = MetaProgress.ownsCosmetic(kind, c.id);
     if (owned) {
-      MetaProgress.equipCosmetic(kind, c.id);
-      audio.blip(880);
-      setStatus(from === 'play' ? COPY.status.equippedLive : COPY.status.equipped);
+      if (MetaProgress.equipCosmetic(kind, c.id)) {
+        emitCosmeticsChanged(null);
+        audio.blip(880);
+        setStatus(from === 'play' ? COPY.status.equippedLive : COPY.status.equipped);
+      } else {
+        setStatus(COPY.status.equipFailed);
+        audio.blip(220);
+      }
       forceUpdate();
       refresh();
       return;
@@ -45,9 +51,11 @@ function ShopContent() {
     }
     if (MetaProgress.spendGems(c.cost)) {
       MetaProgress.unlockCosmetic(kind, c.id);
-      MetaProgress.equipCosmetic(kind, c.id);
-      audio.blip(880);
-      setStatus(COPY.status.unlocked);
+      if (MetaProgress.equipCosmetic(kind, c.id)) {
+        emitCosmeticsChanged(null);
+        audio.blip(880);
+        setStatus(COPY.status.unlocked);
+      }
       forceUpdate();
       refresh();
     } else {
@@ -98,7 +106,10 @@ function ShopContent() {
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>{section.blurb}</p>
             {section.items.map((c) => {
               const owned = MetaProgress.ownsCosmetic(section.kind, c.id);
-              const equipped = eq[section.kind] === c.id;
+              const equipped =
+                (section.kind === 'hull' && eq.hull === c.id)
+                || (section.kind === 'trail' && eq.trail === c.id)
+                || (section.kind === 'theme' && eq.theme === c.id);
               const tint = section.kind === 'theme' ? c.accent : c.tint;
               let actionLabel: string = COPY.actions.equip;
               if (c.premium && !MetaProgress.isPremium() && !owned) actionLabel = COPY.actions.premium;

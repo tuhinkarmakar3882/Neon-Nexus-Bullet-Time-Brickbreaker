@@ -1,15 +1,21 @@
 import Phaser from 'phaser';
-import { SCENES } from '../config/Constants.js';
+import { GAME, SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { anchorButtonStack, makeResponsiveOverlayPanel } from '../utils/UI.js';
 import { Monetization } from '../systems/Monetization.js';
 import { isAdSurfaceEnabled } from '../config/AdsConfig.js';
 import { InputRouter } from '../systems/InputRouter.js';
+import { buildGameOverSharePayload } from '../config/ShareConfig.js';
 import { shareProgressScreenshot } from '../systems/ShareProgress.js';
 import { MetaProgress } from '../systems/MetaProgress.js';
 import { audio } from '../systems/AudioManager.js';
 import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 import { exitToHome } from '../shell/routes.js';
+import { getGameScene } from '../utils/SceneRefs.js';
+import {
+  dispatchGameOverOverlayClose,
+  dispatchGameOverOverlayOpen,
+} from '../shell/gameOverOverlayDom.js';
 
 export class GameOverScene extends Phaser.Scene {
   constructor() {
@@ -23,19 +29,102 @@ export class GameOverScene extends Phaser.Scene {
   create() {
     InputRouter.onOverlayOpen(SCENES.GAMEOVER);
     this.input.setTopOnly(true);
+
+    const d = this.data2;
+    this.gameScene = getGameScene(this);
+    this.score = Number(d.score ?? 0) || 0;
+    this.highScore = Number(d.highScore ?? this.score) || 0;
+    this.isNewBest = d.isNewBest ?? (this.score >= this.highScore && this.score > 0);
+    this.message = d.message ?? '';
+    this.adsReady = isAdSurfaceEnabled('rewarded') && Monetization.getProviderName() !== 'noop';
+
+    if (GAME.USE_DOM_HUD) {
+      this._domGameOver = true;
+      dispatchGameOverOverlayOpen({
+        score: this.score,
+        highScore: this.highScore,
+        message: this.message,
+        isNewBest: this.isNewBest,
+        adsReady: this.adsReady,
+        level: this.gameScene?.level ?? 1,
+        lives: this.gameScene?.lives ?? 0,
+      });
+      this.events.once('shutdown', () => dispatchGameOverOverlayClose());
+      this.input.keyboard.on('keydown-ESC', () => this.handleBack());
+      return;
+    }
+
+    this.buildPhaserUI();
+    this.input.keyboard.on('keydown-ESC', () => this.handleBack());
+  }
+
+  closeOverlay(andThen) {
+    InputRouter.onOverlayClose(SCENES.GAMEOVER, false);
+    this.scene.stop();
+    andThen?.();
+  }
+
+  async videoContinue() {
+    if (this._continuing) return '';
+    this._continuing = true;
+    try {
+      const { granted, bypassed } = await Monetization.offerRewardedContinueWithBypass();
+      if (granted) {
+        const msg = bypassed && this.adsReady
+          ? 'Video unavailable — continuing your run…'
+          : '';
+        this.closeOverlay(() => this.gameScene?.doVideoContinue?.());
+        return msg;
+      }
+    } catch {
+      /* fall through */
+    } finally {
+      this._continuing = false;
+    }
+    audio.blip(220);
+    return 'Could not continue — tap again or restart';
+  }
+
+  restart() {
+    this.closeOverlay(() => this.gameScene?.doRestart?.());
+  }
+
+  mainMenu() {
+    this.handleBack();
+  }
+
+  async shareProgress(override = {}) {
+    const game = this.gameScene;
+    const d = this.data2 ?? {};
+    const score = Number(override.score ?? this.score ?? d.score ?? game?.score ?? 0) || 0;
+    const highScore = Number(override.highScore ?? this.highScore ?? d.highScore ?? score) || 0;
+    const isNewBest = override.isNewBest ?? this.isNewBest ?? (score >= highScore && score > 0);
+    const level = override.level ?? game?.level ?? 1;
+    const lives = override.lives ?? game?.lives ?? 0;
+    const res = await shareProgressScreenshot(this.game, buildGameOverSharePayload({
+      score,
+      highScore,
+      isNewBest,
+      level,
+      lives,
+      gems: MetaProgress.getGems(),
+      treasury: MetaProgress.getTreasury(),
+    }));
+    if (res.ok) {
+      if (res.method === 'download+clipboard') return 'Saved — share text copied.';
+      if (res.method === 'download') return 'Share card saved.';
+      return 'Shared successfully.';
+    }
+    return 'Share cancelled';
+  }
+
+  buildPhaserUI() {
     const d = this.data2;
     const panel = makeResponsiveOverlayPanel(this, { dimAlpha: 0.88, maxCardW: 640 });
-    const game = this.scene.get(SCENES.GAME);
-    const score = d.score ?? 0;
-    const highScore = d.highScore ?? 0;
-    const isNewBest = score >= highScore && score > 0;
-    const adsReady = isAdSurfaceEnabled('rewarded') && Monetization.getProviderName() !== 'noop';
-
-    const resume = () => {
-      InputRouter.onOverlayClose(SCENES.GAMEOVER);
-      this.scene.stop();
-      game.doVideoContinue();
-    };
+    const score = this.score;
+    const highScore = this.highScore;
+    const isNewBest = this.isNewBest;
+    const adsReady = this.adsReady;
 
     const { frame, stackTop } = anchorButtonStack(this, panel, [
       {
@@ -44,59 +133,24 @@ export class GameOverScene extends Phaser.Scene {
         color: PAL.accent2,
         onClick: async () => {
           this.statusText.setText(adsReady ? 'Loading video…' : '');
-          const { granted, bypassed } = await Monetization.offerRewardedContinueWithBypass();
-          if (granted) {
-            if (bypassed && adsReady) this.statusText.setText('Video unavailable — continuing your run…');
-            resume();
-          } else {
-            this.statusText.setText('Could not continue — please try again');
-            audio.blip(220);
-          }
+          const msg = await this.videoContinue();
+          if (msg && !this._domGameOver) this.statusText.setText(msg);
         },
       },
       {
         label: 'RESTART', primary: false, fontSize: '14px',
-        onClick: () => {
-          InputRouter.onOverlayClose(SCENES.GAMEOVER, false);
-          this.scene.stop();
-          game.doRestart();
-        },
+        onClick: () => this.restart(),
       },
       {
         label: 'MAIN MENU', primary: false, fontSize: '14px', color: 0x8b9bb4,
-        onClick: () => {
-          InputRouter.onOverlayClose(SCENES.GAMEOVER, false);
-          this.scene.stop(SCENES.UI);
-          this.scene.stop(SCENES.GAME);
-          this.scene.stop();
-          exitToHome();
-        },
+        onClick: () => this.mainMenu(),
       },
       {
         label: 'SHARE PROGRESS', primary: false, fontSize: '13px', color: PAL.accent3,
         onClick: async () => {
           this.statusText.setText('Preparing share card…');
-          const res = await shareProgressScreenshot(this.game, {
-            kind: 'gameover',
-            shareData: { score, highScore, isNewBest, level: game.level, lives: game.lives },
-            uiScore: score,
-            level: game.level,
-            lives: game.lives,
-            gems: MetaProgress.getGems(),
-            treasury: MetaProgress.getTreasury(),
-            badge: isNewBest ? '🏆 NEW PERSONAL BEST' : '💥 RUN ENDED',
-            badgeColor: isNewBest ? cssHex(PAL.gold) : '#ff6b7a',
-            heroStat: score.toLocaleString(),
-            heroLabel: 'FINAL SCORE',
-            line2: highScore.toLocaleString(),
-            line2Label: 'PERSONAL BEST',
-            line3: MetaProgress.getGems().toLocaleString(),
-            line3Label: 'GEMS',
-            hook: 'Jardinain chaos · Nexus slow-mo · Beat my siege',
-          });
-          this.statusText.setText(res.ok
-            ? (res.method === 'download+clipboard' ? 'Saved — share text copied.' : res.method === 'download' ? 'Share card saved.' : 'Shared successfully.')
-            : 'Share cancelled');
+          const msg = await this.shareProgress();
+          this.statusText.setText(msg);
         },
       },
     ]);
@@ -138,8 +192,6 @@ export class GameOverScene extends Phaser.Scene {
     this.statusText = this.add.text(frame.cx, statusY, '', {
       ...orbitronStyle(12, cssHex(PAL.accent3), { align: 'center', wordWrap: { width: frame.wrap } }),
     }).setOrigin(0.5, 0).setDepth(1001);
-
-    this.input.keyboard.on('keydown-ESC', () => this.handleBack());
   }
 
   handleBack() {

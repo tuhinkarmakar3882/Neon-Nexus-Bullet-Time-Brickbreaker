@@ -135,8 +135,21 @@ netlify deploy --prod --dir=out
 
 - **HTTPS** — provided by Vercel/Netlify.
 - **Manifest** — `public/manifest.json` (icons from `pnpm run gen:icons`).
+- **Production manifest URLs** — set `VITE_GAME_URL` at build time (e.g. `https://nnbr.netlify.app`) so `id`, `start_url`, and `scope` are absolute. Relative `./` works locally but absolute origins help Chrome’s WebAPK.
 - **Service worker** — not shipped in the Next shell yet; installability may depend on browser heuristics without offline caching.
 - Install prompt hook: `beforeinstallprompt` in [`app/layout.tsx`](../app/layout.tsx).
+
+### Google Play Protect (“Unsafe app blocked”)
+
+On some Android devices, **Play Protect** may block install or launch with *“built for an older version of Android”*. Common causes:
+
+| Cause | What to do |
+|--------|------------|
+| **Old Capacitor/APK** on the phone (same name “Neon Nexus”) | Settings → Apps → uninstall old build; use the website or a new store build with API 35. |
+| **Chrome WebAPK check** (install from browser) | Update Chrome; play in the tab at `VITE_GAME_URL` without installing; or retry after uninstalling duplicate apps. |
+| **Play Store / sideload APK** | Rebuild native app: `pnpm run cap:add:android` then `pnpm run ship:android` — runs [`patch-android-sdk.mjs`](../scripts/patch-android-sdk.mjs) (`targetSdkVersion = 35`). |
+
+Play Protect for browser PWAs is enforced by **Android + Chrome**, not your JavaScript. The install page (`/install/`) documents this for players.
 
 ## SEO & link previews
 

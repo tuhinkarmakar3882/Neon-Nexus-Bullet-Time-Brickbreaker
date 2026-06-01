@@ -365,6 +365,19 @@ export class AudioManager {
     this._chime([440, 554], 0.05, 'square', 0.16);
   }
 
+  /** Jardinains mock the player after a life is lost. */
+  gnomeLaugh() {
+    this._chime([392, 330, 262, 196], 0.11, 'square', 0.22);
+    this._chime([494, 415], 0.09, 'triangle', 0.14);
+    this._sweep(480, 160, 0.24, 'sawtooth', 0.12);
+  }
+
+  spikeDeflect() {
+    this._sfx(920, 0.04, 'square', 0.22);
+    this._sfx(1380, 0.03, 'triangle', 0.14);
+    this._noise(0.02, 0.1, 600, 3200);
+  }
+
   juggle(n = 1) {
     const step = Math.min(Math.max(1, n), 8);
     this._sfx(392 + step * 48, 0.06, 'triangle', 0.2 + step * 0.018);
@@ -414,6 +427,7 @@ export class AudioManager {
     else if (def.cannon === 'fire' || def.cannon === 'napalm') this._noise(0.07, 0.16, 120, 2200);
     else if (def.cannon === 'ice') this.frostHit();
     else if (def.cannon === 'shock') this._sweep(880, 1320, 0.1, 'sawtooth', 0.12);
+    else if (def.paddleSpikes) this.spikeDeflect();
     else if (def.ballMod === 'explosive' || def.ballMod === 'nuke') this._noise(0.05, 0.14, 200, 3200);
     else if (def.ballMod === 'frost') this._chime([880, 1174, 1396], 0.04, 'sine', 0.16);
     else if (def.ballMod === 'electric') this._sweep(660, 1180, 0.09, 'square', 0.12);

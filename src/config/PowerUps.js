@@ -72,6 +72,7 @@ export const POWERS = {
   SlowPaddle:   { pill: 'SLOW',     short: 'PL', category: 'paddle', color: 0xffb3c1, dur: 8000,  kind: 'timed', weight: 4,  polarity: 'neg', icon: 'gauge-down', desc: 'Slower paddle movement' },
   Flip:         { pill: 'FLIP',     short: 'RV', category: 'paddle', color: 0xc084fc, dur: 6000,  kind: 'timed', weight: 4,  polarity: 'neg', icon: 'flip',      toggle: true,       desc: 'Reversed controls — grab again to fix' },
   Magnet:       { pill: 'MAGNET',   short: 'MG', category: 'paddle', color: 0xffd93d, dur: 9000,  kind: 'timed', weight: 8,  polarity: 'pos', icon: 'magnet',    desc: 'Pulls falling power-ups toward paddle' },
+  PaddleSpikes: { pill: 'SPIKES',   short: 'SP', category: 'paddle', color: 0x88ddff, dur: 12000, kind: 'timed', weight: 8,  polarity: 'pos', icon: 'triangle',  paddleSpikes: true, desc: 'Spiked paddle — deflects pots, anchors & enemies' },
 
   // —— Ball (Jardinains elements + legacy ball mods) ——
   ExplosiveBall: { pill: 'BLAST',   short: 'BO', category: 'ball', color: 0xff7a3d, dur: 12000, kind: 'timed', weight: 9, polarity: 'pos', icon: 'bomb',      ballMod: 'explosive', desc: '3×3 grid blast on contact' },

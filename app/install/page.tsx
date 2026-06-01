@@ -14,11 +14,13 @@ export default function InstallPage() {
   const [hint, setHint] = useState('');
   const [canInstall, setCanInstall] = useState(false);
   const [standalone, setStandalone] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
   const c = SHELL_COPY.install;
 
   useEffect(() => {
     setStandalone(isStandaloneDisplay());
     setCanInstall(canOfferInstall());
+    setIsAndroid(/Android/i.test(navigator.userAgent));
     const off = onInstallPromptReady(() => setCanInstall(canOfferInstall()));
     return () => {
       off();
@@ -60,6 +62,13 @@ export default function InstallPage() {
         </>
       )}
       {hint && <p className="shell-hint" style={{ marginTop: 16 }}>{hint}</p>}
+
+      {isAndroid && !standalone && (
+        <aside className="shell-hint" style={{ marginTop: 24, textAlign: 'left' }} role="note">
+          <strong>{c.playProtectTitle}</strong>
+          <p style={{ marginTop: 8, marginBottom: 0 }}>{c.playProtectBody}</p>
+        </aside>
+      )}
     </AppShell>
   );
 }

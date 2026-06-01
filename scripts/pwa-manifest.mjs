@@ -8,7 +8,16 @@ export const PWA_THEME = {
   background_color: '#08050c',
 };
 
-export function buildPwaManifest() {
+/**
+ * @param {{ siteUrl?: string }} opts
+ * When `siteUrl` is set at build time (VITE_GAME_URL), use absolute id/start_url/scope
+ * so Chrome’s WebAPK matches the live origin — reduces install / Play Protect quirks.
+ */
+export function buildPwaManifest({ siteUrl = '' } = {}) {
+  const origin = siteUrl.replace(/\/$/, '');
+  const useAbsolute = !!origin;
+  const appRoot = useAbsolute ? `${origin}/` : './';
+
   const androidBase = 'icons/android';
   const iosBase = 'icons/ios';
   const icons = [];
@@ -45,9 +54,9 @@ export function buildPwaManifest() {
     short_name: 'Neon Nexus',
     description:
       'Free neon brick breaker with bullet-time slow-mo, 25+ power-ups, Jardinain gnomes, and tons of levels to clear.',
-    id: './',
-    start_url: './',
-    scope: './',
+    id: appRoot,
+    start_url: appRoot,
+    scope: appRoot,
     display: 'standalone',
     display_override: ['standalone'],
     orientation: 'portrait',

@@ -2,6 +2,7 @@ import { SCENES } from '../config/Constants.js';
 import { MetaProgress } from './MetaProgress.js';
 import { SaveManager } from './SaveManager.js';
 import { applyBannerPlaceholder, hideWebBannerBar, showWebBannerBar } from './AdBannerSlot.js';
+import { withAdOverlayTimeout } from './AdOverlay.js';
 import { launchParallelScene } from './SceneLaunch.js';
 
 const AD_SIM_MS = 1400;
@@ -76,10 +77,13 @@ export function createDemoAdProvider(game) {
     hideBanner: () => {
       hideWebBannerBar();
     },
-    showInterstitialOverlay: () => new Promise((resolve) => {
-      game.events.once('ad:break:done', resolve);
-      if (game.scene.isActive(SCENES.AD_BREAK)) game.scene.stop(SCENES.AD_BREAK);
-      launchParallelScene(game, SCENES.AD_BREAK, { provider: 'demo' });
-    }),
+    showInterstitialOverlay: () => {
+      const overlay = new Promise((resolve) => {
+        game.events.once('ad:break:done', resolve);
+        if (game.scene.isActive(SCENES.AD_BREAK)) game.scene.stop(SCENES.AD_BREAK);
+        launchParallelScene(game, SCENES.AD_BREAK, { provider: 'demo' });
+      });
+      return withAdOverlayTimeout(game, overlay).then((r) => r?.value);
+    },
   };
 }

@@ -30,6 +30,7 @@ export class Paddle {
     this._targetX = this.x;
     this._smooth = 0.35;
     this._hullTint = 0xffffff;
+    this.spikesActive = false;
 
     this.shadow = scene.add.image(this.x, this.y + this.h * 0.7, 'shadow')
       .setDepth(18).setAlpha(0.5);
@@ -37,6 +38,7 @@ export class Paddle {
     this.body = scene.add.nineslice(this.x, this.y, 'vaus', undefined, this.w, this.h,
       VAUS_SLICE.l, VAUS_SLICE.r, VAUS_SLICE.t, VAUS_SLICE.b).setDepth(20);
     this.cannons = scene.add.graphics().setDepth(21);
+    this.spikesGfx = scene.add.graphics().setDepth(21.2);
   }
 
   get left() { return this.x - this.w / 2; }
@@ -57,7 +59,12 @@ export class Paddle {
     this.w = clamp(w, this.baseW * 0.45, Math.min(cap, this.baseW * 2.4));
   }
 
+  setSpikesActive(on) {
+    this.spikesActive = !!on;
+  }
+
   glowColor() {
+    if (this.spikesActive) return powerFillColor('PaddleSpikes');
     if (this.stunned) return PAL.danger;
     if (this.sticky) return powerFillColor('Catch');
     if (this.cannonType && CANNON_COLORS[this.cannonType]) return CANNON_COLORS[this.cannonType]();
@@ -68,9 +75,25 @@ export class Paddle {
     return paddleSideInset();
   }
 
-  setCenter(x) {
+  /** Nineslice cap padding — allow travel so visible hull meets arena edges. */
+  _edgeBleed() {
+    const texW = 280;
+    const scale = this.w / texW;
+    return (VAUS_SLICE.l + VAUS_SLICE.r) * 0.38 * scale;
+  }
+
+  _xLimits() {
     const inset = this._sideInset();
-    this.x = clamp(x, inset + this.w / 2, GAME.WIDTH - inset - this.w / 2);
+    const bleed = this._edgeBleed();
+    return {
+      min: inset + this.w / 2 - bleed,
+      max: GAME.WIDTH - inset - this.w / 2 + bleed,
+    };
+  }
+
+  setCenter(x) {
+    const { min, max } = this._xLimits();
+    this.x = clamp(x, min, max);
   }
 
   moveByKeyboard(dir, dtSec, timeScale) {
@@ -80,8 +103,8 @@ export class Paddle {
 
   setPointer(worldX) {
     if (this.stunned) return;
-    const inset = this._sideInset();
-    this._targetX = clamp(worldX, inset + this.w / 2, GAME.WIDTH - inset - this.w / 2);
+    const { min, max } = this._xLimits();
+    this._targetX = clamp(worldX, min, max);
     const smooth = clamp(this._smooth * this.speedMult, 0.2, 0.55);
     this.x += (this._targetX - this.x) * smooth;
   }
@@ -89,8 +112,8 @@ export class Paddle {
   relayout() {
     this.baseW = GAME.PADDLE_BASE_WIDTH;
     this.y = GAME.HEIGHT - GAME.PADDLE_Y_OFFSET;
-    const inset = this._sideInset();
-    this._targetX = clamp(this.x, inset + this.w / 2, GAME.WIDTH - inset - this.w / 2);
+    const { min, max } = this._xLimits();
+    this._targetX = clamp(this.x, min, max);
   }
 
   applyAnchorShrink() {
@@ -107,6 +130,7 @@ export class Paddle {
     this.speedMult = 1;
     this.widthPenaltyMult = 1;
     this.stunUntil = 0;
+    this.spikesActive = false;
     this.x = GAME.WIDTH / 2;
   }
 
@@ -122,11 +146,14 @@ export class Paddle {
     this.shadow.setPosition(this.x, this.y + this.h * 0.75).setDisplaySize(this.w * 1.05, this.h * 1.55);
 
     const gc = this.glowColor();
-    const active = this.sticky || this.hasCannon || this.magnet || this.stunned;
+    const active = this.spikesActive || this.sticky || this.hasCannon || this.magnet || this.stunned;
     this.glow.setPosition(this.x, this.y)
       .setDisplaySize(this.w * 1.2, this.h * 3.4)
       .setTint(active ? gc : 0x5aa0ff)
       .setAlpha(active ? 0.45 + 0.1 * Math.sin(this.scene.frame * 0.08) : 0.14);
+
+    this.spikesGfx.clear();
+    if (this.spikesActive) this.drawSpikes();
 
     this.cannons.clear();
     if (!this.cannonType) return;
@@ -150,10 +177,33 @@ export class Paddle {
     }
   }
 
+  drawSpikes() {
+    const g = this.spikesGfx;
+    const n = Math.max(5, Math.floor(this.w / 34));
+    const step = this.w / (n + 1);
+    const baseY = this.top - 1;
+    const spikeH = Math.min(20, this.h * 0.62);
+    const pulse = 0.92 + 0.08 * Math.sin((this.scene.frame ?? 0) * 0.14);
+    g.fillStyle(0xd8f4ff, 1);
+    g.lineStyle(2, 0x5aa0ff, 0.95);
+    for (let i = 1; i <= n; i++) {
+      const cx = this.left + step * i;
+      const half = step * 0.26 * pulse;
+      g.beginPath();
+      g.moveTo(cx - half, baseY);
+      g.lineTo(cx, baseY - spikeH * pulse);
+      g.lineTo(cx + half, baseY);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+    }
+  }
+
   destroy() {
     this.body.destroy();
     this.glow.destroy();
     this.shadow.destroy();
     this.cannons.destroy();
+    this.spikesGfx.destroy();
   }
 }

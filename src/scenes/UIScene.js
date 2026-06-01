@@ -209,15 +209,23 @@ export class UIScene extends Phaser.Scene {
       ...orbitronStyle(10, PAL.textMuted, { fontStyle: 'bold', align: 'center', wordWrap: { width: arenaW } }),
     }).setOrigin(0.5, 0).setDepth(1006);
 
-    this.onTreasury = () => this.refreshCurrency();
-    this.refreshCurrency = () => {
-      if (this._useDomHud) {
-        this.game.events.emit('hud:treasury', { value: MetaProgress.getTreasury() });
-        return;
+    this.onTreasury = (payload) => this.refreshCurrency(payload);
+    this.refreshCurrency = (payload) => {
+      // DOM HUD is updated by React (useGameplayHudState) via hud:treasury from GameScene.
+      // Never re-emit that event here — UIScene also listens and would stack-overflow.
+      if (this._useDomHud) return;
+      if (this._refreshingCurrency) return;
+      this._refreshingCurrency = true;
+      try {
+        this._setPillValue(this._gemPill, MetaProgress.getGems());
+        this._setPillValue(
+          this._leafPill,
+          payload?.value ?? MetaProgress.getTreasury(),
+        );
+        this.layoutAll();
+      } finally {
+        this._refreshingCurrency = false;
       }
-      this._setPillValue(this._gemPill, MetaProgress.getGems());
-      this._setPillValue(this._leafPill, MetaProgress.getTreasury());
-      this.layoutAll();
     };
     this._fitCurrency = () => this.layoutAll();
     this._layoutComboCash = (scoreCx) => {

@@ -5,9 +5,54 @@
 
 type NeonGame = import('phaser').Game;
 
+const OVERLAY_TIMEOUT_MS = 45_000;
+
 function getGame(): NeonGame | undefined {
   if (typeof window === 'undefined') return undefined;
   return window.__NEON;
+}
+
+async function waitForOverlayEvent(
+  event: 'ad:break:done' | 'ad:reward:done',
+  launch: () => void,
+): Promise<boolean> {
+  const game = getGame();
+  if (!game) return false;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      game.events.off('ad:break:done', onBreak);
+      game.events.off('ad:reward:done', onReward);
+      resolve(ok);
+    };
+
+    const onBreak = () => finish(true);
+    const onReward = () => finish(true);
+    game.events.once('ad:break:done', onBreak);
+    game.events.once('ad:reward:done', onReward);
+
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const { SCENES } = await import('@/src/config/Constants.js');
+          if (game.scene?.isActive(SCENES.AD_BREAK)) {
+            const scene = game.scene.getScene(SCENES.AD_BREAK) as { finish?: () => void } | undefined;
+            if (typeof scene?.finish === 'function') scene.finish();
+            else game.scene.stop(SCENES.AD_BREAK);
+          }
+        } catch (e) {
+          console.warn('[Ads] overlay timeout cleanup failed', e);
+        }
+        finish(false);
+      })();
+    }, OVERLAY_TIMEOUT_MS);
+
+    launch();
+  });
 }
 
 async function runPhaserAdBreak(): Promise<boolean> {
@@ -17,12 +62,7 @@ async function runPhaserAdBreak(): Promise<boolean> {
   const { SCENES } = await import('@/src/config/Constants.js');
   const { launchParallelScene } = await import('@/src/systems/SceneLaunch.js');
 
-  return new Promise((resolve) => {
-    const done = () => {
-      game.events.off('ad:break:done', done);
-      resolve(true);
-    };
-    game.events.once('ad:break:done', done);
+  return waitForOverlayEvent('ad:break:done', () => {
     if (game.scene.isActive(SCENES.AD_BREAK)) game.scene.stop(SCENES.AD_BREAK);
     launchParallelScene(game, SCENES.AD_BREAK, { provider: 'google' });
   });
@@ -35,15 +75,19 @@ async function runPhaserRewardedSim(placement?: string): Promise<boolean> {
   const { SCENES } = await import('@/src/config/Constants.js');
   const { launchParallelScene } = await import('@/src/systems/SceneLaunch.js');
 
-  return new Promise((resolve) => {
-    const done = () => {
-      game.events.off('ad:reward:done', done);
-      resolve(true);
-    };
-    game.events.once('ad:reward:done', done);
+  return waitForOverlayEvent('ad:reward:done', () => {
     if (game.scene.isActive(SCENES.AD_BREAK)) game.scene.stop(SCENES.AD_BREAK);
     launchParallelScene(game, SCENES.AD_BREAK, { provider: 'reward', placement });
   });
+}
+
+async function tryGpt<T>(fn: () => Promise<T>): Promise<T | null> {
+  try {
+    return await fn();
+  } catch (e) {
+    console.warn('[Ads] GPT call failed', e);
+    return null;
+  }
 }
 
 /**
@@ -63,7 +107,8 @@ export function registerWebAdBridge(): void {
   if (!window.__googleShowInterstitial) {
     window.__googleShowInterstitial = async () => {
       if (interstitialUnit && typeof window.__gptShowInterstitial === 'function') {
-        return window.__gptShowInterstitial(interstitialUnit);
+        const ok = await tryGpt(() => window.__gptShowInterstitial!(interstitialUnit));
+        if (ok) return true;
       }
       return runPhaserAdBreak();
     };
@@ -72,7 +117,8 @@ export function registerWebAdBridge(): void {
   if (!window.__googleShowRewarded) {
     window.__googleShowRewarded = async (placement?: string) => {
       if (rewardedUnit && typeof window.__gptShowRewarded === 'function') {
-        return window.__gptShowRewarded(rewardedUnit, placement);
+        const ok = await tryGpt(() => window.__gptShowRewarded!(rewardedUnit, placement));
+        if (ok) return true;
       }
       return runPhaserRewardedSim(placement);
     };

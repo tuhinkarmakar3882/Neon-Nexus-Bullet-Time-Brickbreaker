@@ -66,10 +66,10 @@ export function GameplayHud({ state }: { state: GameplayHudState }) {
         data-life-pulse={state.lifePulse > 0 ? state.lifePulse : undefined}
       >
         <div className="play-hud-bar__inner">
-          <div className="play-hud-lives" aria-label={`${state.lives} lives`}>
+          <div className="play-hud-lives" aria-label={`${state.lives} lives`} key={`lives-${state.lives}`}>
             {Array.from({ length: hearts }, (_, i) => (
               <LucideIcon
-                key={i}
+                key={`${state.lives}-${i}`}
                 icon={Heart}
                 size={13}
                 className="play-hud-heart"

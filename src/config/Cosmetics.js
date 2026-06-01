@@ -93,6 +93,22 @@ export function cosmeticById(list, id) {
   return list.find((c) => c.id === id) ?? list[0];
 }
 
+/** Sanitize equipped ids — unknown or unowned ids fall back to first owned / catalog default. */
+export function resolveEquippedCosmetics(equipped = {}, owned = {}) {
+  const pick = (kind, list) => {
+    const ownedIds = owned[kind] ?? [];
+    const fallback = ownedIds[0] ?? list[0]?.id ?? 'default';
+    const id = equipped[kind];
+    if (!list.some((c) => c.id === id)) return fallback;
+    return ownedIds.includes(id) ? id : fallback;
+  };
+  return {
+    hull: pick('hull', PADDLE_HULLS),
+    trail: pick('trail', BALL_TRAILS),
+    theme: pick('theme', GARDEN_THEMES),
+  };
+}
+
 export function cosmeticCatalog(kind) {
   if (kind === 'hull') return PADDLE_HULLS;
   if (kind === 'trail') return BALL_TRAILS;

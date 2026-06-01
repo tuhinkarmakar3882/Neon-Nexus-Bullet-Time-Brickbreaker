@@ -4,9 +4,14 @@
 // Game scenes call Monetization.* only — swap Google AdMob / demo / noop via config.
 
 import { AdsConfig, isAdSurfaceEnabled, isIapEnabled } from '../config/AdsConfig.js';
+import { withAdOverlayTimeout } from './AdOverlay.js';
 import { MetaProgress } from './MetaProgress.js';
 import { SaveManager } from './SaveManager.js';
 import * as PlayBilling from './PlayBilling.js';
+
+function resolvePlacement(placement) {
+  return AdsConfig.placements?.[placement] ?? placement;
+}
 
 const DEFAULT_PROVIDER = {
   name: 'noop',
@@ -67,19 +72,29 @@ class MonetizationService {
         nativeShown = true;
         this._lastInterstitialAt = now;
         if (AdsConfig.interstitial.overlayAfterNative && this.provider.showInterstitialOverlay) {
-          await this.provider.showInterstitialOverlay(game);
+          await this._showInterstitialOverlaySafe(game);
         }
         return { shown: true, native: true };
       }
       if (this.provider.showInterstitialOverlay) {
-        await this.provider.showInterstitialOverlay(game);
+        const overlay = await this._showInterstitialOverlaySafe(game);
+        if (overlay?.timedOut) {
+          console.warn('[Ads] interstitial overlay timed out — continuing');
+          return { shown: false, timedOut: true };
+        }
         this._lastInterstitialAt = now;
         return { shown: true, native: nativeShown };
       }
       return { shown: false };
-    } catch {
+    } catch (e) {
+      console.warn('[Ads] interstitial skipped', e);
       return { shown: false };
     }
+  }
+
+  async _showInterstitialOverlaySafe(game) {
+    if (!this.provider.showInterstitialOverlay) return { timedOut: false };
+    return withAdOverlayTimeout(game, this.provider.showInterstitialOverlay(game));
   }
 
   async offerRewardedContinue() {
@@ -89,31 +104,55 @@ class MonetizationService {
   /** Rewarded continue — bypasses when ads are off, unconfigured, or unavailable. */
   async offerRewardedContinueWithBypass() {
     if (!isAdSurfaceEnabled('rewarded') || this.getProviderName() === 'noop') {
-      return { granted: true, bypassed: true };
+      return { granted: true, bypassed: true, unavailable: true };
     }
     try {
-      const res = await this.provider.showRewarded({ placement: AdsConfig.placements?.continue ?? 'continue' });
-      if (res?.rewarded) return { granted: true, bypassed: !!res.simulated };
-      return { granted: true, bypassed: true };
-    } catch {
-      return { granted: true, bypassed: true };
+      const res = await this.provider.showRewarded({
+        placement: resolvePlacement('continue'),
+      });
+      if (res?.rewarded) {
+        return { granted: true, bypassed: !!res.simulated, cancelled: false, unavailable: false };
+      }
+      return { granted: true, bypassed: true, cancelled: !!res?.native, unavailable: true };
+    } catch (e) {
+      console.warn('[Ads] continue rewarded failed — bypassing', e);
+      return { granted: true, bypassed: true, unavailable: true };
     }
   }
 
   async offerRewardedDoubleBonus() {
-    return this.offerRewarded('double_bonus');
+    const res = await this.offerRewarded('double_bonus');
+    return res.granted;
   }
 
   async offerReviveWithPowers() {
-    return this.offerRewarded('revive_powers');
+    const res = await this.offerRewarded('revive_powers');
+    return res.granted;
   }
 
-  async offerRewarded(placement) {
+  /**
+   * @returns {{ granted: boolean, unavailable?: boolean, cancelled?: boolean, simulated?: boolean }}
+   */
+  async offerRewarded(placementKey) {
+    if (!isAdSurfaceEnabled('rewarded') || this.getProviderName() === 'noop') {
+      return { granted: false, unavailable: true };
+    }
     try {
-      const res = await this.provider.showRewarded({ placement });
-      return !!res?.rewarded;
-    } catch {
-      return false;
+      const res = await this.provider.showRewarded({ placement: resolvePlacement(placementKey) });
+      if (res?.rewarded) {
+        return { granted: true, unavailable: false, cancelled: false, simulated: !!res.simulated };
+      }
+      if (res?.unavailable || res?.timeout) {
+        return { granted: false, unavailable: true, cancelled: false };
+      }
+      return {
+        granted: false,
+        unavailable: false,
+        cancelled: !!res?.native,
+      };
+    } catch (e) {
+      console.warn('[Ads] rewarded failed', placementKey, e);
+      return { granted: false, unavailable: true };
     }
   }
 

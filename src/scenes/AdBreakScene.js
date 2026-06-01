@@ -28,9 +28,9 @@ export class AdBreakScene extends Phaser.Scene {
     fitTextWidth(title, panel.cardW * 0.9, uiPx(22, { min: 18, max: 28 }));
 
     const body = this.add.text(panel.cx, panel.cy - uiPx(4, { min: 0, max: 8 }), isReward
-      ? 'Watch to claim your reward\n(simulated on web demo)'
+      ? 'Watch to claim your reward\n(close when the bar finishes)'
       : isDemo
-        ? 'Support the garden\n(demo simulated ad)'
+        ? 'Support the garden\n(close when the bar finishes)'
         : 'Thanks for supporting\nNeon Nexus', {
       ...orbitronStyle(16, PAL.text, { align: 'center', wordWrap: { width: panel.cardW * 0.85 } }),
     }).setOrigin(0.5).setDepth(1001);
@@ -74,12 +74,20 @@ export class AdBreakScene extends Phaser.Scene {
   finish() {
     if (this._finished) return;
     this._finished = true;
-    InputRouter.onOverlayClose(SCENES.AD_BREAK);
-    this.scene.stop();
-    if (this._provider === 'reward') {
-      this.game.events.emit('ad:reward:done', { placement: this._placement });
-    } else {
-      this.game.events.emit('ad:break:done');
+    try {
+      InputRouter.onOverlayClose(SCENES.AD_BREAK);
+      this.scene.stop();
+      if (this._provider === 'reward') {
+        this.game.events.emit('ad:reward:done', { placement: this._placement });
+      } else {
+        this.game.events.emit('ad:break:done');
+      }
+    } catch (e) {
+      console.warn('[AdBreak] finish failed', e);
+      try {
+        this.game?.events?.emit('ad:break:done');
+        this.game?.events?.emit('ad:reward:done', { placement: this._placement });
+      } catch { /* ignore */ }
     }
   }
 

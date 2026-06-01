@@ -192,10 +192,14 @@ export class Ball {
   }
 
   applyCosmetic(tint = 0xffffff, id = 'comet') {
+    if (!this.scene?.sys) return;
+    const trailId = TRAIL_PROFILES[id] ? id : 'comet';
     this._trailTint = tint;
-    if (this._trailId !== id) {
-      this._trailId = id;
-      this.trail?.destroy();
+    if (this._trailId !== trailId) {
+      this._trailId = trailId;
+      try {
+        this.trail?.destroy?.();
+      } catch { /* tearing down */ }
       this.trail = this.buildTrail();
     }
   }
@@ -231,7 +235,7 @@ export class Ball {
       .setTint(mod ? c : 0xffffff)
       .setAlpha(mod ? 0.65 : 0.78);
 
-    if (!mod) this.trail.setParticleTint(this._identityIndex === 0 ? this._trailTint : idTint);
+    if (!mod) this.trail.setParticleTint(this._trailTint);
     else this.trail.setParticleTint(c);
     this.trail.frequency = missile ? 4 : (chaos ? 6 : (mod ? 9 : (TRAIL_PROFILES[this._trailId]?.frequency ?? 14)));
     this.trailTarget.x = this.x;

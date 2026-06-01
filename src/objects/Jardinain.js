@@ -266,9 +266,14 @@ export class Jardinain {
       this.y = this.brick.y - this.r - 2 + Math.sin(this.bob) * 3;
       this.syncPosition();
 
-      this.throwTimer -= dtMs * envMult;
+      const throwRate = this.scene.potThrowRateMult ?? this.scene.difficulty?.potThrowRateMult ?? 1;
+      this.throwTimer -= dtMs * envMult * throwRate;
       if (this.throwTimer <= 0) {
-        this.throwTimer = rand(this.tierDef.throwMin, this.tierDef.throwMax);
+        const intervalMult = 1 / Math.max(0.35, throwRate);
+        this.throwTimer = rand(
+          this.tierDef.throwMin * intervalMult,
+          this.tierDef.throwMax * intervalMult,
+        );
         this.scene.tweens.add({ targets: this.c, scaleY: 0.7, scaleX: 1.2, duration: 110, yoyo: true });
         return 'throw';
       }
@@ -377,6 +382,32 @@ export class Jardinain {
       this.syncPosition();
     }
     return true;
+  }
+
+  /** Wobble + bob when the player loses a life. */
+  playTauntLaugh() {
+    if (this._destroyed || !this.c?.scene) return;
+    this.scene.tweens.killTweensOf(this.c);
+    this.scene.tweens.add({
+      targets: this.c,
+      angle: -10,
+      duration: 90,
+      yoyo: true,
+      repeat: 4,
+      ease: 'Sine.easeInOut',
+    });
+    this.scene.tweens.add({
+      targets: this.c,
+      scaleY: 1.18,
+      scaleX: 0.88,
+      duration: 110,
+      yoyo: true,
+      repeat: 3,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        if (!this._destroyed && this.c?.scene) this.c.setScale(1).setAngle(0);
+      },
+    });
   }
 
   flee() {

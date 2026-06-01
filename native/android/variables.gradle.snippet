@@ -1,0 +1,11 @@
+// Reference — Capacitor android/variables.gradle should match after patch-android-sdk.mjs:
+//
+// ext {
+//     minSdkVersion = 24
+//     compileSdkVersion = 35
+//     targetSdkVersion = 35
+//     ...
+// }
+//
+// Play Protect / Play Console reject store builds with targetSdk below current policy.
+// Re-run: node scripts/patch-android-sdk.mjs  (wired into pnpm run ship:android)

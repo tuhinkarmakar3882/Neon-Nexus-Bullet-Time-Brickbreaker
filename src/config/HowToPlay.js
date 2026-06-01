@@ -21,7 +21,8 @@ export const HOW_TO_PLAY = {
         'Cannons — Fire, Ice, Shock, Napalm, and Laser fire automatically from your paddle.',
         'Catch — Sticky paddle; tap again to release and re-aim.',
         'Expand / Reduce — Widen or narrow your paddle.',
-        'Magnet — Pulls capsules toward you. Flip inverts controls until you grab another capsule.',
+        'Magnet — Pulls capsules toward you. Paddle Spikes — Top spikes block pots, anchors, and enemies.',
+        'Flip inverts controls until you grab another capsule.',
       ],
     },
     {

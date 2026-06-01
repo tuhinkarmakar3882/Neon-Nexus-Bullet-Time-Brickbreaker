@@ -65,9 +65,12 @@ export function syncPauseAdSlot(game: import('phaser').Game, rect: PauseAdRect):
   showPauseAdSlot(game, rect);
 }
 
-/** Mount ad inside the React pause card (no canvas coordinate mapping). */
-export function mountPauseAdInContainer(el: HTMLElement): void {
-  el.dataset.placement = AD_PLACEMENTS.PAUSE_MENU_BANNER;
+/** Mount ad inside a React overlay card (pause, game over, …). */
+export function mountInlineOverlayAd(
+  el: HTMLElement,
+  placement: (typeof AD_PLACEMENTS)[keyof typeof AD_PLACEMENTS] = AD_PLACEMENTS.PAUSE_MENU_BANNER,
+): void {
+  el.dataset.placement = placement;
   el.classList.add('pause-ad-slot--visible', 'pause-ad-slot--inline');
   el.setAttribute('aria-hidden', 'false');
   el.style.left = '';
@@ -80,9 +83,17 @@ export function mountPauseAdInContainer(el: HTMLElement): void {
   applyBannerPlaceholder(el);
 }
 
-export function hidePauseAdSlot(): void {
-  const el = getSlotEl();
-  if (!el) return;
+/** Mount ad inside the React pause card (no canvas coordinate mapping). */
+export function mountPauseAdInContainer(el: HTMLElement): void {
+  mountInlineOverlayAd(el, AD_PLACEMENTS.PAUSE_MENU_BANNER);
+}
+
+/** Mount ad inside the React game-over card. */
+export function mountGameOverAdInContainer(el: HTMLElement): void {
+  mountInlineOverlayAd(el, AD_PLACEMENTS.GAME_OVER_MENU_BANNER);
+}
+
+export function hideInlineOverlayAd(el: HTMLElement): void {
   el.classList.remove('pause-ad-slot--visible', 'pause-ad-slot--inline');
   el.setAttribute('aria-hidden', 'true');
   el.style.width = '';
@@ -91,4 +102,10 @@ export function hidePauseAdSlot(): void {
   el.style.top = '';
   delete el.dataset.adsense;
   el.innerHTML = '';
+}
+
+export function hidePauseAdSlot(): void {
+  const el = getSlotEl();
+  if (!el) return;
+  hideInlineOverlayAd(el);
 }

@@ -66,6 +66,7 @@ export const SHELL_COPY = {
     status: {
       equippedLive: 'Equipped. Return to your run to see it in the arena.',
       equipped: 'Equipped.',
+      equipFailed: 'Could not equip that item.',
       premiumRequired: 'Requires Premium Pass — see Support below.',
       premiumSoon: 'Premium cosmetics arrive in a future update.',
       unlocked: 'Unlocked and equipped.',
@@ -122,6 +123,11 @@ export const SHELL_COPY = {
       unavailable: 'Install is not available here. Use your browser’s Add to Home Screen option.',
       dismissed: 'Install dismissed. You can try again anytime.',
     },
+    playProtectTitle: 'Seeing “Unsafe app blocked” on Android?',
+    playProtectBody:
+      'That warning is from Google Play Protect, not the game. It often appears when an older Neon Nexus APK is on the phone, or when Chrome’s install check is strict. Uninstall any old “Neon Nexus” app in Settings → Apps, update Chrome, then install again from the browser—or keep playing at nnbr.netlify.app without installing.',
+    playProtectPlayStore:
+      'If you installed from a test APK or Play Store build, upload a new release built with target API 35 (pnpm run ship:android after cap:add:android).',
   },
   connect: {
     title: 'CONNECT',

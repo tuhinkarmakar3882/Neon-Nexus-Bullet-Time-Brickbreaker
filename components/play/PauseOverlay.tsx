@@ -1,16 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, Settings, LogOut, Heart } from 'lucide';
+import { Play, LogOut, Heart } from 'lucide';
 import { LucideIcon } from '@/components/shell/LucideIcon';
 import { NeonButton } from '@/components/shell/AppShell';
 import { mountPauseAdInContainer, hidePauseAdSlot } from '@/lib/ads/pauseAdSlot';
 import type { PauseOverlayData } from '@/lib/shell/pauseOverlayTypes';
-import {
-  pauseOverlayOpenSettings,
-  pauseOverlayQuitToMenu,
-  pauseOverlayResume,
-} from '@/lib/shell/pauseOverlayActions';
+import { pauseOverlayQuitToMenu, pauseOverlayResume } from '@/lib/shell/pauseOverlayActions';
 import { Monetization } from '@/src/systems/Monetization.js';
 
 type Props = {
@@ -79,24 +75,14 @@ export function PauseOverlay({ data }: Props) {
             >
               Resume
             </NeonButton>
-            <div className="pause-overlay__row">
-              <NeonButton
-                variant="secondary"
-                icon={Settings}
-                className="pause-overlay__half"
-                onClick={() => pauseOverlayOpenSettings()}
-              >
-                Settings
-              </NeonButton>
-              <NeonButton
-                variant="danger"
-                icon={LogOut}
-                className="pause-overlay__half pause-overlay__quit"
-                onClick={() => pauseOverlayQuitToMenu()}
-              >
-                Quit to menu
-              </NeonButton>
-            </div>
+            <NeonButton
+              variant="danger"
+              icon={LogOut}
+              className="pause-overlay__quit"
+              onClick={() => pauseOverlayQuitToMenu()}
+            >
+              Quit to menu
+            </NeonButton>
           </div>
 
           {showAd ? (

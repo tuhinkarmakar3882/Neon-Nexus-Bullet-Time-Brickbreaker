@@ -7,10 +7,10 @@ import { clearGameplayHistory } from '../systems/Navigation.js';
 import { Monetization } from '../systems/Monetization.js';
 import { hidePauseAdSlot, showPauseAdSlot } from '../systems/PauseAdSlot.js';
 import { dispatchPauseOverlayClose, dispatchPauseOverlayOpen } from '../shell/pauseOverlayDom.js';
-import { ROUTES, exitToHome, saveRunAndLeavePlay } from '../shell/routes.js';
+import { exitToHome } from '../shell/routes.js';
 import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 
-/** Pause overlay — mockup: title → ad banner → resume → settings | quit. */
+/** Pause overlay — title → ad banner → resume → quit. */
 export class PauseScene extends Phaser.Scene {
   constructor() {
     super(SCENES.PAUSE);
@@ -101,23 +101,9 @@ export class PauseScene extends Phaser.Scene {
     y += btnPrimaryH + gap;
 
     const rowY = y + btnRowH / 2;
-    const rowGap = uiPx(10, { min: 8, max: 12 });
-    const halfW = (contentW - rowGap) / 2;
 
-    makeButton(this, cx - halfW / 2 - rowGap / 2, rowY, 'SETTINGS', () => {
-      this._teardown();
-      InputRouter.onOverlayClose(SCENES.PAUSE, false, false);
-      saveRunAndLeavePlay(ROUTES.settings, { from: 'play' });
-    }, {
-      width: halfW,
-      height: btnRowH,
-      fontSize: '14px',
-      primary: false,
-      depth: 1003,
-    });
-
-    makeButton(this, cx + halfW / 2 + rowGap / 2, rowY, 'QUIT TO MENU', () => this.exitToHub(), {
-      width: halfW,
+    makeButton(this, cx, rowY, 'QUIT TO MENU', () => this.exitToHub(), {
+      width: contentW,
       height: btnRowH,
       fontSize: '14px',
       primary: false,

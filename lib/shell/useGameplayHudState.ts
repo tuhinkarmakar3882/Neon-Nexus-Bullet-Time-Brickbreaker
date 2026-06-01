@@ -35,7 +35,7 @@ function attachHudListeners(
     patch((prev) => ({
       ...prev,
       score: s.score ?? prev.score,
-      lives: s.lives ?? prev.lives,
+      lives: typeof s.lives === 'number' ? s.lives : prev.lives,
       level: s.level ?? prev.level,
       bricksLeft: s.bricksLeft ?? prev.bricksLeft,
       combo: s.combo ?? 0,
@@ -44,11 +44,11 @@ function attachHudListeners(
     }));
   };
 
-  const onTreasury = () => {
+  const onTreasury = (p?: { value?: number }) => {
     patch((prev) => ({
       ...prev,
       gems: MetaProgress.getGems(),
-      treasury: MetaProgress.getTreasury(),
+      treasury: p?.value ?? MetaProgress.getTreasury(),
     }));
   };
 
@@ -96,8 +96,14 @@ function attachHudListeners(
     patch((prev) => ({ ...prev, scramble: !!on }));
   };
 
-  const onLife = () => {
-    patch((prev) => ({ ...prev, lifePulse: prev.lifePulse + 1 }));
+  const onLife = (p?: { lives?: number }) => {
+    const gs = window.__NEON?.scene?.getScene('Game') as { lives?: number } | undefined;
+    const lives = typeof p?.lives === 'number' ? p.lives : gs?.lives;
+    patch((prev) => ({
+      ...prev,
+      lifePulse: prev.lifePulse + 1,
+      ...(typeof lives === 'number' ? { lives } : {}),
+    }));
   };
 
   const onGambit = () => {

@@ -1,4 +1,5 @@
 import { STORAGE } from '../config/Constants.js';
+import { resolveEquippedCosmetics } from '../config/Cosmetics.js';
 import { SaveManager } from './SaveManager.js';
 import { META_SCHEMA_VERSION } from './SaveMigration.js';
 
@@ -94,7 +95,10 @@ export const MetaProgress = {
     saveMeta(m);
   },
   getEquipped() {
-    return loadMeta().cosmetics?.equipped ?? DEFAULT_META.cosmetics.equipped;
+    const m = loadMeta();
+    const raw = m.cosmetics?.equipped ?? DEFAULT_META.cosmetics.equipped;
+    const owned = m.cosmetics?.owned ?? DEFAULT_META.cosmetics.owned;
+    return resolveEquippedCosmetics(raw, owned);
   },
   ownsCosmetic(kind, id) {
     const m = loadMeta();
@@ -111,10 +115,16 @@ export const MetaProgress = {
     }
   },
   equipCosmetic(kind, id) {
+    if (!id || !this.ownsCosmetic(kind, id)) return false;
     const m = loadMeta();
     if (!m.cosmetics) m.cosmetics = { ...DEFAULT_META.cosmetics };
     m.cosmetics.equipped[kind] = id;
     saveMeta(m);
+    return true;
+  },
+  /** Power-up loadout — blessed drops bias toward these keys (max 3). */
+  getBlessings() {
+    return this.getLoadout();
   },
   getLastRunPath() {
     return loadMeta().lastRunPath ?? [];

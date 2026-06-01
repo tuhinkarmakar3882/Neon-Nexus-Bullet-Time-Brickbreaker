@@ -162,7 +162,10 @@ function SettingsContent() {
           )
         )}
 
-        <Link href={ROUTES.shop} className="neon-btn neon-btn-secondary shell-block-link">
+        <Link
+          href={from === 'play' ? `${ROUTES.shop}?from=play` : ROUTES.shop}
+          className="neon-btn neon-btn-secondary shell-block-link"
+        >
           {COPY.shopLink}
         </Link>
 

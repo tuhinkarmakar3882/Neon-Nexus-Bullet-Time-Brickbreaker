@@ -371,7 +371,10 @@ writeFileSync(join(publicDir, 'apple-touch-icon.png'), launcherIconPng(180));
 writeFileSync(join(resourcesDir, 'icon.png'), launcherIconPng(1024));
 
 writeFileSync(join(publicDir, 'og-image.png'), ogImagePng());
-writeFileSync(join(publicDir, 'manifest.json'), `${JSON.stringify(buildPwaManifest(), null, 2)}\n`);
+writeFileSync(
+  join(publicDir, 'manifest.json'),
+  `${JSON.stringify(buildPwaManifest({ siteUrl: SITE_URL }), null, 2)}\n`,
+);
 writeSeoFiles();
 
 console.log('Generated PWA icons in public/icons/android/');
