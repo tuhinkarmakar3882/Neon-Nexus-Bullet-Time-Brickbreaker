@@ -26,6 +26,10 @@ export const RunPersistence = {
       return null;
     }
     if (!Number.isFinite(snap.level) || snap.level < 1) return null;
+    if (snap.pendingGameOver) {
+      SaveManager.clearRun();
+      return null;
+    }
     return snap;
   },
 
@@ -33,8 +37,10 @@ export const RunPersistence = {
     SaveManager.clearRun();
   },
 
-  saveRun(gameScene) {
-    if (!gameScene || gameScene.over) return;
+  saveRun(gameScene, opts = {}) {
+    if (!gameScene) return;
+    const pendingGameOver = opts.pendingGameOver === true;
+    if (gameScene.over && !pendingGameOver) return;
     const activePowers = gameScene.powerSys?.keys().map((key) => ({
       key,
       remaining: gameScene.powerSys.active.get(key) ?? 0,
@@ -56,6 +62,7 @@ export const RunPersistence = {
       brickDamage: gameScene.bricks
         ?.map((b, i) => (b.alive && b.hp < b.maxHp ? { i, hp: b.hp } : null))
         .filter(Boolean) ?? [],
+      pendingGameOver,
     };
     SaveManager.saveRun(snapshot);
   },
@@ -69,5 +76,8 @@ export const RunPersistence = {
       if (document.visibilityState === 'hidden') save();
     });
     window.addEventListener('beforeunload', save);
+    const intervalMs = 15000;
+    const intervalId = window.setInterval(save, intervalMs);
+    game.events?.once?.('destroy', () => window.clearInterval(intervalId));
   },
 };

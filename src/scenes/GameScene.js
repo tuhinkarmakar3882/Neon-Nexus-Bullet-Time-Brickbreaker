@@ -221,6 +221,7 @@ export class GameScene extends Phaser.Scene {
 
     this.time.delayedCall(80, () => this.levelFlash());
     pushGameplayHistory();
+    RunPersistence.saveRun(this);
     this.events.on('shutdown', () => this.cleanup());
   }
 
@@ -2899,7 +2900,7 @@ export class GameScene extends Phaser.Scene {
   gameOver() {
     this.over = true;
     MetaProgress.saveLastRunPath(this._runPath);
-    RunPersistence.clearRun();
+    RunPersistence.saveRun(this, { pendingGameOver: true });
     const hs = SaveManager.getHighScore();
     if (this.score > hs) SaveManager.setHighScore(this.score);
     this.scene.pause();

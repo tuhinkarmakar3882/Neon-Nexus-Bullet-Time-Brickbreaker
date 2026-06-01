@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Version** | 2.0.0 |
+| **Version** | 3.0.x |
 | **Engine** | [Phaser 4.1.0](https://phaser.io/v401) (WebGL \| Web Audio) |
 | **Bundler** | Vite 8 |
 | **Platforms** | Web (PWA), Capacitor (iOS/Android) |
@@ -49,7 +49,7 @@ Design pillars:
 
 - **Responsive canvas** — fixed 1280px logical height; portrait width = `H × aspect` (no 720 clamp); desktop may letterbox under `Scale.FIT`.
 - **Pause-safe timers** — power expiry uses frame delta, not wall clock alone.
-- **Run + meta persistence** — mid-game save/resume (`nn_run_v1`, 7-day TTL) and long-term meta (`nn_meta_v1`).
+- **Run + meta persistence** — mid-game save/resume (`nn_run_v1`, format v2, 7-day TTL) and long-term meta (`nn_meta_v1`). Auto-resume on `/play/` unless `forceNew` play intent. Game-over **video continue** preserves level/bricks until Restart/Main menu.
 - **Zero external art pipeline** — textures and Lucide icons rasterized at boot.
 - **Weapon vs utility stacking** — one cannon + one ball mod at a time; paddle/env powers stack; fusion upgrades duplicate picks to tier II.
 
@@ -103,19 +103,25 @@ Neon-Nexus-Bullet-Time-Brickbreaker/
 
 ## 3. Runtime bootstrap
 
-### 3.1 Load sequence
+### 3.1 Load sequence (web)
 
 ```
-index.html
-  └── src/main.js
-        ├── computeLayout(w, h)     → sets GAME.WIDTH, responsive constants
+app/play/PlayClient.tsx
+  └── src/game/bootstrap.js → bootPlayGame()
+        ├── runMigrations()
+        ├── peekPlayIntent() → window.__neonPlayIntent
         ├── new Phaser.Game(config)
         └── on READY:
-              ├── InputRouter.attach(game)
-              ├── RunPersistence.attachAutoSave(game)
-              ├── Monetization.register(createDemoAdProvider())
-              └── hide #boot-splash
+              ├── InputRouter, Navigation, RunPersistence.attachAutoSave
+              ├── Monetization.register(ad provider)
+              └── scenes: Boot → Preload → Game (+ parallel UI)
+
+PreloadScene.js
+  ├── resume: load nn_run_v1 (unless forceNew)
+  └── new: GameScene with { newGame: true }
 ```
+
+Legacy Vite-only entry (`src/main.js`) was removed; the **Next.js shell** owns routing. See [`SHELL.md`](./SHELL.md).
 
 ### 3.2 Phaser configuration (`src/main.js`)
 
@@ -149,7 +155,7 @@ index.html
 | Provider registration | `main.js` | `Monetization.register(createDemoAdProvider())` |
 | Demo ads | `DemoAdProvider.js` | Simulated rewarded/interstitial + DOM banner |
 | Interstitial UI | `AdBreakScene.js` | Overlay between levels |
-| Rewarded continue / revive | `GameOverScene.js` | `offerRewardedContinue()`, revive + 2 powers |
+| Rewarded continue | `GameOverScene.js` / `GameOverOverlay.tsx` | `doVideoContinue()` — same level/bricks, lives refilled; run not cleared |
 | 2× clear bonus | `LevelCompleteScene.js` | Rewarded double treasury |
 | Interstitial cadence | `GameScene.js` `completeLevel()` | Every 2 levels, 90s frequency cap |
 | Shop / cosmetics | `ShopScene.js` | Paddle hulls, ball trails, themes |
@@ -413,8 +419,18 @@ tick(dtMs)                   // called every frame with scaled delta
 ### RunPersistence
 
 - Key: `localStorage['nn_run_v1']` (via `SaveManager`).
+- Format version: **2** (`RUN_FORMAT_VERSION` in `SaveMigration.js`).
 - TTL: **7 days**.
-- Triggers: pause, visibility hidden, beforeunload, after power apply.
+- Triggers: level load, pause, power apply, level complete/advance, ball loss, visibility hidden, beforeunload, **15s interval** while playing.
+- **Game over:** snapshot saved with `pendingGameOver: true` (not cleared until Restart/Main menu). **Video continue** clears pending flag and saves revived state.
+- **Load:** rejects `pendingGameOver` snapshots (abandoned game-over screen).
+- **Play intent:** `lib/shell/playIntent.ts` — `resume` vs `new` + `forceNew`; consumed in `PreloadScene.js`.
+
+### ShareProgress
+
+- Canvas share cards + Web Share API / download fallback (`ShareProgress.js`).
+- Copy & payloads: `ShareConfig.js` (`buildGameOverSharePayload`, `buildShareMessage`).
+- Game-over card: hero score, inline stats row, gap-to-best line, conditional CTA hierarchy.
 
 ---
 
@@ -437,6 +453,8 @@ All under `src/config/`.
 | `Cosmetics.js` | Shop paddle hulls, ball trails, garden themes |
 | `Palette.js` | `PAL` color tokens, `cssHex()` |
 | `Messages.js` | Game over / level cleared quips |
+| `ShareConfig.js` | Share copy, game URL, game-over card payloads |
+| `VfxQuality.js` | Graphics tier presets (particles, bloom, shake) |
 | `HowToPlay.js` | Codex copy (basics, mods, tiers, brick specials) |
 
 ### Key tunables (`GAME` in Constants.js)
@@ -670,13 +688,15 @@ Knockout triggers automatically at **3** paddle juggles (`KNOCKOUT_JUGGLES`). El
 
 ### 14.2 Level generator
 
-**File**: `src/systems/LevelGenerator.js`
+**File**: `src/systems/LevelGenerator.js` · **Curve**: `DifficultyScaler.js`
 
 | Input | `(level, campaignSeed)` |
-| Output | Brick spec array + metadata + optional `goal`, `mutators` |
+| Output | Brick spec array + metadata + optional `goal`, `mutators`, `layoutLabel` |
 | Seed | `levelSeed = (campaignSeed + level × 997) >>> 0` |
-| Patterns | 15+ layouts including fortress boss arena |
-| Boss | Every **5** levels → `fortress` pattern with gold/steel walls |
+| Layout | **Hybrid zones** — 3–4 stacked bands, contrasting pattern families per zone |
+| Vertical reach | **65–85%** of playable band height (per-level deterministic variation) |
+| Patterns | 30+ ids (wave, emoji, spiral, tunnel, lattice packs, fortress boss, …) |
+| Boss | Every **5** levels → `fortress` / `fortressRing` / `fortressSplit` |
 | Goals | **~90% Clear all** from level 8+; rare bonus goals; boss 85% clear (`LevelGoals.js`) |
 | Portals | Level ≥8, paired cells (min distance apart) |
 | Gravity | Bands: 0.65×–1.35× by level band |
@@ -749,8 +769,9 @@ Key: `localStorage['nn_meta_v1']`
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `version` | 1 | Schema version |
+| `version` | 2 | Schema version (`RUN_FORMAT_VERSION`) |
 | `savedAt` | timestamp | 7-day TTL |
+| `pendingGameOver` | boolean | Set while game-over overlay open; load rejects if true |
 | `campaignSeed` | uint32 | Campaign RNG root |
 | `levelSeed` | uint32 | Current level seed |
 | `level` | int | Current level number |

@@ -118,7 +118,7 @@ export function GameOverOverlay({ data }: Props) {
               onClick={() => gameOverOverlayRestart()}
               disabled={busy}
             >
-              Restart
+              Restart from level 1
             </NeonButton>
             <NeonButton
               variant="danger"

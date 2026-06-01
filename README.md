@@ -2,11 +2,9 @@
 
 A visually-stunning, cross-platform **neon brick breaker** with bullet-time slow-mo,
 **25+ power-ups** (positive, negative, and elemental balls), Jardinain creatures, tons of
-levels, and save/resume. Built on **[Phaser 4.1.0](https://phaser.io/v401)** (WebGL | Web Audio) from the original canvas prototype
-in `_archive/legacy/` (optional reference).
+**hybrid procedural levels**, and **save/resume**. Built on **[Phaser 4.1.0](https://phaser.io/v401)** inside a **Next.js 15** app shell; the original canvas prototype lives in `_archive/legacy/` (reference only).
 
-> Design docs: [`docs/GAME_MECHANICS.md`](docs/GAME_MECHANICS.md) (original spec),
-> [`docs/REDESIGN.md`](docs/REDESIGN.md) (v2 direction).
+> Design docs: [`docs/README.md`](docs/README.md) (index) · [`docs/GAME_MECHANICS.md`](docs/GAME_MECHANICS.md) · [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
 ---
 
@@ -14,10 +12,11 @@ in `_archive/legacy/` (optional reference).
 
 ```bash
 pnpm install
-pnpm run dev         # http://localhost:3000
+pnpm run dev         # http://localhost:3000 — home at /, play at /play/
 pnpm run build       # static export -> out/
 pnpm run preview     # serve out/ at :4173
 pnpm run test:smoke  # headless Chrome flow test
+pnpm run typecheck   # React shell (app/, components/, lib/)
 ```
 
 Art and audio are **generated at runtime** (procedural textures + Web Audio synthesis).
@@ -28,10 +27,12 @@ Art and audio are **generated at runtime** (procedural textures + Web Audio synt
 
 - **25+ power-ups** with Lucide icons and positive/negative polarity (Laser, Echo, BlackHole, Joker, Reduce, Flip, etc.)
 - **Elemental balls** — Cannon (2× damage), Fire (chain burn), Frost (freeze)
-- **Brick types** — normal, silver, gold, explosive, nest, boss, moving, reinforced (with crack overlays)
+- **Brick types** — normal, silver, gold, explosive, nest, boss, moving, reinforced (segmented HP bars)
 - **Jardinains** — creatures that lob pots at your paddle
-- **Tons of levels** — seeded layouts, biomes, boss fortresses every 5 levels, level mutators
-- **Save / resume** — mid-run progress persisted to localStorage
+- **Hybrid level layouts** — stacked pattern zones (wave, emoji, spiral, lattice, …), wall height **65–85%** of arena per level
+- **Save / resume** — mid-run snapshot in `localStorage` (7-day TTL); auto-resume on `/play/` unless you start **New Garden**
+- **Game over** — **Watch video & continue** keeps level, score, and brick layout; Restart / Main menu clears the run
+- **Share cards** — canvas game-over cards with score-first layout (`ShareProgress.js`)
 - **Mobile-ready** — touch input, safe-area insets, rotation relayout, PWA installable
 - **Monetization hooks** — rewarded continue, interstitials, IAP adapter (`Monetization.js`)
 
@@ -44,22 +45,42 @@ Art and audio are **generated at runtime** (procedural textures + Web Audio synt
 | Move paddle | Mouse / `←` `→` | Drag |
 | Launch ball | Click / Space | Tap |
 | Pause | `P` / pause button | Pause button |
-| Menu nav | `↑` `↓` + Enter | Tap buttons |
+| Menu nav | Home screen buttons | Tap buttons |
 
 ---
 
 ## Architecture
 
 ```
+app/                   Next.js App Router (home, play, shop, codex, settings, …)
+components/            React HUD overlays, shell UI
+lib/shell/             Routes, play intent, game-over bridge
 src/
-  main.js              Phaser bootstrap, InputRouter, RunPersistence, Monetization
-  config/              Constants, PowerUps, DropTables, Themes, Messages
-  objects/             Paddle, Ball, Brick, PowerUp, Jardinain, Enemy, Background
-  systems/             PowerUpSystem, LevelGenerator, ChallengeSystem, StatusSystem,
-                       AudioManager, SaveManager, RunPersistence, InputRouter, Haptics
-  scenes/              Boot … LevelComplete, Codex
-  utils/               Textures, IconTextures, UI widgets
+  game/bootstrap.js    Phaser boot on /play/ only
+  config/              Constants, PowerUps, Themes, ShareConfig, VfxQuality
+  objects/             Paddle, Ball, Brick, PowerUp, Jardinain, …
+  systems/             LevelGenerator, RunPersistence, FeedbackDirector, …
+  scenes/              Game, UI, Pause, GameOver, LevelComplete, …
 ```
+
+**Split:** React owns menus and forms; Phaser owns the 60fps play loop. Shared logic (`MetaProgress`, `SaveManager`, `RunPersistence`) lives under `src/` and is imported from both.
+
+See [`docs/SHELL.md`](docs/SHELL.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+---
+
+## Save & resume (player)
+
+| Action | Run progress |
+|--------|----------------|
+| Pause / leave tab / periodic auto-save | Saved (`nn_run_v1`) |
+| Home → **Continue Siege** | Resumes saved level |
+| Home → **New Garden** | Clears run, level 1 |
+| Refresh `/play/` with saved run | Auto-resumes (unless explicit new game) |
+| **Watch video & continue** (game over) | Same level & bricks; lives refilled |
+| **Restart** / **Main menu** / Esc (game over) | Run cleared |
+
+Meta progress (gems, cosmetics, high score) is separate — see `MetaProgress.js` / `nn_meta_v1`.
 
 ---
 
@@ -83,6 +104,7 @@ pnpm run ship:android:bundle # signed AAB (after keystore setup)
 | [**RELEASE.md**](docs/RELEASE.md) | Android signing & Play |
 | [**PWA.md**](docs/PWA.md) | Vercel & Netlify |
 | [**IAP.md**](docs/IAP.md) | RevenueCat + Stripe |
+| [**SHELL.md**](docs/SHELL.md) | Next.js vs Phaser, routes, play intent, overlays |
 | [**NATIVE.md**](docs/NATIVE.md) | Capacitor workflow |
 | [**ADS.md**](docs/ADS.md) | AdMob / AdSense |
 

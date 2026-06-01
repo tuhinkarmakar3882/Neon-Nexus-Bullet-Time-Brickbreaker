@@ -66,6 +66,7 @@ export function upgradeRunSnapshot(snap) {
     version: RUN_FORMAT_VERSION,
     powerDropSeq: snap.powerDropSeq ?? 0,
     brickDamage: Array.isArray(snap.brickDamage) ? snap.brickDamage : [],
+    pendingGameOver: !!snap.pendingGameOver,
     migratedAt: Date.now(),
   };
 }

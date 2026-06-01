@@ -3,7 +3,7 @@ import { SCENES, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '../config/Cons
 import { audio } from '../systems/AudioManager.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { RunPersistence } from '../systems/RunPersistence.js';
-import { consumePlayIntent } from '../shell/playIntent.js';
+import { consumePlayIntent, peekPlayIntent } from '../shell/playIntent.js';
 import { setBootSplash } from '../shell/BootSplash.js';
 
 /** Boot pass — prefetch music catalog, then start gameplay (shell is React). */
@@ -22,19 +22,21 @@ export class PreloadScene extends Phaser.Scene {
     audio.setMusicVolume(s.musicVolume ?? DEFAULT_MUSIC_VOLUME);
     audio.preloadMusicCatalog();
 
-    const intent = typeof window !== 'undefined' ? window.__neonPlayIntent : null;
+    const fromWindow = typeof window !== 'undefined' ? window.__neonPlayIntent : null;
+    const peeked = peekPlayIntent();
+    const intent = fromWindow ?? peeked;
     const mode = intent?.mode ?? 'new';
     const extra = intent?.extra ?? {};
+    const forceNew = extra.forceNew === true;
     if (typeof window !== 'undefined') window.__neonPlayIntent = null;
     consumePlayIntent();
 
     setBootSplash({ progress: 72, label: 'Arming your siege…' });
-    if (mode === 'resume') {
-      const snap = RunPersistence.loadRun();
-      if (snap) {
-        this.scene.start(SCENES.GAME, { resume: snap, ...extra });
-        return;
-      }
+    const snap = RunPersistence.loadRun();
+    const shouldResume = (mode === 'resume' || (!forceNew && snap)) && snap;
+    if (shouldResume) {
+      this.scene.start(SCENES.GAME, { resume: snap, ...extra });
+      return;
     }
     this.scene.start(SCENES.GAME, { newGame: true, ...extra });
   }

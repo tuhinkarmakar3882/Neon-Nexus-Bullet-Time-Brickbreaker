@@ -102,7 +102,7 @@ Registered from [`NativeBridge.js`](../src/systems/NativeBridge.js) via `@capaci
 
 ## Save data across updates
 
-[`SaveMigration.js`](../src/systems/SaveMigration.js) runs at boot (`nn_save_schema`). Run snapshots use format version `2`. Uninstall clears WebView storage.
+[`SaveMigration.js`](../src/systems/SaveMigration.js) runs at boot (`nn_save_schema`). Run snapshots use format version `2` (includes `pendingGameOver` for game-over revive flow). Uninstall clears WebView storage.
 
 Validate locally:
 

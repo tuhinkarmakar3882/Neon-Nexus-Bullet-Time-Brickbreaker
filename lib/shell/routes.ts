@@ -50,7 +50,10 @@ export function exitToHome(): void {
 
 export function navigateToPlay({ resume = false }: { resume?: boolean } = {}): void {
   if (typeof window === 'undefined') return;
-  setPlayIntent({ mode: resume ? 'resume' : 'new' });
+  setPlayIntent({
+    mode: resume ? 'resume' : 'new',
+    extra: { forceNew: !resume },
+  });
   window.location.href = ROUTES.play;
 }
 

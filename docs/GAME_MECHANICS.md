@@ -9,16 +9,28 @@ For architecture and file maps, see [`ARCHITECTURE.md`](./ARCHITECTURE.md). For 
 
 ## 1. Core loop
 
-1. **Menu** — Play, Resume, Shop, Codex, Settings.
+1. **Home** — Play, **Continue Siege** (if saved run), **New Garden**, Shop, Codex, Settings.
 2. **Level** — Break bricks, knock out garden gnomes, meet optional level goals.
-3. **Clear** — Destroy all destructible bricks + satisfy goal → stars, treasury, next level.
-4. **Fail** — Lose all lives → Game Over (free continues + rewarded options).
+3. **Clear** — Destroy all destructible bricks + satisfy goal → stars, gems, next level.
+4. **Fail** — Lose all lives → **Game Over** overlay.
 
 | Stat | Default |
 |------|---------|
 | Lives | 3 |
-| Continues | 2 |
+| Continues | 2 (legacy continue path) |
 | Combo multiplier | Steps every 8 brick hits (max ×3) |
+
+### Save / resume
+
+Mid-run progress is stored in **`localStorage['nn_run_v1']`** (7-day TTL). Gems, cosmetics, and high score live separately in **`nn_meta_v1`**.
+
+| Player action | Run saved? |
+|---------------|------------|
+| Playing (auto-save every ~15s, tab hide, pause) | Yes |
+| Home → **Continue Siege** | Resumes same level |
+| Home → **New Garden** | Cleared — fresh run |
+| **Watch video & continue** (game over) | Yes — same level & brick layout, lives refilled |
+| **Restart** / **Main menu** (game over) | Cleared |
 
 ---
 
@@ -115,11 +127,27 @@ Bonus goals appear rarely (~10% from level 8+) for variety; fortress levels may 
 | Escort | Protect lantern brick (bonus) |
 | Boss perch | Knock fortress gnome off perch (boss variant) |
 
-Goal + mutator text appears under the top HUD bar; mutator intro card at level start.
+Goal text appears under the top HUD bar when active. Level start shows a short **LEVEL N** flash (no separate mutator/goal intro cards).
 
 ---
 
-## 7. Mutators & biomes
+## 7. Level layouts
+
+Levels are **procedurally generated** (`LevelGenerator.js`) from `(level, campaignSeed)`.
+
+| Design choice | Behavior |
+|---------------|----------|
+| **Hybrid zones** | 3–4 stacked vertical zones, each a different pattern family (organic, sculptural, structural, lattice) |
+| **Vertical reach** | Brick wall uses **65–85%** of arena height — varies per level (more open air above the paddle on short walls) |
+| **Pattern variety** | Wave, emoji, spiral, tunnel, chevron, perlin, lattice packs (swiss, checker, woven), boss fortresses every **5** levels |
+| **Difficulty curve** | `DifficultyScaler.js` — ball speed, brick types, gnome pressure by level index |
+| **Mutators** | Up to 2 from level 31+; seasonal every 7 levels |
+
+Boss levels use fortress variants with gold/steel walls. See [`ARCHITECTURE.md` §14](./ARCHITECTURE.md#14-brick-types--level-generation).
+
+---
+
+## 8. Mutators & biomes
 
 Up to **2 mutators** per level (from level 31+). All **13** mutators:
 
@@ -131,12 +159,12 @@ FastBall · LowVisibility (Mist) · DoubleJardinains · NarrowArena · WideArena
 
 ---
 
-## 8. Stars, treasury & meta
+## 9. Stars, gems & meta
 
 | System | Rule |
 |--------|------|
-| **3-star levels** | 1★ for clear; +1★ par time (`90s + 8s × level`); +1★ no lives lost; +1★ ≥1 knockout (max 3★) |
-| **Treasury** | Stars ×50, combo bank milestones, shop currency |
+| **3-star levels** | 1★ for clear; +1★ par time; +1★ no lives lost; +1★ ≥1 knockout (max 3★) |
+| **Gems** | Earned on level clear; spent in Garden Shop (cosmetics) |
 | **Gnome contracts** | Optional per-level bonus — no pot hits, elite knockout, juggle chain (`GnomeContracts.js`) |
 | **Codex journal** | Stats + achievements |
 
@@ -144,7 +172,7 @@ Persistence: `MetaProgress.js` → `localStorage['nn_meta_v1']`.
 
 ---
 
-## 9. Brick specials (tactical)
+## 10. Brick specials (tactical)
 
 Beyond normal/silver/reinforced: explosive, invisible, nest, boss, gold, steel, **portal**, shifting, **mirror**, **moss**, **beehive**, **seedpod**, **linked**, **hostage**.
 
@@ -158,7 +186,7 @@ Fortress every **5** levels.
 
 ---
 
-## 10. Ball readability
+## 11. Ball readability
 
 Chaos is intentional — readability is handled in `Ball.js`:
 
@@ -171,41 +199,41 @@ Chaos is intentional — readability is handled in `Ball.js`:
 
 ---
 
-## 11. HUD layout
+## 12. HUD layout
 
 | Zone | Content |
 |------|---------|
-| **Top bar** | Score, level, bricks, lives, pause, gems/treasury |
+| **Top bar** | Pause · score (center) · gems · lives indicator |
 | **Left vertical meter** | Gnome streak (fill bottom→top), CASH gambit button |
 | **Right vertical meter** | Nexus meter, slow-mo / NEXUS label |
-| **Below bar** | Goal line, mutator line |
+| **Below bar** | Goal line, mutator line (when active) |
 | **Immersive mode** | Settings toggle hides chrome; tap top to peek |
 
-Active powers are read from **power-up pills in the arena** (not HUD chips).
+Active powers are read from **power-up pills in the arena** (not HUD chips). Play HUD uses **gems only** (treasury is meta/shop, not shown in-run).
 
 ---
 
-## 12. Monetization (cosmetic-first)
+## 13. Monetization (cosmetic-first)
 
 Demo ad provider in dev; swap for AdMob/AdSense in production.
 
 | Moment | Reward |
 |--------|--------|
-| Game Over | Rewarded continue or **revive + 2 powers** |
+| Game Over | **Watch video & continue** — revive same level (lives refilled); Restart/Main menu ends run |
 | Level clear | Optional 2× clear bonus (rewarded) |
 | Every 2 levels | Interstitial (90s cap; skipped with Remove Ads) |
-| Menu | Banner slot |
-| Shop | Paddle hulls, ball trails, garden themes (treasury / premium) |
+| Shell routes | Banner slot |
+| Shop | Paddle hulls, ball trails, garden themes (gems / premium) |
 
 ---
 
-## 13. Settings (persisted)
+## 14. Settings (persisted)
 
-Sound, music, volumes, bullet time, flash text, particles, scanlines, reduced FX, haptics, **immersive HUD**, remove ads IAP.
+Sound, music, volumes, **VFX quality tier** (replaces separate particle/reduced-FX toggles), haptics, **immersive HUD**, remove ads IAP.
 
 ---
 
-## 14. VFX, sound & animation
+## 15. VFX, sound & animation
 
 All audio is **Web Audio synthesis** (`AudioManager.js`). All motion is **tween + particle** based — no sprite sheets.
 
@@ -245,7 +273,7 @@ Full catalog: [`ARCHITECTURE.md` §18](./ARCHITECTURE.md#18-audio-vfx--animation
 
 ---
 
-## 15. Legacy prototype
+## 16. Legacy prototype
 
 `docs/GAME_MECHANICS.md` previously described the original 23-power canvas game. Fixed differences in v2:
 
