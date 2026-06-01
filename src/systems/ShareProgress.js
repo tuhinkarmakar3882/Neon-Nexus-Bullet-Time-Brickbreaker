@@ -672,12 +672,12 @@ function drawPredrawnArena(ctx, w, h, ui = {}) {
     ctx.fill();
   }
 
-  drawShareSparkles(ctx, w, h, 56);
+  drawShareSparkles(ctx, w, h, ui.vividPreview ? 72 : 56);
 
   const snapshot = ui.snapshot;
   if (snapshot && canvasHasContent(snapshot)) {
     ctx.save();
-    ctx.globalAlpha = 0.28;
+    ctx.globalAlpha = ui.vividPreview ? 0.52 : 0.28;
     ctx.globalCompositeOperation = 'screen';
     roundRect(ctx, ox, oy, ow, oh, 12);
     ctx.clip();
@@ -762,9 +762,11 @@ function drawGameplayPreview(ctx, x, y, fw, fh, ui = {}) {
     ctx.fillText(`LV ${ui.level ?? 1}`, x + fw - 16, headerCy);
   }
 
-  ctx.fillStyle = 'rgba(8, 5, 12, 0.05)';
-  for (let sy = y; sy < y + fh; sy += 4) {
-    ctx.fillRect(x, sy, fw, 1);
+  if (!ui.vividPreview) {
+    ctx.fillStyle = 'rgba(8, 5, 12, 0.05)';
+    for (let sy = y; sy < y + fh; sy += 4) {
+      ctx.fillRect(x, sy, fw, 1);
+    }
   }
 }
 
@@ -920,33 +922,81 @@ function drawChallengeBanner(ctx, text, cx, cy, w) {
   ctx.stroke();
   ctx.shadowBlur = 0;
   ctx.fillStyle = NEON.cream;
-  ctx.font = canvasFont(28, '800');
+  let fontSize = 28;
+  ctx.font = canvasFont(fontSize, '800');
+  while (fontSize > 18 && ctx.measureText(text).width > w - 32) {
+    fontSize -= 1;
+    ctx.font = canvasFont(fontSize, '800');
+  }
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, cx, cy);
 }
 
-function drawCompactStat(ctx, label, value, cx, cy, w, accent) {
-  const h = 76;
-  const x = cx - w / 2;
-  const y = cy - h / 2;
-  ctx.fillStyle = 'rgba(8, 5, 12, 0.82)';
-  roundRect(ctx, x, y, w, h, 16);
-  ctx.fill();
-  ctx.strokeStyle = accent;
+function drawStatIcon(ctx, kind, cx, cy, size, color) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
   ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.9;
-  roundRect(ctx, x, y, w, h, 16);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = 'rgba(168, 180, 210, 0.92)';
-  ctx.font = canvasFont(16, '600', 'body');
-  ctx.fillText(label, cx, cy - 6);
-  ctx.fillStyle = NEON.cream;
-  ctx.font = canvasFont(28, '800');
-  ctx.fillText(value, cx, cy + 28);
+  ctx.lineJoin = 'round';
+  if (kind === 'trophy') {
+    ctx.beginPath();
+    ctx.moveTo(cx - size * 0.42, cy - size * 0.15);
+    ctx.lineTo(cx - size * 0.28, cy + size * 0.32);
+    ctx.lineTo(cx + size * 0.28, cy + size * 0.32);
+    ctx.lineTo(cx + size * 0.42, cy - size * 0.15);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fillRect(cx - size * 0.14, cy + size * 0.32, size * 0.28, size * 0.12);
+    ctx.fillRect(cx - size * 0.22, cy + size * 0.44, size * 0.44, size * 0.08);
+  } else if (kind === 'level') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - size * 0.42);
+    ctx.lineTo(cx + size * 0.34, cy + size * 0.08);
+    ctx.lineTo(cx + size * 0.12, cy + size * 0.08);
+    ctx.lineTo(cx + size * 0.12, cy + size * 0.42);
+    ctx.lineTo(cx - size * 0.12, cy + size * 0.42);
+    ctx.lineTo(cx - size * 0.12, cy + size * 0.08);
+    ctx.lineTo(cx - size * 0.34, cy + size * 0.08);
+    ctx.closePath();
+    ctx.fill();
+  } else if (kind === 'gem') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - size * 0.42);
+    ctx.lineTo(cx + size * 0.34, cy);
+    ctx.lineTo(cx, cy + size * 0.42);
+    ctx.lineTo(cx - size * 0.34, cy);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Clean horizontal stat row — icon + number + tiny label, no outline boxes. */
+function drawInlineStatsRow(ctx, items, cy, panelX, panelW) {
+  const n = items.length;
+  const colW = panelW / n;
+  items.forEach((item, i) => {
+    const cx = panelX + colW * (i + 0.5);
+    drawStatIcon(ctx, item.icon, cx, cy - 34, 12, item.accent);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = NEON.cream;
+    ctx.font = canvasFont(38, '800');
+    ctx.fillText(item.value, cx, cy + 6);
+    ctx.fillStyle = 'rgba(168, 180, 210, 0.82)';
+    ctx.font = canvasFont(13, '600', 'body');
+    ctx.fillText(item.label, cx, cy + 30);
+    if (i < n - 1) {
+      const divX = panelX + colW * (i + 1);
+      ctx.strokeStyle = 'rgba(47, 230, 199, 0.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(divX, cy - 40);
+      ctx.lineTo(divX, cy + 36);
+      ctx.stroke();
+    }
+  });
 }
 
 function displayShareUrl() {
@@ -955,12 +1005,13 @@ function displayShareUrl() {
   return url.replace(/^https?:\/\//, '');
 }
 
-/** Game-over share layout — hero score, clear stats, challenge CTA. */
+/** Game-over share layout — hero score, inline stats, challenge CTA. */
 function drawGameOverShareCard(ctx, stats) {
   const w = CARD_W;
   const h = CARD_H;
   const ui = stats.ui ?? uiFromStats(stats);
   ui.hidePreviewScore = true;
+  ui.vividPreview = true;
 
   drawChaosField(ctx, w, h);
 
@@ -971,34 +1022,34 @@ function drawGameOverShareCard(ctx, stats) {
     ctx,
     'NEON NEXUS',
     w / 2,
-    96,
-    canvasFont(72, '900'),
+    88,
+    canvasFont(68, '900'),
     [[0, NEON.teal], [0.45, '#ffffff'], [1, NEON.magenta]],
   );
 
   ctx.fillStyle = NEON.cream;
-  ctx.font = canvasFont(26, '700');
+  ctx.font = canvasFont(24, '700');
   ctx.shadowColor = NEON.teal;
   ctx.shadowBlur = 10;
-  ctx.fillText('Bullet-Time Brickbreaker', w / 2, 138);
+  ctx.fillText('Bullet-Time Brickbreaker', w / 2, 126);
   ctx.shadowBlur = 0;
 
-  let frameY = 168;
+  let frameY = 152;
   if (stats.badge) {
-    drawBadge(ctx, stats.badge, w / 2, 198, stats.badgeColor ?? NEON.amber);
-    frameY = 232;
+    drawBadge(ctx, stats.badge, w / 2, 182, stats.badgeColor ?? NEON.amber);
+    frameY = 214;
   }
 
-  const frameX = 52;
-  const frameW = w - 104;
-  const frameH = 400;
-  drawSnapshotFrame(ctx, null, frameX, frameY, frameW, frameH, ui);
+  const frameX = 72;
+  const frameW = w - 144;
+  const frameH = 268;
+  drawSnapshotFrame(ctx, stats.snapshot ?? null, frameX, frameY, frameW, frameH, ui);
 
-  const panelY = frameY + frameH + 36;
+  const panelY = frameY + frameH + 24;
   const panelX = 48;
   const panelW = w - 96;
-  const panelH = 418;
-  ctx.fillStyle = 'rgba(8, 5, 12, 0.78)';
+  const panelH = h - panelY - 72;
+  ctx.fillStyle = 'rgba(8, 5, 12, 0.82)';
   roundRect(ctx, panelX, panelY, panelW, panelH, 28);
   ctx.fill();
   ctx.strokeStyle = 'rgba(47, 230, 199, 0.4)';
@@ -1006,76 +1057,81 @@ function drawGameOverShareCard(ctx, stats) {
   roundRect(ctx, panelX, panelY, panelW, panelH, 28);
   ctx.stroke();
 
-  const heroCy = panelY + 118;
   const heroLabel = stats.heroLabel ?? 'FINAL SCORE';
+  const heroLabelY = panelY + 52;
   ctx.fillStyle = 'rgba(190, 205, 230, 0.9)';
   ctx.font = canvasFont(22, '700', 'body');
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillText(heroLabel, w / 2, heroCy - 52);
+  ctx.fillText(heroLabel, w / 2, heroLabelY);
 
+  const heroCy = panelY + 148;
   const heroAccent = stats.isNewBest ? NEON.amber : NEON.teal;
   fillGradientText(
     ctx,
     stats.heroStat ?? '0',
     w / 2,
-    heroCy + 24,
-    canvasFont(108, '900'),
+    heroCy,
+    canvasFont(120, '900'),
     [[0, heroAccent], [0.45, '#ffffff'], [1, NEON.magenta]],
   );
 
-  const statY = panelY + 218;
-  const statW = (panelW - 56) / 3;
-  const statCx = (i) => panelX + 28 + statW / 2 + i * (statW + 14);
-  drawCompactStat(
-    ctx,
-    stats.line2Label ?? 'PERSONAL BEST',
-    stats.line2 ?? '0',
-    statCx(0),
-    statY,
-    statW - 8,
-    NEON.magenta,
-  );
-  drawCompactStat(
-    ctx,
-    stats.line3Label ?? 'LEVEL',
-    stats.line3 ?? '1',
-    statCx(1),
-    statY,
-    statW - 8,
-    NEON.sky,
-  );
-  drawCompactStat(
-    ctx,
-    stats.line4Label ?? 'GEMS BANKED',
-    stats.line4 ?? fmtStat(stats.gems),
-    statCx(2),
-    statY,
-    statW - 8,
-    NEON.amber,
-  );
-
-  const gemHint = stats.gemHint ?? '';
-  if (gemHint) {
-    ctx.fillStyle = 'rgba(168, 180, 210, 0.88)';
-    ctx.font = canvasFont(20, '600', 'body');
-    ctx.textAlign = 'center';
-    ctx.fillText(gemHint, w / 2, panelY + 278);
+  const subline = stats.scoreSubline ?? '';
+  if (subline) {
+    ctx.fillStyle = stats.isNewBest ? 'rgba(255, 210, 90, 0.92)' : 'rgba(168, 180, 210, 0.9)';
+    ctx.font = canvasFont(24, '600', 'body');
+    ctx.fillText(subline, w / 2, heroCy + 58);
   }
 
-  const challenge = stats.challengeLine ?? `Can you beat ${stats.heroStat ?? '0'}?`;
-  drawChallengeBanner(ctx, challenge, w / 2, panelY + 328, panelW - 64);
+  const pbVal = stats.isNewBest ? stats.line3 ?? '1' : stats.line2 ?? '0';
+  const levelVal = stats.isNewBest ? stats.line2 ?? '1' : stats.line3 ?? '1';
+  const gemsVal = stats.isNewBest ? stats.line3 ?? fmtStat(stats.gems) : stats.line4 ?? fmtStat(stats.gems);
+  const statItems = stats.isNewBest
+    ? [
+      { icon: 'level', label: 'LEVEL', value: levelVal, accent: NEON.sky },
+      { icon: 'gem', label: 'GEMS', value: gemsVal, accent: NEON.amber },
+      { icon: 'trophy', label: 'RECORD', value: '★', accent: NEON.magenta },
+    ]
+    : [
+      { icon: 'trophy', label: 'PB', value: pbVal, accent: NEON.magenta },
+      { icon: 'level', label: 'LEVEL', value: levelVal, accent: NEON.sky },
+      { icon: 'gem', label: 'GEMS', value: gemsVal, accent: NEON.amber },
+    ];
+  const statRowY = subline ? panelY + 268 : panelY + 248;
+  drawInlineStatsRow(ctx, statItems, statRowY, panelX + 16, panelW - 32);
 
-  const ctaY = panelY + panelH - 52;
-  drawCtaButton(
-    ctx,
-    `BEAT MY SCORE  →`,
-    w / 2,
-    ctaY - 44,
-    panelW - 80,
-    { accent: NEON.magenta, mid: '#ff7ab8', fontSize: 28, height: 58 },
-  );
-  drawOutlineCta(ctx, 'PLAY FREE', w / 2, ctaY + 18, 280);
+  const challenge = stats.challengeLine ?? `Can you beat ${stats.heroStat ?? '0'}?`;
+  drawChallengeBanner(ctx, challenge, w / 2, statRowY + 88, panelW - 56);
+
+  const ctaY = panelY + panelH - 56;
+  const primaryPlayFree = !stats.isNewBest;
+  if (primaryPlayFree) {
+    drawCtaButton(
+      ctx,
+      'PLAY FREE  →',
+      w / 2,
+      ctaY - 42,
+      panelW - 72,
+      { accent: NEON.teal, mid: '#5dffe8', fontSize: 30, height: 60 },
+    );
+    drawOutlineCta(ctx, 'BEAT MY SCORE', w / 2, ctaY + 28, 300);
+  } else {
+    drawCtaButton(
+      ctx,
+      'BEAT MY SCORE  →',
+      w / 2,
+      ctaY - 42,
+      panelW - 72,
+      { accent: NEON.magenta, mid: '#ff7ab8', fontSize: 28, height: 58 },
+    );
+    drawOutlineCta(ctx, 'PLAY FREE', w / 2, ctaY + 28, 280);
+  }
+
+  const gemHint = stats.showGemHintOnCard ? (stats.gemHint ?? '') : '';
+  if (gemHint) {
+    ctx.fillStyle = 'rgba(95, 112, 136, 0.85)';
+    ctx.font = canvasFont(16, '500', 'body');
+    ctx.fillText(gemHint, w / 2, h - 56);
+  }
 
   ctx.fillStyle = NEON.teal;
   ctx.font = canvasFont(20, '700');
@@ -1214,7 +1270,9 @@ function statsFromPayload(stats) {
     line4: stats.line4,
     line4Label: stats.line4Label,
     challengeLine: stats.challengeLine,
+    scoreSubline: stats.scoreSubline,
     gemHint: stats.gemHint,
+    showGemHintOnCard: stats.showGemHintOnCard,
     isNewBest: stats.isNewBest ?? stats.shareData?.isNewBest,
     hook: stats.hook,
     ui: stats.ui ?? uiFromStats(stats),

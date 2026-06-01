@@ -1,5 +1,6 @@
 // Pixabay background music + procedural arcade SFX (Web Audio API).
 
+import { GAME } from '../config/Constants.js';
 import { POWERS, resolvePowerKey } from '../config/PowerUps.js';
 import { MUSIC_TRACKS, trackForLevel, menuTrackForVariant, pixabayAlternates, allTrackUrls } from '../config/MusicCatalog.js';
 
@@ -25,6 +26,17 @@ export class AudioManager {
     this._currentTrackDef = null;
     this._backgroundPaused = false;
     this._sfxGainBeforeBg = null;
+    this._rateLimitBuckets = {};
+    this._musicFilter = null;
+    this._musicSource = null;
+    this._musicSources = new WeakMap();
+    this._musicIntensity = 0;
+    this._biomeFilter = null;
+    this._ambienceGain = null;
+    this._ambienceNodes = [];
+    this._gnomeIdleTimer = null;
+    this._ambienceOn = false;
+    this._spatialPan = true;
   }
 
   _initTracks() {
@@ -82,6 +94,17 @@ export class AudioManager {
     }, ms / steps);
   }
 
+  _connectMusicElement(el) {
+    if (!this.ctx || !el || !this._musicFilter || this._musicSources.has(el)) return;
+    try {
+      const src = this.ctx.createMediaElementSource(el);
+      src.connect(this._musicFilter);
+      this._musicSources.set(el, src);
+    } catch {
+      /* element may already be routed — volume-only fallback */
+    }
+  }
+
   async _tryPlayUrl(url, trackDef) {
     const next = this._idleTrackEl();
     const cur = this._activeTrackEl();
@@ -97,6 +120,7 @@ export class AudioManager {
       return false;
     }
 
+    this._connectMusicElement(next);
     this._currentTrackId = trackDef.id;
     this._currentTrackDef = trackDef;
     this._trackSlot = 1 - this._trackSlot;
@@ -153,10 +177,73 @@ export class AudioManager {
 
       this.sfxGain = this.ctx.createGain();
       this.sfxGain.gain.value = this.soundOn ? 0.62 : 0;
-      this.sfxGain.connect(this.comp);
+
+      this._biomeFilter = this.ctx.createBiquadFilter();
+      this._biomeFilter.type = 'lowpass';
+      this._biomeFilter.frequency.value = 12000;
+      this._biomeFilter.connect(this.comp);
+      this.sfxGain.connect(this._biomeFilter);
+
+      this._ambienceGain = this.ctx.createGain();
+      this._ambienceGain.gain.value = 0;
+      this._ambienceGain.connect(this.comp);
+
+      this._musicFilter = this.ctx.createBiquadFilter();
+      this._musicFilter.type = 'highshelf';
+      this._musicFilter.frequency.value = 8000;
+      this._musicFilter.gain.value = 0;
+      this._musicFilter.connect(this.comp);
     } catch {
       this.ctx = null;
     }
+  }
+
+  setSpatialPan(on) {
+    this._spatialPan = !!on;
+  }
+
+  _panFromX(x) {
+    if (!this._spatialPan || x == null) return 0;
+    return Math.max(-1, Math.min(1, (x / GAME.WIDTH) * 2 - 1));
+  }
+
+  _connectSfx(gainNode, opts = {}) {
+    const pan = opts.pan != null ? opts.pan : 0;
+    if (Math.abs(pan) > 0.01 && this.ctx.createStereoPanner) {
+      const p = this.ctx.createStereoPanner();
+      p.pan.value = pan;
+      gainNode.connect(p);
+      p.connect(this.sfxGain);
+    } else {
+      gainNode.connect(this.sfxGain);
+    }
+  }
+
+  _rateLimit(key, windowMs = 50, max = 6) {
+    const now = Date.now();
+    const b = this._rateLimitBuckets[key] ?? { t: now, n: 0 };
+    if (now - b.t > windowMs) { b.t = now; b.n = 0; }
+    b.n += 1;
+    this._rateLimitBuckets[key] = b;
+    return b.n <= max;
+  }
+
+  _duckMusic(factor = 0.55, ms = 420) {
+    const active = this._activeTrackEl();
+    if (active && !active.paused) {
+      const base = active.volume;
+      active.volume = base * factor;
+      setTimeout(() => { if (active && !active.paused) active.volume = base; }, ms);
+    }
+  }
+
+  sidechainImpulse() {
+    if (!this.sfxGain || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.sfxGain.gain.cancelScheduledValues(t);
+    this.sfxGain.gain.setValueAtTime(this.sfxGain.gain.value, t);
+    this.sfxGain.gain.linearRampToValueAtTime(0.38, t + 0.02);
+    this.sfxGain.gain.linearRampToValueAtTime(this.soundOn ? 0.62 : 0, t + 0.12);
   }
 
   resume() {
@@ -226,6 +313,7 @@ export class AudioManager {
     if (this._backgroundPaused) return;
     this._backgroundPaused = true;
     this.stopMusic();
+    this.stopAmbience();
     if (this.sfxGain) {
       this._sfxGainBeforeBg = this.sfxGain.gain.value;
       this.sfxGain.gain.value = 0;
@@ -268,7 +356,7 @@ export class AudioManager {
   }
 
   // ---------- SFX voices ----------
-  _sfx(freq, dur, type, vol, detune = 0) {
+  _sfx(freq, dur, type, vol, detune = 0, opts = {}) {
     if (!this.ctx || !this.soundOn) return;
     const t = this.ctx.currentTime;
     const o = this.ctx.createOscillator();
@@ -276,16 +364,17 @@ export class AudioManager {
     o.type = type;
     o.frequency.setValueAtTime(freq, t);
     o.detune.value = detune;
+    const v = vol * (opts.volScale ?? 1);
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(vol, t + 0.003);
+    g.gain.linearRampToValueAtTime(v, t + 0.003);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g);
-    g.connect(this.sfxGain);
+    this._connectSfx(g, { pan: opts.pan != null ? this._panFromX(opts.pan) : 0 });
     o.start(t);
     o.stop(t + dur + 0.02);
   }
 
-  _sweep(from, to, dur, type, vol) {
+  _sweep(from, to, dur, type, vol, opts = {}) {
     if (!this.ctx || !this.soundOn) return;
     const t = this.ctx.currentTime;
     const o = this.ctx.createOscillator();
@@ -293,15 +382,16 @@ export class AudioManager {
     o.type = type;
     o.frequency.setValueAtTime(from, t);
     o.frequency.exponentialRampToValueAtTime(Math.max(20, to), t + dur);
-    g.gain.setValueAtTime(vol, t);
+    const v = vol * (opts.volScale ?? 1);
+    g.gain.setValueAtTime(v, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g);
-    g.connect(this.sfxGain);
+    this._connectSfx(g, { pan: opts.pan != null ? this._panFromX(opts.pan) : 0 });
     o.start(t);
     o.stop(t + dur + 0.02);
   }
 
-  _noise(dur, vol, hp = 200, lp = 0) {
+  _noise(dur, vol, hp = 200, lp = 0, opts = {}) {
     if (!this.ctx || !this.soundOn) return;
     const t = this.ctx.currentTime;
     const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * dur, this.ctx.sampleRate);
@@ -321,16 +411,16 @@ export class AudioManager {
       node = lpF;
     }
     const g = this.ctx.createGain();
-    g.gain.value = vol;
+    g.gain.value = vol * (opts.volScale ?? 1);
     src.connect(f);
     node.connect(g);
-    g.connect(this.sfxGain);
+    this._connectSfx(g, { pan: opts.pan != null ? this._panFromX(opts.pan) : 0 });
     src.start(t);
   }
 
-  _chime(notes, gap = 0.055, type = 'sine', vol = 0.22) {
+  _chime(notes, gap = 0.055, type = 'sine', vol = 0.22, opts = {}) {
     notes.forEach((f, i) => {
-      setTimeout(() => this._sfx(f, 0.12, type, vol - i * 0.015, (i - 1) * 4), i * gap * 1000);
+      setTimeout(() => this._sfx(f, 0.12, type, vol - i * 0.015, (i - 1) * 4, opts), i * gap * 1000);
     });
   }
 
@@ -340,14 +430,15 @@ export class AudioManager {
     this._sfx(1040 * Math.pow(2, step / 24), 0.035, 'sine', 0.1);
   }
 
-  paddle() {
-    this._sfx(148, 0.07, 'triangle', 0.34);
-    this._noise(0.025, 0.08, 400, 2200);
+  paddle(opts = {}) {
+    this._sfx(148, 0.07, 'triangle', 0.34, 0, opts);
+    this._noise(0.025, 0.08, 400, 2200, opts);
   }
 
-  wall() {
-    this._sfx(380, 0.035, 'sine', 0.16);
-    this._sfx(760, 0.025, 'triangle', 0.08);
+  wall(opts = {}) {
+    const v = opts.volScale ?? 1;
+    this._sfx(380, 0.035, 'sine', 0.16 * v, 0, opts);
+    this._sfx(760, 0.025, 'triangle', 0.08 * v, 0, opts);
   }
 
   power() {
@@ -355,9 +446,9 @@ export class AudioManager {
     this._sweep(440, 1200, 0.2, 'sawtooth', 0.18);
   }
 
-  clutch() {
-    this._sweep(740, 1040, 0.1, 'sine', 0.22);
-    this._sfx(880, 0.05, 'triangle', 0.14, 8);
+  clutch(opts = {}) {
+    this._sweep(740, 1040, 0.1, 'sine', 0.22, opts);
+    this._sfx(880, 0.05, 'triangle', 0.14, 8, opts);
   }
 
   gnomePop() {
@@ -390,25 +481,25 @@ export class AudioManager {
     this._sfx(82, 0.3, 'square', 0.18);
   }
 
-  powerCategory(cat = 'env') {
+  powerCategory(cat = 'env', opts = {}) {
     switch (cat) {
       case 'paddle':
-        this._chime([294, 370, 440], 0.07, 'triangle', 0.26);
+        this._chime([294, 370, 440], 0.07, 'triangle', 0.26, opts);
         break;
       case 'ball':
-        this._chime([440, 554, 659, 880], 0.05, 'sine', 0.22);
+        this._chime([440, 554, 659, 880], 0.05, 'sine', 0.22, opts);
         break;
       case 'wild':
-        this._sweep(280, 920, 0.22, 'square', 0.28);
-        this._noise(0.06, 0.14, 280, 4000);
+        this._sweep(280, 920, 0.22, 'square', 0.28, opts);
+        this._noise(0.06, 0.14, 280, 4000, opts);
         break;
       default:
-        this._chime([330, 415, 494, 622], 0.06, 'triangle', 0.22);
+        this._chime([330, 415, 494, 622], 0.06, 'triangle', 0.22, opts);
     }
   }
 
   /** Per-power pickup sting — keyed off catalog entry. */
-  powerPickup(key) {
+  powerPickup(key, opts = {}) {
     const k = resolvePowerKey(key);
     const def = POWERS[k];
     if (!def) { this.power(); return; }
@@ -422,7 +513,7 @@ export class AudioManager {
     }[def.category] ?? [392, 494, 587];
     const base = catPitch[hash % catPitch.length] + (hash % 9) * 6;
     const wave = def.category === 'ball' ? 'sawtooth' : def.category === 'wild' ? 'square' : 'triangle';
-    this._chime([base, base * 1.26, base * 1.52, base * 1.88], 0.048, wave, 0.24);
+    this._chime([base, base * 1.26, base * 1.52, base * 1.88], 0.048, wave, 0.24, opts);
     if (def.cannon === 'laser') this._sweep(1200, 680, 0.08, 'square', 0.14);
     else if (def.cannon === 'fire' || def.cannon === 'napalm') this._noise(0.07, 0.16, 120, 2200);
     else if (def.cannon === 'ice') this.frostHit();
@@ -439,72 +530,74 @@ export class AudioManager {
     this._sfx(1760, 0.05, 'triangle', 0.12);
   }
 
-  /** Brick destroy — type-specific timbre + combo pitch lift. */
-  brickBreak(type = 'normal', combo = 0, hpRemaining = 0) {
-    const step = Math.min(combo, 14);
-    const lift = Math.pow(2, step / 12);
+  /** Brick destroy — type-specific timbre; combo pitch only when combo > 0. */
+  brickBreak(type = 'normal', combo = 0, hpRemaining = 0, opts = {}) {
+    if (!this._rateLimit('brick', 50, 6)) return;
+    const step = combo > 0 ? Math.min(combo, 14) : 0;
+    const lift = step > 0 ? Math.pow(2, step / 12) : 1;
     switch (type) {
       case 'silver':
-        this._sfx(320 * lift, 0.07, 'square', 0.28);
-        this._chime([640, 800, 960].map((f) => f * lift), 0.035, 'triangle', 0.14);
+        this._sfx(320 * lift, 0.07, 'square', 0.28, 0, opts);
+        this._chime([640, 800, 960].map((f) => f * lift), 0.035, 'triangle', 0.14, opts);
         break;
       case 'reinforced':
-        this._sfx(180 + hpRemaining * 40, 0.09, 'sawtooth', 0.26);
-        this._noise(0.05, 0.12, 500, 2800);
+        this._sfx(180 + hpRemaining * 40, 0.09, 'sawtooth', 0.26, 0, opts);
+        this._noise(0.05, 0.12, 500, 2800, opts);
         break;
       case 'boss':
-        this._sfx(140 * lift, 0.12, 'square', 0.32);
-        this._noise(0.08, 0.18, 80, 1800);
-        this._sweep(220, 80, 0.2, 'sawtooth', 0.16);
+        this._sfx(140 * lift, 0.12, 'square', 0.32, 0, opts);
+        this._noise(0.08, 0.18, 80, 1800, opts);
+        this._sweep(220, 80, 0.2, 'sawtooth', 0.16, opts);
         break;
       case 'explosive':
       case 'seedpod':
-        this._noise(0.1, 0.22, 280, 3400);
-        this._sfx(160, 0.07, 'sawtooth', 0.18);
-        this._sweep(400, 60, 0.15, 'square', 0.14);
+        this._noise(0.1, 0.22, 280, 3400, opts);
+        this._sfx(160, 0.07, 'sawtooth', 0.18, 0, opts);
+        this._sweep(400, 60, 0.15, 'square', 0.14, opts);
         break;
       case 'nest':
       case 'beehive':
-        this._chime([440, 554, 659].map((f) => f * lift), 0.04, 'square', 0.2);
-        this._sweep(520, 880, 0.1, 'triangle', 0.14);
+        this._chime([440, 554, 659].map((f) => f * lift), 0.04, 'square', 0.2, opts);
+        this._sweep(520, 880, 0.1, 'triangle', 0.14, opts);
         break;
       case 'moss':
-        this._sfx(260 * lift, 0.06, 'triangle', 0.18);
-        this._noise(0.04, 0.08, 800, 4000);
+        this._sfx(260 * lift, 0.06, 'triangle', 0.18, 0, opts);
+        this._noise(0.04, 0.08, 800, 4000, opts);
         break;
       case 'invisible':
-        this._sweep(880, 440, 0.08, 'sine', 0.16);
-        this._sfx(660 * lift, 0.04, 'triangle', 0.12);
+        this._sweep(880, 440, 0.08, 'sine', 0.16, opts);
+        this._sfx(660 * lift, 0.04, 'triangle', 0.12, 0, opts);
         break;
       case 'portal':
-        this._sweep(300, 900, 0.12, 'sine', 0.18);
-        this._sfx(720 * lift, 0.05, 'triangle', 0.1);
+        this._sweep(300, 900, 0.12, 'sine', 0.18, opts);
+        this._sfx(720 * lift, 0.05, 'triangle', 0.1, 0, opts);
         break;
       case 'shifting':
       case 'mirror':
-        this._sfx(480 * lift, 0.05, 'square', 0.2);
-        this._sfx(720 * lift, 0.035, 'sine', 0.1);
+        this._sfx(480 * lift, 0.05, 'square', 0.2, 0, opts);
+        this._sfx(720 * lift, 0.035, 'sine', 0.1, 0, opts);
         break;
       case 'linked':
-        this._chime([392, 494, 587].map((f) => f * lift), 0.04, 'triangle', 0.18);
+        this._chime([392, 494, 587].map((f) => f * lift), 0.04, 'triangle', 0.18, opts);
         break;
       case 'hostage':
-        this._chime([523, 659, 784], 0.06, 'sine', 0.24);
-        this._sweep(440, 880, 0.14, 'triangle', 0.12);
+        this._chime([523, 659, 784], 0.06, 'sine', 0.24, opts);
+        this._sweep(440, 880, 0.14, 'triangle', 0.12, opts);
         break;
       case 'gold':
-        this._chime([784, 988, 1174], 0.045, 'sine', 0.26);
-        this._sfx(880, 0.06, 'triangle', 0.14);
+        this._chime([784, 988, 1174], 0.045, 'sine', 0.26, opts);
+        this._sfx(880, 0.06, 'triangle', 0.14, 0, opts);
         break;
       default:
-        this.brick(combo);
+        this._sfx(520, 0.05, 'square', 0.24, 0, opts);
+        this._sfx(1040, 0.035, 'sine', 0.1, 0, opts);
     }
   }
 
-  explode() {
-    this._noise(0.32, 0.38, 80, 2400);
-    this._sweep(280, 48, 0.38, 'sawtooth', 0.24);
-    this._sfx(96, 0.15, 'square', 0.16);
+  explode(opts = {}) {
+    this._noise(0.32, 0.38, 80, 2400, opts);
+    this._sweep(280, 48, 0.38, 'sawtooth', 0.24, opts);
+    this._sfx(96, 0.15, 'square', 0.16, 0, opts);
   }
 
   lose() {
@@ -521,17 +614,45 @@ export class AudioManager {
     this._sweep(880, 180, 0.42, 'sine', 0.26);
     this._noise(0.14, 0.18, 200, 1600);
     this._sfx(55, 0.4, 'triangle', 0.12);
-    const active = this._activeTrackEl();
-    if (active && !active.paused) {
-      const base = active.volume;
-      active.volume = base * 0.55;
-      setTimeout(() => { if (active && !active.paused) active.volume = base; }, 420);
-    }
+    this._duckMusic(0.55, 420);
   }
 
-  wowHit() {
-    this._chime([523, 659, 784], 0.055, 'square', 0.22);
-    this._sweep(620, 1100, 0.16, 'sawtooth', 0.18);
+  nexusUnleashed(opts = {}) {
+    this._sweep(120, 480, 0.35, 'sine', 0.32, opts);
+    this._noise(0.28, 0.22, 60, 1200, opts);
+    this._sweep(800, 40, 0.4, 'sawtooth', 0.18, opts);
+    this._duckMusic(0.45, 600);
+  }
+
+  shieldRebound(opts = {}) {
+    this._sfx(880, 0.06, 'sine', 0.2, 0, opts);
+    this._sfx(1320, 0.04, 'triangle', 0.12, 0, opts);
+    this._noise(0.015, 0.06, 800, 6000, opts);
+  }
+
+  portalWarp(opts = {}) {
+    this._sweep(440, 220, 0.08, 'sine', 0.18, opts);
+    setTimeout(() => this._sweep(220, 660, 0.1, 'triangle', 0.16, opts), 80);
+  }
+
+  potIncomingTick(opts = {}) {
+    this._sweep(320, 520, 0.06, 'sine', 0.08, opts);
+  }
+
+  comboMilestone(tier, opts = {}) {
+    const notes = {
+      8: [523, 659, 784],
+      16: [587, 740, 880, 1046],
+      24: [659, 831, 988, 1174],
+      32: [784, 988, 1174, 1396],
+    }[tier] ?? [523, 659, 784];
+    this._chime(notes, 0.055, 'square', 0.24, opts);
+    this._sweep(620, 1100, 0.14, 'sawtooth', 0.16, opts);
+  }
+
+  wowHit(opts = {}) {
+    this._chime([523, 659, 784], 0.055, 'square', 0.22, opts);
+    this._sweep(620, 1100, 0.16, 'sawtooth', 0.18, opts);
   }
 
   levelUp() {
@@ -560,9 +681,82 @@ export class AudioManager {
     }
   }
 
-  powerNegative() {
-    this._sweep(380, 120, 0.32, 'sawtooth', 0.28);
-    this._sfx(146, 0.22, 'square', 0.18);
+  powerNegative(opts = {}) {
+    this._sweep(380, 120, 0.32, 'sawtooth', 0.28, opts);
+    this._sfx(146, 0.22, 'square', 0.18, 0, opts);
+  }
+
+  setBiomeFilter(biome = 'garden') {
+    if (!this._biomeFilter) return;
+    const profiles = {
+      garden: { type: 'lowpass', freq: 12000 },
+      frost: { type: 'highpass', freq: 400 },
+      ember: { type: 'bandpass', freq: 800 },
+    };
+    const p = profiles[biome] ?? profiles.garden;
+    this._biomeFilter.type = p.type;
+    this._biomeFilter.frequency.value = p.freq;
+    if (p.type === 'bandpass') this._biomeFilter.Q.value = 0.8;
+  }
+
+  setMusicIntensity(intensity = 0) {
+    this._musicIntensity = Math.max(0, Math.min(1, intensity));
+    if (this._musicFilter) {
+      this._musicFilter.frequency.value = 8000 + this._musicIntensity * 4000;
+      this._musicFilter.gain.value = this._musicIntensity * 4;
+    }
+    const active = this._activeTrackEl();
+    if (active && !active.paused && this._currentTrackDef) {
+      const boost = 1 + this._musicIntensity * 0.08;
+      active.volume = this._baseTrackVolume(this._currentTrackDef) * boost;
+    }
+  }
+
+  startAmbience(biome = 'garden') {
+    if (!this.ctx || !this._ambienceGain || this._ambienceOn) return;
+    this._ambienceOn = true;
+    this.stopAmbience();
+    const t = this.ctx.currentTime;
+    const dur = 4;
+    const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * dur, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) {
+      d[i] = (Math.random() * 2 - 1) * 0.3;
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const f = this.ctx.createBiquadFilter();
+    if (biome === 'frost') {
+      f.type = 'highpass';
+      f.frequency.value = 2000;
+    } else if (biome === 'ember') {
+      f.type = 'bandpass';
+      f.frequency.value = 600;
+      f.Q.value = 1.2;
+    } else {
+      f.type = 'lowpass';
+      f.frequency.value = 400;
+    }
+    src.connect(f);
+    f.connect(this._ambienceGain);
+    this._ambienceGain.gain.setTargetAtTime(0.04, t, 0.8);
+    src.start(t);
+    this._ambienceNodes.push(src);
+  }
+
+  stopAmbience() {
+    if (!this._ambienceGain) return;
+    this._ambienceGain.gain.setTargetAtTime(0, this.ctx?.currentTime ?? 0, 0.3);
+    this._ambienceNodes.forEach((n) => { try { n.stop(); } catch { /* */ } });
+    this._ambienceNodes = [];
+    this._ambienceOn = false;
+  }
+
+  /** Rare gnome idle clink — call from GameScene when gnome on brick. */
+  gnomeIdleClink(opts = {}) {
+    if (Math.random() > 0.08) return;
+    this._sfx(440 + Math.random() * 80, 0.04, 'triangle', 0.06, 0, opts);
   }
 
   brickHit(type = 'normal', hpRemaining = 0) {

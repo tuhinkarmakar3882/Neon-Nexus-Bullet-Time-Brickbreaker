@@ -34,12 +34,18 @@ export const GAME = {
   STEER_SWIRL_GRAVITY: 3.4,
   STEER_SPEED_MIN: 0.62,
   STEER_SPEED_MAX: 1.75,
-  ECHO_ORBIT_COUNT: 8,
-  ECHO_ORBIT_SPEED: 9.5,
+  ECHO_ORBIT_COUNT: 3,
+  ECHO_ORBIT_SPEED: 6.5,
   /** Multiplier on ball radius for echo satellite orbit path. */
-  ECHO_ORBIT_RADIUS: 3.4,
+  ECHO_ORBIT_RADIUS: 2.75,
+  /** Ms between echo damage pulses (visuals still run every frame). */
+  ECHO_TICK_MS: 180,
+  /** Per-brick cooldown after an echo chip or break. */
+  ECHO_HIT_COOLDOWN_MS: 480,
+  /** Hit reach as fraction of brick height added to node radius. */
+  ECHO_HIT_REACH: 0.38,
   /** Black hole pull radius (fraction of min screen dimension). */
-  BLACK_HOLE_RADIUS: 0.34,
+  BLACK_HOLE_RADIUS: 0.38,
 
   PADDLE_BASE_WIDTH: 220,
   PADDLE_EXPAND_MULT: 1.35,
@@ -346,6 +352,12 @@ export function playfieldLayoutScale() {
   const refH = GAME.IS_PORTRAIT ? 520 : 440;
   const scale = Math.sqrt((w * h) / (refW * refH));
   return Math.max(0.92, Math.min(1.5, scale));
+}
+
+/** Portrait, tablet, or smaller playfields — denser brick layouts than wide desktop. */
+export function isCompactLayout() {
+  if (GAME.IS_PORTRAIT || GAME.IS_TABLET) return true;
+  return playfieldLayoutScale() < 1.14;
 }
 
 export const STORAGE = {

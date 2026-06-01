@@ -8,7 +8,7 @@ import { SaveManager } from '@/src/systems/SaveManager.js';
 import { audio } from '@/src/systems/AudioManager.js';
 import { Monetization } from '@/src/systems/Monetization.js';
 import { MetaProgress } from '@/src/systems/MetaProgress.js';
-import { VFX_LEVELS, resolveSettings } from '@/src/config/VfxQuality.js';
+import { VFX_LEVELS, VFX_TIER_COPY, resolveSettings } from '@/src/config/VfxQuality.js';
 import { DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '@/src/config/Constants.js';
 import { isIapEnabled } from '@/src/config/AdsConfig.js';
 import { isWebStripeEnabled, promptUnlockCode } from '@/src/systems/WebUnlock.js';
@@ -20,6 +20,11 @@ import { PremiumLoader } from '@/components/shell/PremiumLoader';
 
 const COPY = SHELL_COPY.settings;
 
+function notifyVfxChange(resolved: ReturnType<typeof resolveSettings>) {
+  if (typeof window === 'undefined') return;
+  window.__NEON?.events?.emit('settings:vfx', resolved);
+}
+
 function SettingsContent() {
   const searchParams = useSearchParams();
   const from = searchParams.get('from') ?? '';
@@ -27,14 +32,16 @@ function SettingsContent() {
   const [status, setStatus] = useState('');
 
   const persist = useCallback((next: GameSettings) => {
-    setSettings(next);
-    SaveManager.saveSettings(next);
+    const resolved = resolveSettings(next);
+    setSettings(resolved as GameSettings);
+    SaveManager.saveSettings(resolved as GameSettings);
     audio.init();
-    audio.setSoundEnabled(next.sound);
-    audio.setMusicEnabled(next.music);
-    audio.setSfxVolume(next.sfxVolume ?? DEFAULT_SFX_VOLUME);
-    audio.setMusicVolume(next.musicVolume ?? DEFAULT_MUSIC_VOLUME);
-    if (next.music) audio.applyMusicSettings({ musicVolume: next.musicVolume });
+    audio.setSoundEnabled(resolved.sound);
+    audio.setMusicEnabled(resolved.music);
+    audio.setSfxVolume(resolved.sfxVolume ?? DEFAULT_SFX_VOLUME);
+    audio.setMusicVolume(resolved.musicVolume ?? DEFAULT_MUSIC_VOLUME);
+    if (resolved.music) audio.applyMusicSettings({ musicVolume: resolved.musicVolume });
+    notifyVfxChange(resolved);
   }, []);
 
   const toggle = (key: keyof Pick<GameSettings, 'sound' | 'music'>) => {
@@ -54,8 +61,7 @@ function SettingsContent() {
   };
 
   const setQuality = (q: string) => {
-    const resolved = resolveSettings({ ...settings, vfxQuality: q });
-    persist(resolved);
+    persist({ ...settings, vfxQuality: q });
     audio.blip(720);
   };
 
@@ -85,6 +91,9 @@ function SettingsContent() {
     setStatus(res?.success ? COPY.status.unlocked : '');
   };
 
+  const activeTier = settings.vfxQuality ?? 'high';
+  const tierHint = VFX_TIER_COPY[activeTier as keyof typeof VFX_TIER_COPY] ?? VFX_TIER_COPY.high;
+
   return (
     <AppShell title={COPY.title} from={from} tone="utility">
       <h1 className="shell-title" style={{ fontSize: '1.25rem' }}>
@@ -110,6 +119,9 @@ function SettingsContent() {
             ))}
           </span>
         </div>
+        <p className="shell-hint" style={{ margin: '0 0 14px', textAlign: 'left', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+          {tierHint}
+        </p>
 
         <div className="toggle-row">
           <label>{COPY.soundFx}</label>

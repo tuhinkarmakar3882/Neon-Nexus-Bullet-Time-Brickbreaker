@@ -1,4 +1,4 @@
-import { GAME, BRICK, JARDINAIN, playfieldSideInset, playfieldLayoutScale } from '../config/Constants.js';
+import { GAME, BRICK, JARDINAIN, playfieldSideInset, playfieldLayoutScale, isCompactLayout } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
 import { themeForLevel } from '../config/Themes.js';
 import { pickLevelGoal } from '../config/LevelGoals.js';
@@ -160,7 +160,11 @@ const PATTERN_FILL_TARGET = {
 };
 
 /** Default pack target for hybrid zones (non-void). */
-const HYBRID_ZONE_FILL = 0.84;
+const HYBRID_ZONE_FILL = 0.88;
+
+/** Brick wall height as a fraction of the playable band — every level varies within this band. */
+const VERTICAL_REACH_MIN = 0.65;
+const VERTICAL_REACH_MAX = 0.85;
 
 const TWISTS = [
   { id: 'none', minLevel: 1, weight: 10 },
@@ -181,10 +185,7 @@ const TWIST_LABELS = {
   nestCluster: 'NEST SWARM',
 };
 
-function isMobileLayout() {
-  return GAME.IS_PORTRAIT;
-}
-
+/** Portrait phones, tablets, and narrow playfields need denser brick walls. */
 /** Rows that fit between header and paddle without clipping. */
 function maxRowsForArena(top, bh) {
   const gap = BRICK.GAP;
@@ -197,34 +198,32 @@ function maxRowsForVerticalReach(top, bh, reach = 0.75) {
   const gap = BRICK.GAP;
   const bottom = (GAME.ARENA_FLOOR ?? GAME.HEIGHT) - gap * 2;
   const playableH = Math.max(bh * 4, bottom - top);
-  const maxWallH = playableH * clamp(reach, 0.55, 1);
+  const maxWallH = playableH * clamp(reach, VERTICAL_REACH_MIN, VERTICAL_REACH_MAX);
   return Math.max(4, Math.floor(maxWallH / (bh + gap)));
 }
 
-/** Fraction of WALL_TOP→ARENA_FLOOR used by bricks (early levels stay low for ball room). */
-function verticalReachForLevel(level, isBoss) {
-  let reach;
-  if (isBoss) reach = 0.78;
-  else if (level <= 6) reach = 0.72;
-  else if (level <= 12) reach = 0.78;
-  else if (level <= 20) reach = 0.86;
-  else if (level <= 28) reach = 0.92;
-  else reach = 1;
-  const screen = playfieldLayoutScale();
-  return clamp(reach + (screen - 1) * 0.1, 0.68, 1);
+/**
+ * Per-level wall height in [65%, 85%] of the playable band.
+ * Early levels cluster toward the low end; later levels can span the full band.
+ */
+function verticalReachForLevel(level, isBoss, levelSeed = 0) {
+  const hash = ((levelSeed ^ level * 7919 ^ (level * 2654435761 >>> 0)) >>> 0) % 1000 / 1000;
+  const progress = clamp((level - 1) / 24, 0, 1);
+  const high = VERTICAL_REACH_MIN + (VERTICAL_REACH_MAX - VERTICAL_REACH_MIN) * (0.22 + progress * 0.78);
+  let reach = VERTICAL_REACH_MIN + (high - VERTICAL_REACH_MIN) * hash;
+  if (isBoss) reach = Math.min(VERTICAL_REACH_MAX, reach + 0.05);
+  return clamp(reach, VERTICAL_REACH_MIN, VERTICAL_REACH_MAX);
 }
 
 /** Global cap on gap-pack density — jitters per level seed so density differs run-to-run. */
 function levelPackDensity(level, levelSeed = 0) {
-  let base = 0.76;
+  let base = 0.78;
   if (level <= 4) base = 0.76;
   else if (level <= 10) base = 0.82;
-  else if (level <= 18) base = 0.88;
-  else base = 0.94;
-  const screen = playfieldLayoutScale();
-  base = Math.min(0.98, base + (screen - 1) * 0.08);
+  else if (level <= 18) base = 0.86;
+  else base = 0.9;
   const jitter = (((levelSeed >>> 10) % 17) - 8) / 100;
-  return clamp(base + jitter, 0.68, 0.98);
+  return clamp(base + jitter, 0.68, 0.92);
 }
 
 function pickLevelArc(level, campaignSeed, levelSeed) {
@@ -237,11 +236,12 @@ function pickLevelArc(level, campaignSeed, levelSeed) {
 function pickLevelZoneCount(level, campaignSeed, baseCount, rng) {
   const roll = rng();
   let n = baseCount;
-  if (level <= 10) n = baseCount + (roll < 0.45 ? 1 : 0);
+  if (level <= 10) n = baseCount + (roll < 0.35 ? 1 : 0);
   else n = baseCount + (roll < 0.38 ? 1 : roll < 0.08 ? -1 : 0);
   const parity = ((campaignSeed + level * 31) >>> 0) & 1;
   if (parity && n < 4) n += 1;
-  return clamp(n, 3, 4);
+  const minZones = isCompactLayout() && level <= 20 ? 2 : 3;
+  return clamp(n, minZones, 4);
 }
 
 /**
@@ -253,11 +253,11 @@ function fitBrickLayout(arenaLeft, arenaRight) {
   const bh = BRICK.HEIGHT;
   const arenaW = Math.max(80, arenaRight - arenaLeft);
   const maxBw = BRICK.WIDTH;
-  const minBrickW = Math.round(maxBw * (isMobileLayout() ? 0.58 : 0.64));
+  const minBrickW = Math.round(maxBw * (isCompactLayout() ? 0.54 : 0.62));
   const screen = playfieldLayoutScale();
-  const minCols = isMobileLayout() ? 5 : Math.round(clamp(6, 5, 7));
-  const maxCols = isMobileLayout()
-    ? Math.round(clamp(5 + screen * 3.2, 6, 10))
+  const minCols = isCompactLayout() ? 6 : Math.round(clamp(6, 5, 7));
+  const maxCols = isCompactLayout()
+    ? Math.round(clamp(6 + screen * 3.6, 7, 11))
     : Math.round(clamp(8 + screen * 5.5, 10, 16));
 
   let cols = clamp(
@@ -372,18 +372,18 @@ export function buildLevel(level, campaignSeed = 12345) {
 
   const { cols, bw, bh, gridLeft, gridRight } = fitBrickLayout(arenaLeft, arenaRight);
   const arenaMaxRows = maxRowsForArena(top, bh);
-  const verticalReach = verticalReachForLevel(level, isBoss);
+  const verticalReach = verticalReachForLevel(level, isBoss, levelSeed);
   const reachRowCap = maxRowsForVerticalReach(top, bh, verticalReach);
   const rowCap = Math.min(diff.layoutMaxRows, arenaMaxRows, reachRowCap);
 
   const paceRoll = rng();
   const paceLabel = paceRoll < 0.28 ? 'siege' : paceRoll < 0.72 ? 'standard' : 'blitz';
-  let paceRowMult = paceLabel === 'siege' ? 1.22 : paceLabel === 'blitz' ? 0.84 : 1;
-  if (level <= 10) paceRowMult = Math.min(paceRowMult, 1.04);
+  let paceRowMult = paceLabel === 'siege' ? 1.1 : paceLabel === 'blitz' ? 0.92 : 1;
+  if (level <= 10) paceRowMult = Math.min(paceRowMult, isCompactLayout() ? 1.04 : 1.02);
   const hpPaceMult = paceLabel === 'siege' ? 1.14 : paceLabel === 'blitz' ? 0.92 : 1;
   diff.brickHpPaceMult = hpPaceMult;
 
-  const minRows = level <= 4 ? 6 : 7;
+  const minRows = isCompactLayout() ? (level <= 4 ? 5 : 6) : (level <= 4 ? 4 : 5);
   let totalRows = levelBrickRows(level, diff, isBoss, rowCap);
   totalRows = clamp(Math.round(totalRows * paceRowMult), minRows, rowCap);
 
@@ -396,7 +396,7 @@ export function buildLevel(level, campaignSeed = 12345) {
   const screenFill = playfieldLayoutScale();
   const fillDensity = Math.min(
     1,
-    (diff.patternDensity + diff.layoutDensityBoost * 0.45) * clamp(0.94 + (screenFill - 1) * 0.14, 0.94, 1.12),
+    (diff.patternDensity + diff.layoutDensityBoost * 0.4) * clamp(0.94 + (screenFill - 1) * 0.1, 0.94, 1.06),
   );
 
   const twist = isBoss ? 'none' : pickWeighted(TWISTS.filter((t) => level >= t.minLevel), rng);
@@ -543,11 +543,9 @@ function pickLatticePackProfile(pattern, zoneSeed, level, layoutVariant = 0, zon
   if (!LATTICE_PATTERNS.has(pattern)) return null;
   const roll = (zoneSeed + layoutVariant * 19 + level * 11 + zoneIndex * 97) >>> 0;
   let mode;
-  if (level <= 12) {
-    mode = LATTICE_PACK_MODES_EARLY[roll % LATTICE_PACK_MODES_EARLY.length];
-  } else if (level <= 20) {
-    const pool = [...LATTICE_PACK_MODES_EARLY, 'flush'];
-    mode = pool[roll % pool.length];
+  if (level <= 8) {
+    const earlyPool = [...LATTICE_PACK_MODES_EARLY, 'flush', 'woven'];
+    mode = earlyPool[roll % earlyPool.length];
   } else {
     mode = LATTICE_PACK_MODES[roll % LATTICE_PACK_MODES.length];
   }
@@ -574,11 +572,15 @@ function patternFillTarget(pattern, level) {
 function boostPatternWeights(pool, arcPool, zoneIndex, level) {
   return pool.map((p) => {
     let w = p.weight ?? 1;
-    if (COMPLEX_PATTERNS.has(p.id)) w *= 2.1;
-    else w *= 0.55;
-    if (arcPool.includes(p.id)) w *= zoneIndex === 0 ? 2.2 : 1.35;
-    if (VOID_PATTERNS.has(p.id) && level >= 5) w *= 1.25;
-    if (LATTICE_PATTERNS.has(p.id)) w *= 0.7;
+    const group = patternGroup(p.id);
+    if (COMPLEX_PATTERNS.has(p.id)) w *= 2.9;
+    if (arcPool.includes(p.id)) w *= zoneIndex === 0 ? 2.5 : 1.55;
+    if (group === 'organic' || group === 'structural') w *= 1.65;
+    if (group === 'lattice') w *= 1.35;
+    if (PATTERN_GROUPS.dense.includes(p.id)) w *= 0.42;
+    if (VOID_PATTERNS.has(p.id) && level >= 3) w *= 1.35;
+    if (SPARSE_PATTERN_IDS.has(p.id) && level >= 4) w *= 1.2;
+    if (HYBRID_MIXER_IDS.includes(p.id)) w *= 1.45;
     return { ...p, weight: w };
   });
 }
@@ -604,17 +606,16 @@ function contrastPickZone(out, index, eligible, used, usedGroups, rng, arcPool) 
 function pickZonePatterns(level, levelSeed, zoneCount, rng, campaignSeed, layoutArc) {
   const arc = layoutArc ?? pickLevelArc(level, campaignSeed, levelSeed);
   const arcPool = LEVEL_ARC_POOLS[arc] ?? LEVEL_ARC_POOLS.chaosTapestry;
-  const boost = isMobileLayout() ? 1 : 0;
+  const boost = isCompactLayout() ? 1 : 0;
   let eligible = PATTERN_DEFS.filter((p) => level + boost >= p.minLevel && !BORING_PATTERNS.has(p.id));
   if (level <= 6) {
     eligible = eligible.filter((p) => !['fortress', 'fortressRing', 'fortressSplit'].includes(p.id));
   }
-
   const used = new Set();
   const usedGroups = new Set();
   const out = [];
   let latticeZones = 0;
-  const maxLattice = arc === 'latticeMosaic' ? 2 : 1;
+  const maxLattice = arc === 'latticeMosaic' ? 2 : (zoneCount >= 3 ? 2 : 1);
 
   for (let z = 0; z < zoneCount; z++) {
     let pool = eligible.filter((p) => !used.has(p.id));
@@ -645,7 +646,7 @@ function pickZonePatterns(level, levelSeed, zoneCount, rng, campaignSeed, layout
   }
 
   for (let z = 1; z < out.length; z++) {
-    if (patternGroup(out[z]) === patternGroup(out[z - 1])) {
+    if (patternGroup(out[z]) === patternGroup(out[z - 1]) || out[z] === out[z - 1]) {
       const prev = out[z];
       out[z] = contrastPickZone(out, z, eligible, used, usedGroups, rng, arcPool);
       used.delete(prev);
@@ -657,18 +658,23 @@ function pickZonePatterns(level, levelSeed, zoneCount, rng, campaignSeed, layout
   if (zoneCount >= 2) {
     const signature = HYBRID_MIXER_IDS[((campaignSeed ^ levelSeed ^ level * 53) >>> 0) % HYBRID_MIXER_IDS.length];
     if (eligible.some((p) => p.id === signature) && !out.includes(signature)) {
-      const slot = ((levelSeed + campaignSeed + level * 29) >>> 0) % out.length;
+      const slot = zoneCount >= 3
+        ? 1 + (((levelSeed + campaignSeed + level * 29) >>> 0) % (out.length - 1))
+        : ((levelSeed + campaignSeed + level * 29) >>> 0) % out.length;
       used.delete(out[slot]);
       out[slot] = signature;
       usedGroups.add(patternGroup(signature));
     }
   }
 
-  if (zoneCount >= 3 && patternGroup(out[0]) === patternGroup(out[2])) {
-    const slot = 2;
-    const prev = out[slot];
-    out[slot] = contrastPickZone(out, slot, eligible, used, usedGroups, rng, arcPool);
-    used.delete(prev);
+  for (let z = 2; z < out.length; z++) {
+    if (patternGroup(out[z]) === patternGroup(out[z - 2])) {
+      const prev = out[z];
+      out[z] = contrastPickZone(out, z, eligible, used, usedGroups, rng, arcPool);
+      used.delete(prev);
+      used.add(out[z]);
+      usedGroups.add(patternGroup(out[z]));
+    }
   }
 
   return out;
@@ -907,12 +913,16 @@ function scatterZoneHoles(bricks, ctx) {
     zoneRows, rowOffset, cols, level, levelSeed,
   } = ctx;
   const holeJitter = (((levelSeed ?? 0) >>> 4) % 9) / 100;
-  const holeRate = clamp(
+  let holeRate = clamp(
     (level <= 6 ? 0.16 : level <= 14 ? 0.12 : 0.08) + holeJitter - 0.04,
     0.06,
     0.22,
   );
-  const minKeep = Math.max(6, Math.floor(cols * zoneRows * 0.42));
+  if (isCompactLayout()) holeRate *= level <= 14 ? 0.32 : 0.55;
+  const minKeep = Math.max(
+    8,
+    Math.floor(cols * zoneRows * (isCompactLayout() && level <= 14 ? 0.58 : 0.45)),
+  );
 
   const candidates = [];
   for (let i = 0; i < bricks.length; i++) {
@@ -1173,7 +1183,11 @@ function ensureCannonsOnlyReachable(bricks, theme, rng, layout) {
 }
 
 function ensureMinBricks(bricks, layout, theme, rng, min = 18) {
-  const target = Math.max(min, Math.floor(layout.cols * 2.2));
+  const compact = isCompactLayout();
+  const target = Math.max(
+    compact ? 22 : 18,
+    Math.floor(layout.cols * (compact ? 2.4 : 2.0)),
+  );
   if (bricks.length >= target) return;
   min = target;
   if (bricks.length >= min) return;
@@ -1181,7 +1195,8 @@ function ensureMinBricks(bricks, layout, theme, rng, min = 18) {
   const bottom = (GAME.ARENA_FLOOR ?? GAME.HEIGHT) - BRICK.GAP * 2;
   const right = layout.gridRight ?? layout.arenaRight ?? (GAME.WIDTH - playfieldSideInset());
   let row = 0;
-  while (bricks.length < min && row < 12) {
+  const maxFillRows = compact ? 14 : 12;
+  while (bricks.length < min && row < maxFillRows) {
     const y = top + row * (bh + BRICK.GAP);
     if (y + bh > bottom + 0.5) break;
     for (let c = 0; c < cols && bricks.length < min; c++) {
@@ -1681,7 +1696,8 @@ function exists(pattern, r, c, rows, cols, seed, noise, rng, density = 1, absR =
   }
   if (!place) return false;
   if (!VOID_PATTERNS.has(pattern) && !LATTICE_PATTERNS.has(pattern)) {
-    if (!layoutJitter(r, c, seed, level, 0.07)) return false;
+    const jitterRate = isCompactLayout() && level <= 10 ? 0.05 : 0.07;
+    if (!layoutJitter(r, c, seed, level, jitterRate)) return false;
   }
   if (SPARSE_PATTERN_IDS.has(pattern)) {
     const keep = Math.min(1, density * sparsePatternBoost * (level <= 6 ? 1.12 : 1.04));

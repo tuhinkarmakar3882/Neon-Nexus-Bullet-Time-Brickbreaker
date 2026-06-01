@@ -9,6 +9,13 @@ import { displayStyle } from '../utils/Typography.js';
 
 const BOSS_COLORS = [0xffb080, 0xff7040, 0xff4020];
 const STEEL_TYPES = new Set(['gold', 'steel']);
+const HP_BAR_COLORS = {
+  silver: { fill: 0xd8ecff, empty: 0x1a2a3a, rim: 0x88bbee },
+  reinforced: { fill: 0xe8e8f0, empty: 0x222230, rim: 0xaaaacc },
+  boss: { fill: 0xffcc66, empty: 0x3a1800, rim: 0xff8844 },
+  moss: { fill: 0x9ef0aa, empty: 0x143018, rim: 0x56d364 },
+  default: { fill: 0xffffff, empty: 0x1a1a28, rim: 0xccccdd },
+};
 const INDESTRUCTIBLE_PANEL = {
   gold: 'panel-gold',
   steel: 'panel-steel',
@@ -39,6 +46,8 @@ export class Brick {
     this.movePhase = opts.movePhase ?? 0;
     this.moveSpeed = opts.moveSpeed ?? 1;
     this.moveAmp = opts.moveAmp ?? 0;
+    this.zoneRow = opts.zoneRow ?? null;
+    this.col = opts.col ?? null;
     this.t = 0;
     this._lastCx = x + w / 2;
     this._vxSmoothed = 0;
@@ -109,6 +118,36 @@ export class Brick {
     return Math.min(3, Math.ceil((dmg / this.maxHp) * 3));
   }
 
+  _drawHpBar(g, w, h) {
+    const count = this.maxHp;
+    const filled = Math.max(0, this.hp);
+    if (count <= 1) return;
+
+    const padX = Math.max(6, w * 0.1);
+    const barH = Math.max(4, Math.min(7, h * 0.12));
+    const barY = h - Math.max(6, h * 0.14);
+    const barW = w - padX * 2;
+    const segGap = count > 4 ? 1.5 : 2;
+    const segW = (barW - segGap * (count - 1)) / count;
+    const colors = HP_BAR_COLORS[this.type] ?? HP_BAR_COLORS.default;
+
+    g.fillStyle(0x000000, 0.5);
+    g.fillRoundedRect(padX - 2, barY - barH / 2 - 2, barW + 4, barH + 4, barH * 0.45);
+
+    for (let i = 0; i < count; i++) {
+      const active = i < filled;
+      const sx = padX + i * (segW + segGap);
+      g.fillStyle(active ? colors.fill : colors.empty, active ? 0.95 : 0.6);
+      g.fillRoundedRect(sx, barY - barH / 2, segW, barH, barH * 0.35);
+      if (active) {
+        g.fillStyle(0xffffff, 0.28);
+        g.fillRect(sx + 1, barY - barH / 2 + 1, Math.max(1, segW - 2), Math.max(1, barH * 0.38));
+      }
+      g.lineStyle(1, colors.rim, active ? 0.75 : 0.35);
+      g.strokeRoundedRect(sx, barY - barH / 2, segW, barH, barH * 0.35);
+    }
+  }
+
   drawFx() {
     const g = this.fx;
     g.clear();
@@ -141,9 +180,6 @@ export class Brick {
     } else if (this.type === 'hostage') {
       g.lineStyle(1.5, 0xff5a6e, 0.65);
       g.strokeRoundedRect(4, 4, w - 8, h - 8, 5);
-    } else if (this.type === 'silver' || this.type === 'boss' || this.type === 'reinforced') {
-      g.fillStyle(0xffffff, 0.9);
-      for (let i = 0; i < this.hp; i++) g.fillCircle(10 + i * 10, h - 7, 2.5);
     } else if (this.type === 'explosive') {
       g.fillStyle(0xff7040, 0.85);
       g.fillCircle(w / 2, h / 2, h * 0.12);
@@ -177,6 +213,10 @@ export class Brick {
       g.fillCircle(w / 2, h / 2, h * 0.22);
     }
 
+    if (this.maxHp > 1 && !this.indestructible) {
+      this._drawHpBar(g, w, h);
+    }
+
     if (this.isBonus) {
       g.lineStyle(2, PAL.accent3, 0.95);
       g.strokeRoundedRect(2, 2, w - 4, h - 4, 6);
@@ -198,6 +238,12 @@ export class Brick {
       g.fillRoundedRect(2, 2, w - 4, h - 4, 6);
       g.lineStyle(2, 0xffaa44, 0.85);
       g.strokeRoundedRect(2, 2, w - 4, h - 4, 6);
+    }
+    if (this.electricFlashUntil && this.scene.time.now < this.electricFlashUntil) {
+      g.lineStyle(2, 0xb8a8ff, 0.9);
+      g.strokeRoundedRect(2, 2, w - 4, h - 4, 6);
+      g.fillStyle(0xb8a8ff, 0.12);
+      g.fillRoundedRect(3, 3, w - 6, h - 6, 5);
     }
 
   }
@@ -221,7 +267,7 @@ export class Brick {
     if (this.frozen && !this.frostMarked) damage = Math.max(damage, this.hp);
     this.hp -= damage;
     this.flash();
-    if (this.hp > 0 && (this.type === 'silver' || this.type === 'boss' || this.type === 'reinforced')) {
+    if (this.hp > 0 && this.maxHp > 1 && !this.indestructible) {
       this.drawFx();
     }
     if (this.hp <= 0) { this.alive = false; return true; }
@@ -240,6 +286,10 @@ export class Brick {
     }
     this.scene.time.delayedCall(60, () => {
       if (!this.panel.active) return;
+      if (this.type === 'reinforced' || this.type === 'boss') {
+        this.drawFx();
+        return;
+      }
       if (typeof this.panel.setTintFill === 'function' && !INDESTRUCTIBLE_PANEL[this.type]) {
         this.panel.setTintFill(this.color);
       } else {

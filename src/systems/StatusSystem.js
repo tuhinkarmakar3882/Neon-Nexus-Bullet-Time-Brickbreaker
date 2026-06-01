@@ -39,10 +39,23 @@ export class StatusSystem {
   }
 
   gridDistance(a, b) {
-    const cellW = a.w + (this.scene.brickGap ?? 10);
-    const cellH = a.h + (this.scene.brickGap ?? 10);
-    const col = Math.round(Math.abs(a.cx - b.cx) / cellW);
-    const row = Math.round(Math.abs(a.cy - b.cy) / cellH);
+    return this.gridChebyshev(a, b);
+  }
+
+  /** Chebyshev distance in grid cells — uses layout indices when available. */
+  gridChebyshev(a, b) {
+    if (a.col != null && a.zoneRow != null && b.col != null && b.zoneRow != null) {
+      return Math.max(Math.abs(a.col - b.col), Math.abs(a.zoneRow - b.zoneRow));
+    }
+    const gap = this.scene.brickGap ?? 0;
+    const cellW = a.w + gap;
+    const cellH = a.h + gap;
+    const ax = (a.baseX ?? a.x) + a.w / 2;
+    const ay = a.y + a.h / 2;
+    const bx = (b.baseX ?? b.x) + b.w / 2;
+    const by = b.y + b.h / 2;
+    const col = Math.round(Math.abs(bx - ax) / cellW);
+    const row = Math.round(Math.abs(by - ay) / cellH);
     return Math.max(col, row);
   }
 

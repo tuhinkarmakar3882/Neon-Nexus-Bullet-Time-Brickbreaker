@@ -44,11 +44,10 @@ function attachHudListeners(
     }));
   };
 
-  const onTreasury = (p?: { value?: number }) => {
+  const onTreasury = () => {
     patch((prev) => ({
       ...prev,
       gems: MetaProgress.getGems(),
-      treasury: p?.value ?? MetaProgress.getTreasury(),
     }));
   };
 
@@ -106,6 +105,14 @@ function attachHudListeners(
     }));
   };
 
+  const onAchieve = (p?: { meter?: string }) => {
+    if (p?.meter === 'nexus') {
+      patch((prev) => ({ ...prev, nexusMeterPulse: prev.nexusMeterPulse + 1 }));
+    } else if (p?.meter === 'gnome') {
+      patch((prev) => ({ ...prev, gnomeMeterPulse: prev.gnomeMeterPulse + 1 }));
+    }
+  };
+
   const onGambit = () => {
     patch((prev) => ({ ...prev, gambitReady: false }));
   };
@@ -119,6 +126,7 @@ function attachHudListeners(
   bus.on('hud:immersive', onImmersive);
   bus.on('hud:scramble', onScramble);
   bus.on('hud:life', onLife);
+  bus.on('hud:achieve', onAchieve);
   bus.on('hud:gambit', onGambit);
 
   onTreasury();
@@ -133,6 +141,7 @@ function attachHudListeners(
     bus.off('hud:immersive', onImmersive);
     bus.off('hud:scramble', onScramble);
     bus.off('hud:life', onLife);
+    bus.off('hud:achieve', onAchieve);
     bus.off('hud:gambit', onGambit);
   };
 }

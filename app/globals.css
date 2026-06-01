@@ -474,17 +474,19 @@ body.shell-play .shell-route-enter {
 
 /* —— Thin single-row play header —— */
 .play-hud-bar {
+  --play-hud-gap: 20px;
   padding: 0 2px 4px;
   min-width: 0;
 }
 
 .play-hud-bar__inner {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: clamp(5px, 1.5vw, 10px);
-  height: 36px;
-  min-height: 36px;
-  padding: 0 8px 0 10px;
+  column-gap: var(--play-hud-gap);
+  height: 38px;
+  min-height: 38px;
+  padding: 0 12px;
   border: 1px solid var(--play-frame-border);
   border-radius: 10px;
   background: var(--play-frame-bg);
@@ -493,6 +495,25 @@ body.shell-play .shell-route-enter {
   box-shadow:
     0 4px 16px rgba(0, 0, 0, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.play-hud-bar__left {
+  grid-column: 1;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.play-hud-bar__right {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: var(--play-hud-gap);
+  min-width: 0;
+  padding-right: 4px;
 }
 
 .play-hud-bar--scramble .play-hud-bar__inner {
@@ -518,6 +539,23 @@ body.shell-play .shell-route-enter {
   }
 }
 
+.play-hud-rail[data-meter-pulse] {
+  animation: play-hud-meter-pulse 0.45s ease-out;
+}
+
+@keyframes play-hud-meter-pulse {
+  0% {
+    filter: brightness(1);
+  }
+  40% {
+    filter: brightness(1.35);
+    box-shadow: inset 0 0 12px rgba(142, 197, 255, 0.45);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
 .play-hud-lives {
   flex: 0 0 auto;
   display: flex;
@@ -539,12 +577,24 @@ body.shell-play .shell-route-enter {
 }
 
 .play-hud-main {
-  flex: 1 1 auto;
+  grid-column: 2;
+  justify-self: center;
   min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1;
+}
+
+.play-hud-main__row {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .play-hud-score {
@@ -556,7 +606,7 @@ body.shell-play .shell-route-enter {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 42vw;
+  max-width: min(42vw, 220px);
 }
 
 .play-hud-tag {
@@ -597,12 +647,12 @@ body.shell-play .shell-route-enter {
 .play-hud-progress {
   flex: 0 0 auto;
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 2px;
-  font-size: 0.68rem;
+  font-size: 0.58rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: rgba(170, 190, 220, 0.9);
+  color: rgba(170, 190, 220, 0.85);
   line-height: 1;
 }
 
@@ -622,8 +672,7 @@ body.shell-play .shell-route-enter {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: #e8eefc;
@@ -633,8 +682,8 @@ body.shell-play .shell-route-enter {
 .play-hud-wallet__item {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  max-width: 18vw;
+  gap: 4px;
+  max-width: 22vw;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -652,31 +701,39 @@ body.shell-play .shell-route-enter {
 
 .play-hud-pause {
   flex: 0 0 auto;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: auto;
+  height: auto;
   margin: 0;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid rgba(140, 170, 220, 0.4);
-  background: rgba(12, 20, 40, 0.92);
-  color: #e8eefc;
+  padding: 2px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #ffffff;
   cursor: pointer;
+  line-height: 0;
+  opacity: 0.92;
+  transition: opacity 0.15s ease;
+}
+
+.play-hud-pause:hover {
+  opacity: 1;
 }
 
 .play-hud-pause:active {
-  transform: scale(0.96);
+  opacity: 0.75;
+  transform: none;
 }
 
 @media (max-width: 360px) {
-  .play-hud-progress {
-    display: none;
+  .play-hud-bar {
+    --play-hud-gap: 14px;
   }
 
-  .play-hud-wallet {
-    gap: 5px;
+  .play-hud-progress {
+    display: none;
   }
 }
 

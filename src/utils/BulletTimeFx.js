@@ -1,5 +1,8 @@
 import { GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
+import {
+  fxArenaDim, fxFlashMult, fxRadialBlasts, fxRingScale, fxScreenPunchMult,
+} from './FxBudget.js';
 
 /** Screen-space bullet-time overlay + camera punch helpers. */
 
@@ -96,13 +99,15 @@ export function setBulletTimeIntensity(scene, intensity) {
 }
 
 export function screenPunch(scene, amt = 0.05, dur = 70) {
+  const mult = fxScreenPunchMult(scene);
+  if (mult <= 0) return;
   const cam = scene.cameras?.main;
   if (!cam) return;
   const base = scene.btFx?.baseZoom ?? 1;
   scene.tweens.killTweensOf(cam);
   scene.tweens.add({
     targets: cam,
-    zoom: base + amt,
+    zoom: base + amt * mult,
     duration: dur,
     yoyo: true,
     ease: 'Quad.easeOut',
@@ -117,52 +122,54 @@ export function screenPunch(scene, amt = 0.05, dur = 70) {
   });
 }
 
-export function impactFlash(scene, color = 0xffffff, alpha = 0.22) {
+export function impactFlash(scene, color = 0xffffff, alpha = 0.1) {
+  const mult = fxFlashMult(scene);
+  if (mult <= 0 || alpha <= 0) return;
   const cam = scene.cameras?.main;
   if (!cam) return;
+  const a = alpha * mult;
   const r = (color >> 16) & 255;
   const g = (color >> 8) & 255;
   const b = color & 255;
   try {
-    cam.flash(80, r, g, b, false, (_cam, progress) => alpha * (1 - progress));
+    cam.flash(80, r, g, b, false, (_cam, progress) => a * (1 - progress));
   } catch {
     cam.flash(80, r, g, b);
   }
 }
 
 export function radialBlast(scene, x, y, opts = {}) {
-  const { tint = PAL.accent2, scale = 4.2, dur = 520, depth = 34 } = opts;
+  if (!fxRadialBlasts(scene)) return;
+  const { tint = PAL.accent2, scale = 2.4, dur = 480, depth = 34 } = opts;
+  const ringScale = fxRingScale(scene, scale);
   const ring = scene.add.image(x, y, 'ring').setDepth(depth).setTint(tint)
-    .setBlendMode('ADD').setScale(0.06).setAlpha(0.95);
-  const ring2 = scene.add.image(x, y, 'ring').setDepth(depth - 1).setTint(0xffffff)
-    .setBlendMode('ADD').setScale(0.04).setAlpha(0.55);
-  const flash = scene.add.image(x, y, 'soft').setDepth(depth - 2).setTint(tint)
-    .setBlendMode('ADD').setScale(0.12).setAlpha(0.45);
+    .setBlendMode('SCREEN').setScale(0.06).setAlpha(0.36);
   scene.tweens.add({
     targets: ring,
-    scaleX: scale,
-    scaleY: scale,
+    scaleX: ringScale,
+    scaleY: ringScale,
     alpha: 0,
     duration: dur,
     ease: 'Cubic.easeOut',
     onComplete: () => ring.destroy(),
   });
-  scene.tweens.add({
-    targets: ring2,
-    scaleX: scale * 0.72,
-    scaleY: scale * 0.72,
-    alpha: 0,
-    duration: dur * 0.85,
-    ease: 'Cubic.easeOut',
-    onComplete: () => ring2.destroy(),
+}
+
+/** Subtle desaturate/tint on brick panels during bullet time. */
+export function setArenaDim(scene, on) {
+  if (!scene || (on && !fxArenaDim(scene))) return;
+  const alpha = on ? 0.72 : 1;
+  scene.bricks?.forEach((b) => {
+    if (b.panel?.active) b.panel.setAlpha(alpha);
   });
-  scene.tweens.add({
-    targets: flash,
-    scaleX: scale * 0.35,
-    scaleY: scale * 0.35,
-    alpha: 0,
-    duration: dur * 0.55,
-    ease: 'Quad.easeOut',
-    onComplete: () => flash.destroy(),
-  });
+  if (scene._arenaDimGfx) {
+    scene._arenaDimGfx.destroy();
+    scene._arenaDimGfx = null;
+  }
+  if (on) {
+    const g = scene.add.graphics().setDepth(850).setScrollFactor(0).setAlpha(0.12);
+    g.fillStyle(0x1a2844, 1);
+    g.fillRect(0, 0, GAME.WIDTH, GAME.HEIGHT);
+    scene._arenaDimGfx = g;
+  }
 }

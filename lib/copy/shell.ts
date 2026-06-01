@@ -34,7 +34,7 @@ export const SHELL_COPY = {
   },
   settings: {
     title: 'SETTINGS',
-    vfxLabel: 'VISUAL QUALITY',
+    vfxLabel: 'GRAPHICS',
     soundFx: 'SOUND EFFECTS',
     music: 'MUSIC',
     sfxVolume: 'SFX VOLUME',

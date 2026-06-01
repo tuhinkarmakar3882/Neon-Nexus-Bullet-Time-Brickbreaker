@@ -11,6 +11,8 @@ export class GnomeProjectile {
     this.dead = false;
     this.tracking = opts.tracking ?? false;
     this.gravityScale = opts.gravityScale ?? 1;
+    this._telegraphed = false;
+    this._shadowGfx = null;
     this.r = this.type === 'anchor' ? Math.max(16, GAME.HEIGHT * 0.016) : Math.max(12, GAME.HEIGHT * 0.013);
     this.spin = 0;
 
@@ -106,6 +108,7 @@ export class GnomeProjectile {
   }
 
   destroy() {
+    this._shadowGfx?.destroy?.();
     this.gfx.destroy();
     this.glow.destroy();
   }

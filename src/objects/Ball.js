@@ -1,6 +1,6 @@
 import { GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
-import { fxTrailMult, fxParticleScale } from '../utils/FxBudget.js';
+import { fxTrailMult, fxParticleScale, fxGlowScale } from '../utils/FxBudget.js';
 import { clamp } from '../utils/Helpers.js';
 
 const TRAIL_PROFILES = {
@@ -238,12 +238,21 @@ export class Ball {
 
     if (!mod) this.trail.setParticleTint(this._trailTint);
     else this.trail.setParticleTint(c);
-    this.trail.frequency = missile ? 4 : (chaos ? 6 : (mod ? 9 : (TRAIL_PROFILES[this._trailId]?.frequency ?? 14)));
+    const baseFreq = TRAIL_PROFILES[this._trailId]?.frequency ?? 14;
+    const tm = fxTrailMult(this.scene);
+    const speedRatio = clamp(speed / (this.speed || GAME.BALL_MIN_SPEED), 0.4, 1.6);
+    const modBoost = mod ? 0.55 : 0;
+    const invSpeed = 1.4 - speedRatio * 0.5;
+    this.trail.frequency = Math.max(3, Math.round((baseFreq * invSpeed * (1 - modBoost)) / Math.max(0.5, tm)));
     this.trailTarget.x = this.x;
     this.trailTarget.y = this.y;
   }
 
   destroy() {
+    if (this._echoRingGfx) {
+      this._echoRingGfx.destroy();
+      this._echoRingGfx = null;
+    }
     if (this._echoSprites) {
       this._echoSprites.forEach((s) => {
         s?.core?.destroy?.();
@@ -251,6 +260,7 @@ export class Ball {
       });
       this._echoSprites = null;
     }
+    this._echoCd = null;
     this.core.destroy(); this.halo.destroy(); this.ring.destroy(); this.rim.destroy();
     this.shadow.destroy(); this.trail.destroy();
   }

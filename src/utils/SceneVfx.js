@@ -79,6 +79,7 @@ function ensureChroma(scene, on) {
   g.fillStyle(PAL.accent3, 0.03);
   g.fillRect(0, 0, W, pad);
   scene._chromaGfx = g;
+  scene._chromaBaseAlpha = 1;
 }
 
 /** Rebuild camera filters and fullscreen overlays from resolved settings. */
@@ -87,8 +88,10 @@ export function applySceneVfx(scene, settings = {}) {
   scene.settings = { ...(scene.settings ?? {}), ...settings };
 
   const cam = scene.cameras.main;
+  const bloom = settings.bloom ?? 0;
+  scene._vfxBaseBloom = bloom;
   clearCameraFilters(cam);
-  applyBloom(cam, settings.bloom ?? 0);
+  applyBloom(cam, bloom);
   applyVignette(cam, settings.vignette ?? 0);
 
   ensureScanlines(scene, settings.scanlines ? (settings.scanlineAlpha ?? 0.03) : 0);
@@ -105,4 +108,34 @@ export function destroySceneVfxOverlays(scene) {
   destroyOverlay(scene, 'scanline');
   destroyOverlay(scene, 'grain');
   destroyOverlay(scene, 'chroma');
+}
+
+/** Brief bloom bump on big hits (0.62 → ~0.85 for 200ms). */
+export function bumpBloom(scene, opts = {}) {
+  const base = scene?._vfxBaseBloom ?? scene?.settings?.bloom ?? 0;
+  if (base <= 0 || scene?.settings?.reactiveBloom === false) return;
+  const delta = opts.delta ?? 0.09;
+  const ms = opts.ms ?? 200;
+  const peak = Math.min(0.95, base + delta);
+  updateSceneVfx(scene, { bloom: peak });
+  scene._bloomBumpTimer?.remove?.(false);
+  scene._bloomBumpTimer = scene.time.delayedCall(ms, () => {
+    updateSceneVfx(scene, { bloom: base });
+  });
+}
+
+/** Pulse chroma overlay alpha on knockout / cursed pickup. */
+export function pulseChroma(scene, opts = {}) {
+  if (!scene?.settings?.chroma || !scene._chromaGfx) return;
+  const g = scene._chromaGfx;
+  const strength = opts.strength ?? 1.12;
+  const ms = opts.ms ?? 300;
+  scene.tweens.killTweensOf(g);
+  g.setAlpha(strength);
+  scene.tweens.add({
+    targets: g,
+    alpha: scene._chromaBaseAlpha ?? 1,
+    duration: ms,
+    ease: 'Quad.easeOut',
+  });
 }

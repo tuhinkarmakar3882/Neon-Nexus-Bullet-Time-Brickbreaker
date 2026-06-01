@@ -71,11 +71,22 @@ export function gemRewardHint(gems) {
 }
 
 /** Challenge line on the game-over share card (plain words — no dot separators). */
-export function gameOverChallengeLine(score, isNewBest) {
+export function gameOverChallengeLine(score, isNewBest, highScore = 0) {
   const s = Number(score) || 0;
+  const pb = Number(highScore) || 0;
   const pts = s.toLocaleString();
   if (isNewBest) return `Fresh record — can you match ${pts} pts?`;
+  const gap = pb - s;
+  if (gap > 0) return `You are ${gap.toLocaleString()} away from your best!`;
   return `Can you beat my score of ${pts}?`;
+}
+
+/** Subline under the hero score on the game-over share card. */
+export function gameOverScoreSubline(score, isNewBest, highScore = 0) {
+  const s = Number(score) || 0;
+  const pb = Number(highScore) || 0;
+  if (isNewBest) return pb > 0 && pb !== s ? `Previous best: ${pb.toLocaleString()}` : '';
+  return `Personal Best: ${pb.toLocaleString()}`;
 }
 
 /**
@@ -108,8 +119,10 @@ export function buildGameOverSharePayload({
     highScore: pb,
     badge: isNewBest ? 'NEW PERSONAL BEST' : null,
     badgeColor: '#ffd23d',
-    challengeLine: gameOverChallengeLine(s, !!isNewBest),
+    challengeLine: gameOverChallengeLine(s, !!isNewBest, pb),
+    scoreSubline: gameOverScoreSubline(s, !!isNewBest, pb),
     gemHint: gemRewardHint(g),
+    showGemHintOnCard: false,
     heroLabel: isNewBest ? 'NEW RECORD' : 'FINAL SCORE',
     heroStat: s.toLocaleString(),
     line2: isNewBest ? lv : pb.toLocaleString(),

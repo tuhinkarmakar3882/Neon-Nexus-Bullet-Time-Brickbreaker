@@ -1,6 +1,6 @@
 /** Lightweight micro-animation helpers — keep motion snappy (<400ms). */
 
-import { fxCount, fxParticlesOn, fxShake, fxImpactScale, fxGlowScale, fxParticleSize } from './FxBudget.js';
+import { fxCount, fxParticlesOn, fxShake, fxImpactScale, fxGlowScale, fxParticleSize, fxRingScale, fxRipplesOn, fxCameraShake, fxAtLeast } from './FxBudget.js';
 import { displayStyle } from './Typography.js';
 
 export function popScale(scene, target, opts = {}) {
@@ -77,13 +77,12 @@ export function pulseAlpha(scene, target, opts = {}) {
 }
 
 export function rippleRing(scene, x, y, opts = {}) {
-  const { tint = 0xffffff, scale = 2.8, dur = 480, depth = 32 } = opts;
-  const impact = fxImpactScale(scene, 1);
-  const ringScale = scale * impact;
+  if (!fxRipplesOn(scene)) return;
+  const { tint = 0xffffff, scale = 1.75, dur = 480, depth = 32 } = opts;
+  const ringScale = fxRingScale(scene, scale);
+  const glow = fxGlowScale(scene, 1);
   const ring = scene.add.image(x, y, 'ring').setDepth(depth).setTint(tint)
-    .setBlendMode('ADD').setScale(0.1).setAlpha(0.92 * impact);
-  const ring2 = scene.add.image(x, y, 'ring').setDepth(depth - 1).setTint(0xffffff)
-    .setBlendMode('ADD').setScale(0.06).setAlpha(0.45 * impact);
+    .setBlendMode('SCREEN').setScale(0.08).setAlpha(0.38 * glow);
   scene.tweens.add({
     targets: ring,
     scaleX: ringScale,
@@ -93,17 +92,8 @@ export function rippleRing(scene, x, y, opts = {}) {
     ease: 'Cubic.easeOut',
     onComplete: () => ring.destroy(),
   });
-  scene.tweens.add({
-    targets: ring2,
-    scaleX: ringScale * 0.65,
-    scaleY: ringScale * 0.65,
-    alpha: 0,
-    duration: dur * 0.85,
-    ease: 'Cubic.easeOut',
-    onComplete: () => ring2.destroy(),
-  });
-  if (impact > 1.05 && fxParticlesOn(scene)) {
-    neonPulse(scene, x, y, tint, { scale: ringScale * 0.4, dur: dur * 0.7 });
+  if (opts.pulse && fxAtLeast(scene, 'high') && fxParticlesOn(scene)) {
+    neonPulse(scene, x, y, tint, { scale: ringScale * 0.32, dur: dur * 0.65, depth: depth - 1 });
   }
 }
 
@@ -139,7 +129,7 @@ export function shardBurst(scene, x, y, color, count = 6) {
     const sparkPx = fxParticleSize(scene, 7);
     const s = scene.add.image(x, y, tex).setDepth(33).setTint(color)
       .setDisplaySize(sparkPx + Math.random() * sparkPx, sparkPx + Math.random() * sparkPx * 0.85)
-      .setAlpha(0.92).setRotation(Math.random() * Math.PI);
+      .setAlpha(0.62).setRotation(Math.random() * Math.PI);
     scene.tweens.add({
       targets: s,
       x: x + Math.cos(a) * dist,
@@ -159,16 +149,22 @@ function randSpin() {
 }
 
 /** Ceramic tile chips + dust for brick destruction. */
-export function tileChipBurst(scene, x, y, color, count = 5) {
+export function tileChipBurst(scene, x, y, color, count = 5, chipOpts = {}) {
   if (!fxParticlesOn(scene)) return;
   const n = fxCount(scene, count);
+  const { angle: biasAngle, spread = Math.PI * 2 } = chipOpts;
   for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2 + Math.random() * 0.6;
+    let a;
+    if (biasAngle != null && spread < Math.PI * 2) {
+      a = biasAngle + (Math.random() - 0.5) * spread;
+    } else {
+      a = (i / n) * Math.PI * 2 + Math.random() * 0.6;
+    }
     const dist = 14 + Math.random() * 28;
     const chipW = fxParticleSize(scene, 8);
     const chip = scene.add.image(x, y, 'tile-chip').setDepth(32).setTint(color)
       .setDisplaySize(chipW + Math.random() * chipW * 0.7, chipW * 0.75 + Math.random() * chipW * 0.5)
-      .setAlpha(0.95).setRotation(Math.random() * Math.PI);
+      .setAlpha(0.68).setRotation(Math.random() * Math.PI);
     scene.tweens.add({
       targets: chip,
       x: x + Math.cos(a) * dist,
@@ -212,14 +208,14 @@ export function brickBreakFx(scene, x, y, color, opts = {}) {
   const { reduced = false, particles = true, style = 'normal' } = opts;
   const impact = fxImpactScale(scene, 1);
   if (!particles) {
-    rippleRing(scene, x, y, { tint: color, scale: 2 * impact, dur: 280 });
+    rippleRing(scene, x, y, { tint: color, scale: 1.5, dur: 280 });
     return;
   }
   const scale = (reduced ? 0.65 : 1) * impact;
   switch (style) {
     case 'explosive':
       explosiveImpactFx(scene, x, y, color, {
-        scale: 3.2 * scale, shake: reduced ? 0.004 : 0.009, shards: reduced ? 6 : 12,
+        scale: 2.2 * scale, shake: reduced ? 0.003 : 0.006, shards: reduced ? 4 : 7,
       });
       break;
     case 'nuke':
@@ -238,28 +234,24 @@ export function brickBreakFx(scene, x, y, color, opts = {}) {
       tileChipBurst(scene, x, y, color, reduced ? 2 : 4);
       break;
     default:
-      rippleRing(scene, x, y, { tint: color, scale: reduced ? 2.5 : 3.1, dur: 400 });
-      neonPulse(scene, x, y, color, { scale: reduced ? 1.6 : 2.2, dur: 340 });
-      tileChipBurst(scene, x, y, color, reduced ? 4 : 8);
-      dustPuff(scene, x, y, color, reduced ? 3 : 5);
-      shardBurst(scene, x, y, color, reduced ? 4 : 8);
+      tileChipBurst(scene, x, y, color, reduced ? 3 : 5, opts.chipOpts);
+      rippleRing(scene, x, y, { tint: color, scale: reduced ? 1.4 : 1.65, dur: 320 });
   }
 }
 
 /** Radial blast + debris for explosive hits. */
 export function explosiveImpactFx(scene, x, y, color, opts = {}) {
-  const scale = opts.scale ?? 3.8;
-  rippleRing(scene, x, y, { tint: color, scale, dur: 520 });
-  rippleRing(scene, x, y, { tint: 0xffffff, scale: scale * 0.58, dur: 380, depth: 31 });
-  shardBurst(scene, x, y, color, fxCount(scene, opts.shards ?? 12));
-  dustPuff(scene, x, y, color, fxCount(scene, opts.dust ?? 6));
-  hitSpark(scene, x, y, { tint: 0xffdd88, count: fxCount(scene, 8), spread: 36 });
-  if (opts.shake !== false) microShake(scene, opts.shake ?? 0.008, 130);
+  const scale = opts.scale ?? 2.2;
+  rippleRing(scene, x, y, { tint: color, scale, dur: 480, pulse: true });
+  shardBurst(scene, x, y, color, fxCount(scene, opts.shards ?? 6));
+  dustPuff(scene, x, y, color, fxCount(scene, opts.dust ?? 4));
+  hitSpark(scene, x, y, { tint: 0xffdd88, count: fxCount(scene, 4), spread: 24 });
+  if (opts.shake !== false) microShake(scene, opts.shake ?? 0.005, 110);
 }
 
 export function frostImpactFx(scene, x, y, opts = {}) {
   const tint = opts.tint ?? 0x5aa0ff;
-  rippleRing(scene, x, y, { tint, scale: 2.4, dur: 460 });
+  rippleRing(scene, x, y, { tint, scale: 1.8, dur: 400 });
   hitSpark(scene, x, y, { tint: 0xffffff, count: fxCount(scene, 6), spread: 16 });
   shardBurst(scene, x, y, tint, fxCount(scene, 6));
 }
@@ -267,13 +259,13 @@ export function frostImpactFx(scene, x, y, opts = {}) {
 export function electricImpactFx(scene, x, y, opts = {}) {
   const tint = opts.tint ?? 0xc084fc;
   hitSpark(scene, x, y, { tint, count: fxCount(scene, 14), spread: 40 });
-  rippleRing(scene, x, y, { tint: 0xffffff, scale: 2.6, dur: 280 });
+  rippleRing(scene, x, y, { tint: 0xffffff, scale: 1.7, dur: 260 });
   microShake(scene, opts.shake ?? 0.003, 60);
 }
 
 export function fireImpactFx(scene, x, y, opts = {}) {
   const tint = opts.tint ?? 0xff6633;
-  rippleRing(scene, x, y, { tint, scale: 3.2, dur: 400 });
+  rippleRing(scene, x, y, { tint, scale: 2, dur: 360 });
   hitSpark(scene, x, y, { tint: 0xffaa44, count: fxCount(scene, 10), spread: 30 });
   dustPuff(scene, x, y, tint, fxCount(scene, 5));
   shardBurst(scene, x, y, 0xff4400, fxCount(scene, 6));
@@ -282,12 +274,12 @@ export function fireImpactFx(scene, x, y, opts = {}) {
 export function nukeImpactFx(scene, x, y, opts = {}) {
   const reduced = opts.reduced ?? false;
   explosiveImpactFx(scene, x, y, 0xff2244, {
-    scale: reduced ? 3.8 : 5.5,
-    shake: reduced ? 0.008 : 0.014,
-    shards: reduced ? 8 : 16,
-    dust: reduced ? 4 : 8,
+    scale: reduced ? 2.4 : 2.8,
+    shake: reduced ? 0.005 : 0.008,
+    shards: reduced ? 5 : 8,
+    dust: reduced ? 3 : 5,
   });
-  hitSpark(scene, x, y, { tint: 0xffffff, count: fxCount(scene, reduced ? 8 : 16), spread: 50 });
+  hitSpark(scene, x, y, { tint: 0xffffff, count: fxCount(scene, reduced ? 4 : 6), spread: 32 });
 }
 
 /** Per-power pickup burst layered on top of powerAcquireBurst. */
@@ -295,13 +287,13 @@ export function powerPickupFx(scene, key, x, y, def = {}) {
   const tint = def.color ?? 0xffffff;
   const neg = def.polarity === 'neg';
   if (neg) {
-    explosiveImpactFx(scene, x, y, 0xff4466, { scale: 2.8, shake: 0.012, shards: 8 });
+    explosiveImpactFx(scene, x, y, 0xff4466, { scale: 2, shake: 0.006, shards: 5 });
     return;
   }
   switch (key) {
     case 'ExplosiveBall':
     case 'Earthquake':
-      explosiveImpactFx(scene, x, y, tint, { scale: 4, shake: 0.01, shards: 14 });
+      explosiveImpactFx(scene, x, y, tint, { scale: 2.4, shake: 0.006, shards: 7 });
       break;
     case 'NukeBall':
     case 'InstantWin':
@@ -323,40 +315,46 @@ export function powerPickupFx(scene, key, x, y, def = {}) {
       fireImpactFx(scene, x, y, { tint });
       break;
     case 'BallSplitter':
-      explosiveImpactFx(scene, x, y, tint, { scale: 3.6, shake: 0.006, shards: 10 });
+      explosiveImpactFx(scene, x, y, tint, { scale: 2.2, shake: 0.004, shards: 6 });
       break;
     case 'BlackHole':
-      rippleRing(scene, x, y, { tint: 0x880000, scale: 4.5, dur: 680 });
+      rippleRing(scene, x, y, { tint: 0x880000, scale: 2.6, dur: 580, pulse: true });
       dustPuff(scene, x, y, 0x440000, fxCount(scene, 8));
+      break;
+    case 'Echo':
+      rippleRing(scene, x, y, { tint: 0xc8b8ff, scale: 2.4, dur: 520, pulse: true });
+      hitSpark(scene, x, y, { tint: 0xe8e0ff, count: fxCount(scene, 10), spread: 28 });
+      break;
+    case 'Wrap':
+      rippleRing(scene, x, y, { tint: 0xffe156, scale: 2.2, dur: 480, pulse: true });
+      hitSpark(scene, x, y, { tint: 0xffe156, count: fxCount(scene, 8), spread: 22 });
       break;
     case 'Laser':
     case 'LaserII':
       hitSpark(scene, x, y, { tint: 0xff5566, count: fxCount(scene, 12), spread: 24, angle: -Math.PI / 2 });
-      rippleRing(scene, x, y, { tint: 0xff5566, scale: 2.8, dur: 320 });
+      rippleRing(scene, x, y, { tint: 0xff5566, scale: 1.8, dur: 300 });
       break;
     case 'Shield':
     case 'ShieldII':
-      rippleRing(scene, x, y, { tint: 0xddddff, scale: 3.2, dur: 500 });
+      rippleRing(scene, x, y, { tint: 0xddddff, scale: 2, dur: 440 });
       break;
     default:
-      rippleRing(scene, x, y, { tint, scale: 2.6, dur: 380 });
+      rippleRing(scene, x, y, { tint, scale: 1.75, dur: 340 });
       hitSpark(scene, x, y, { tint, count: fxCount(scene, 6), spread: 22 });
   }
 }
 
 export function microShake(scene, intensity = 0.004, dur = 80) {
-  const scaled = fxShake(scene, intensity);
-  if (scaled <= 0.0005) return;
-  scene.cameras.main.shake(dur, scaled);
+  fxCameraShake(scene, dur, intensity);
 }
 
 /** Soft expanding glow halo for high-tier impacts. */
 export function neonPulse(scene, x, y, tint = 0xffffff, opts = {}) {
   if (!fxParticlesOn(scene)) return;
-  const { scale = 1.8, dur = 320, depth = 30 } = opts;
-  const basePx = fxParticleSize(scene, 16);
+  const { scale = 1.4, dur = 280, depth = 30 } = opts;
+  const basePx = fxParticleSize(scene, 14);
   const glow = scene.add.image(x, y, 'fx-glow').setDepth(depth).setTint(tint)
-    .setBlendMode('ADD').setAlpha(0.5 * fxGlowScale(scene, 1))
+    .setBlendMode('SCREEN').setAlpha(0.22 * fxGlowScale(scene, 1))
     .setDisplaySize(basePx * 0.35, basePx * 0.35);
   const endPx = basePx * scale;
   scene.tweens.add({
@@ -399,16 +397,16 @@ export function shockwaveArc(scene, x, y, angle, tint = 0xffffff, opts = {}) {
 /** Combo milestone flare — stacked rings scaling outward. */
 export function comboFlare(scene, x, y, color, combo = 8) {
   if (!fxParticlesOn(scene) || combo < 8) return;
-  const rings = Math.min(3, 1 + Math.floor(combo / 12));
+  const rings = Math.min(2, 1 + Math.floor(combo / 16));
   for (let i = 0; i < rings; i++) {
-    rippleRing(scene, x, y - i * 6, {
+    rippleRing(scene, x, y - i * 4, {
       tint: color,
-      scale: 1.8 + i * 0.6,
-      dur: 380 + i * 80,
+      scale: 1.35 + i * 0.25,
+      dur: 340 + i * 60,
       depth: 34 + i,
     });
   }
-  hitSpark(scene, x, y, { tint: color, count: 4 + rings * 3, spread: 28 + rings * 6 });
+  hitSpark(scene, x, y, { tint: color, count: 3 + rings * 2, spread: 18 + rings * 4 });
 }
 
 /** Combo / milestone callout with punchy scale-in */
@@ -416,8 +414,8 @@ export function surgeText(scene, x, y, msg, color, size = 36) {
   const t = scene.add.text(x, y, msg, {
     ...displayStyle(size, color, { fontStyle: '700' }),
   }).setOrigin(0.5).setDepth(42).setScale(0.3).setAlpha(0);
-  t.setShadow(0, 0, color, 16, true, true);
-  scene.tweens.add({ targets: t, scale: 1.15, alpha: 1, duration: 140, ease: 'Back.easeOut' });
+  t.setShadow(0, 0, color, 8, true, true);
+  scene.tweens.add({ targets: t, scale: 1.05, alpha: 1, duration: 140, ease: 'Back.easeOut' });
   scene.tweens.add({
     targets: t, scale: 1, y: y - 72, alpha: 0, duration: 680, delay: 160, ease: 'Cubic.easeOut',
     onComplete: () => t.destroy(),
@@ -450,7 +448,7 @@ export function hitSpark(scene, x, y, opts = {}) {
     const streakW = fxParticleSize(scene, tex === 'spark-streak' ? 10 : 6);
     const s = scene.add.image(x, y, tex).setDepth(depth).setTint(tint)
       .setDisplaySize(streakW, tex === 'spark-streak' ? streakW * 0.4 : streakW)
-      .setAlpha(0.88).setRotation(a);
+      .setAlpha(0.55).setRotation(a);
     scene.tweens.add({
       targets: s,
       x: x + Math.cos(a) * d,
@@ -487,12 +485,12 @@ export function brickNudge(scene, panel, nx = 0, ny = -1) {
 export function powerAcquireBurst(scene, x, y, opts = {}) {
   const { tint = 0xffffff, neg = false, big = false } = opts;
   if (neg) {
-    rippleRing(scene, x, y, { tint: 0xff4466, scale: 2.8, dur: 420, depth: 35 });
-    hitSpark(scene, x, y, { tint: 0xff6b7a, count: 10, spread: 28, depth: 36 });
+    rippleRing(scene, x, y, { tint: 0xff4466, scale: 1.9, dur: 380, depth: 35 });
+    hitSpark(scene, x, y, { tint: 0xff6b7a, count: 5, spread: 20, depth: 36 });
   } else {
-    rippleRing(scene, x, y, { tint, scale: big ? 3.4 : 2.6, dur: 400, depth: 35 });
-    hitSpark(scene, x, y, { tint, count: big ? 12 : 7, spread: big ? 30 : 22, depth: 36 });
-    if (big) shardBurst(scene, x, y, tint, 10);
+    rippleRing(scene, x, y, { tint, scale: big ? 2.2 : 1.75, dur: 380, depth: 35, pulse: big });
+    hitSpark(scene, x, y, { tint, count: big ? 6 : 4, spread: big ? 22 : 16, depth: 36 });
+    if (big) shardBurst(scene, x, y, tint, 5);
   }
 }
 

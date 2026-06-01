@@ -77,7 +77,6 @@ export class UIScene extends Phaser.Scene {
     })).setOrigin(0.5, 0).setDepth(1006).setAlpha(0);
 
     this._gemPill = this._createStatPill('gem-icon', 0x66ccff, '💎');
-    this._leafPill = this._createStatPill('leaf-icon', 0x7eb87a, '🌿');
 
     const pauseDepth = 1010;
     if (this.textures.exists('pause-icon')) {
@@ -218,10 +217,6 @@ export class UIScene extends Phaser.Scene {
       this._refreshingCurrency = true;
       try {
         this._setPillValue(this._gemPill, MetaProgress.getGems());
-        this._setPillValue(
-          this._leafPill,
-          payload?.value ?? MetaProgress.getTreasury(),
-        );
         this.layoutAll();
       } finally {
         this._refreshingCurrency = false;
@@ -257,7 +252,7 @@ export class UIScene extends Phaser.Scene {
     this.headerC.add([
       this.scoreLabel, this.scoreText, this.comboText,
       this.levelText, this.metricLabel, this.bricksText, this.bricksLabel,
-      this._gemPill, this._leafPill, this.pauseBtn, this.pauseIcon,
+      this._gemPill, this.pauseBtn, this.pauseIcon,
       this.comboCash, this.comboCashHit,
     ].filter(Boolean));
 
@@ -536,13 +531,7 @@ export class UIScene extends Phaser.Scene {
 
     this._layoutLevelRow(L.levelCx, cy);
 
-    const gemW = this._gemPill._w ?? this._pillW;
-    const leafW = this._leafPill._w ?? this._pillW;
-    const gemsGap = uiPx(3, { min: 2, max: 4 });
-    const pairW = gemW + leafW + gemsGap;
-    const pairStart = L.currencyCx - pairW / 2;
-    this._positionPill(this._gemPill, pairStart + gemW / 2, cy);
-    this._positionPill(this._leafPill, pairStart + gemW + gemsGap + leafW / 2, cy);
+    this._positionPill(this._gemPill, L.currencyCx, cy);
 
     const edgeCy = L.playTop + L.playH / 2;
     this.leftEdgeC.setPosition(L.leftEdgeCx, edgeCy);

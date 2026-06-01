@@ -6,7 +6,6 @@ export type GameplayHudState = {
   bricksLeft: number;
   combo: number;
   gems: number;
-  treasury: number;
   goalText: string;
   mutators: string;
   slowActive: boolean;
@@ -19,6 +18,8 @@ export type GameplayHudState = {
   immersive: boolean;
   scramble: boolean;
   lifePulse: number;
+  nexusMeterPulse: number;
+  gnomeMeterPulse: number;
 };
 
 export const INITIAL_GAMEPLAY_HUD: GameplayHudState = {
@@ -28,7 +29,6 @@ export const INITIAL_GAMEPLAY_HUD: GameplayHudState = {
   bricksLeft: 0,
   combo: 0,
   gems: 0,
-  treasury: 0,
   goalText: '',
   mutators: '',
   slowActive: false,
@@ -41,4 +41,6 @@ export const INITIAL_GAMEPLAY_HUD: GameplayHudState = {
   immersive: true,
   scramble: false,
   lifePulse: 0,
+  nexusMeterPulse: 0,
+  gnomeMeterPulse: 0,
 };

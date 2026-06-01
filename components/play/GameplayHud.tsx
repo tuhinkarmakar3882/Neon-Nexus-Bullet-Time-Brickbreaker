@@ -1,6 +1,6 @@
 'use client';
 
-import { Heart, Pause, Gem, Leaf } from 'lucide';
+import { Heart, Pause, Gem } from 'lucide';
 import { LucideIcon } from '@/components/shell/LucideIcon';
 import type { GameplayHudState } from '@/lib/shell/gameplayHudTypes';
 import { emitGameplayRequest } from '@/lib/shell/useGameplayHudState';
@@ -14,6 +14,7 @@ function MeterRail({
   ratio,
   ready,
   accentClass,
+  pulseKey,
   onTap,
 }: {
   id: string;
@@ -22,6 +23,7 @@ function MeterRail({
   ratio: number;
   ready: boolean;
   accentClass: string;
+  pulseKey?: number;
   onTap: () => void;
 }) {
   const pct = Math.round(Math.min(1, Math.max(0, ratio)) * 100);
@@ -29,6 +31,7 @@ function MeterRail({
     <aside
       id={id}
       className={`play-hud-rail play-hud-rail--${side} play-hud-interactive${ready ? ' play-hud-rail--ready' : ''}`}
+      data-meter-pulse={pulseKey && pulseKey > 0 ? pulseKey : undefined}
       aria-label={`${label} meter`}
     >
       <button
@@ -46,7 +49,7 @@ function MeterRail({
   );
 }
 
-/** Single-row play header — lives, score, level/bricks, wallet, pause. */
+/** Single-row play header — pause + lives (left), score (center), gems (right). */
 export function GameplayHud({ state }: { state: GameplayHudState }) {
   const hearts = Math.min(state.lives, MAX_HEARTS);
   const extraLives = state.lives > MAX_HEARTS ? state.lives - MAX_HEARTS : 0;
@@ -66,72 +69,72 @@ export function GameplayHud({ state }: { state: GameplayHudState }) {
         data-life-pulse={state.lifePulse > 0 ? state.lifePulse : undefined}
       >
         <div className="play-hud-bar__inner">
-          <div className="play-hud-lives" aria-label={`${state.lives} lives`} key={`lives-${state.lives}`}>
-            {Array.from({ length: hearts }, (_, i) => (
-              <LucideIcon
-                key={`${state.lives}-${i}`}
-                icon={Heart}
-                size={13}
-                className="play-hud-heart"
-                label={i === 0 ? `${state.lives} lives` : undefined}
-              />
-            ))}
-            {extraLives > 0 ? <span className="play-hud-lives__more">+{extraLives}</span> : null}
+          <div className="play-hud-bar__left">
+            <button
+              type="button"
+              className="play-hud-pause"
+              onClick={() => emitGameplayRequest('req:pause')}
+              aria-label="Pause game"
+            >
+              <LucideIcon icon={Pause} size={18} label="Pause" />
+            </button>
+            <div className="play-hud-lives" aria-label={`${state.lives} lives`} key={`lives-${state.lives}`}>
+              {Array.from({ length: hearts }, (_, i) => (
+                <LucideIcon
+                  key={`${state.lives}-${i}`}
+                  icon={Heart}
+                  size={13}
+                  className="play-hud-heart"
+                  label={i === 0 ? `${state.lives} lives` : undefined}
+                />
+              ))}
+              {extraLives > 0 ? <span className="play-hud-lives__more">+{extraLives}</span> : null}
+            </div>
           </div>
 
           <div className="play-hud-main">
-            {state.slowActive ? (
-              <span className="play-hud-tag play-hud-tag--slow">{state.slowLabel}</span>
-            ) : null}
-            <span className="play-hud-score">{state.score.toLocaleString()}</span>
-            {combo ? (
-              state.gambitReady ? (
-                <button
-                  type="button"
-                  className="play-hud-combo play-hud-combo--cash"
-                  onClick={() => emitGameplayRequest('req:gambit')}
-                >
-                  {combo}
-                </button>
-              ) : (
-                <span className="play-hud-combo">{combo}</span>
-              )
-            ) : null}
-          </div>
-
-          {showProgress ? (
-            <span
-              className="play-hud-progress"
-              aria-label={`Level ${state.level}, ${state.bricksLeft} bricks remaining`}
-              title={`Level ${state.level} · ${state.bricksLeft} bricks`}
-            >
-              <span className="play-hud-progress__lv">{state.level}</span>
-              <span className="play-hud-progress__dot" aria-hidden>
-                ·
+            <div className="play-hud-main__row">
+              {state.slowActive ? (
+                <span className="play-hud-tag play-hud-tag--slow">{state.slowLabel}</span>
+              ) : null}
+              <span className="play-hud-score">{state.score.toLocaleString()}</span>
+              {combo ? (
+                state.gambitReady ? (
+                  <button
+                    type="button"
+                    className="play-hud-combo play-hud-combo--cash"
+                    onClick={() => emitGameplayRequest('req:gambit')}
+                  >
+                    {combo}
+                  </button>
+                ) : (
+                  <span className="play-hud-combo">{combo}</span>
+                )
+              ) : null}
+            </div>
+            {showProgress ? (
+              <span
+                className="play-hud-progress"
+                aria-label={`Level ${state.level}, ${state.bricksLeft} bricks remaining`}
+                title={`Level ${state.level} · ${state.bricksLeft} bricks`}
+              >
+                <span className="play-hud-progress__lv">{state.level}</span>
+                <span className="play-hud-progress__dot" aria-hidden>
+                  ·
+                </span>
+                <span className="play-hud-progress__br">{state.bricksLeft}</span>
               </span>
-              <span className="play-hud-progress__br">{state.bricksLeft}</span>
-            </span>
-          ) : null}
-
-          <div className="play-hud-wallet" aria-label="Gems and treasury">
-            <span className="play-hud-wallet__item">
-              <LucideIcon icon={Gem} size={11} className="play-hud-wallet__icon play-hud-wallet__icon--gem" label="Gems" />
-              <span>{state.gems.toLocaleString()}</span>
-            </span>
-            <span className="play-hud-wallet__item">
-              <LucideIcon icon={Leaf} size={11} className="play-hud-wallet__icon play-hud-wallet__icon--leaf" label="Treasury" />
-              <span>{state.treasury.toLocaleString()}</span>
-            </span>
+            ) : null}
           </div>
 
-          <button
-            type="button"
-            className="play-hud-pause"
-            onClick={() => emitGameplayRequest('req:pause')}
-            aria-label="Pause game"
-          >
-            <LucideIcon icon={Pause} size={16} label="Pause" />
-          </button>
+          <div className="play-hud-bar__right">
+            <div className="play-hud-wallet" aria-label="Gems">
+              <span className="play-hud-wallet__item">
+                <LucideIcon icon={Gem} size={12} className="play-hud-wallet__icon play-hud-wallet__icon--gem" label="Gems" />
+                <span>{state.gems.toLocaleString()}</span>
+              </span>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -142,6 +145,7 @@ export function GameplayHud({ state }: { state: GameplayHudState }) {
         ratio={state.gnomeRatio}
         ready={state.gnomeReady}
         accentClass="play-hud-rail--gnome"
+        pulseKey={state.gnomeMeterPulse}
         onTap={() => emitGameplayRequest('req:gnome')}
       />
       <MeterRail
@@ -151,6 +155,7 @@ export function GameplayHud({ state }: { state: GameplayHudState }) {
         ratio={state.nexusRatio}
         ready={state.nexusReady}
         accentClass="play-hud-rail--nexus"
+        pulseKey={state.nexusMeterPulse}
         onTap={() => emitGameplayRequest('req:nexus')}
       />
     </>

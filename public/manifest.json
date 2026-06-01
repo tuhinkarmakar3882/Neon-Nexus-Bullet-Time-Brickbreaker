@@ -2,9 +2,9 @@
   "name": "Neon Nexus: Bullet-Time Brick Breaker",
   "short_name": "Neon Nexus",
   "description": "Free neon brick breaker with bullet-time slow-mo, 25+ power-ups, Jardinain gnomes, and tons of levels to clear.",
-  "id": "https://nnbr.netlify.app/",
-  "start_url": "https://nnbr.netlify.app/",
-  "scope": "https://nnbr.netlify.app/",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "display_override": [
     "standalone"

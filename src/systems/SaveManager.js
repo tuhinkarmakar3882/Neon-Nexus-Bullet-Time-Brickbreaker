@@ -1,5 +1,5 @@
 import { STORAGE, DEFAULT_SFX_VOLUME, DEFAULT_MUSIC_VOLUME } from '../config/Constants.js';
-import { migrateVfxQuality, normalizeVfxQuality } from '../config/VfxQuality.js';
+import { migrateVfxQuality, normalizeVfxQuality, resolveSettings } from '../config/VfxQuality.js';
 
 const mem = {};
 
@@ -58,13 +58,13 @@ export const SaveManager = {
       scanlines: this.getBool(STORAGE.SCANLINES, false),
       vfxQuality: storedQuality,
     };
-    return {
+    return resolveSettings({
       sound,
       music,
       vfxQuality: storedQuality ? normalizeVfxQuality(storedQuality) : migrateVfxQuality(legacy),
       sfxVolume: this.getNumber(STORAGE.SFX_VOLUME, DEFAULT_SFX_VOLUME),
       musicVolume: this.getNumber(STORAGE.MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME),
-    };
+    });
   },
   saveSettings(s) {
     this.setBool(STORAGE.SOUND, s.sound);

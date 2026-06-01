@@ -1,6 +1,7 @@
 /**
+ * @deprecated Unused — Pixabay loops + AudioManager filter/intensity/sidechain are used instead.
+ * Kept for reference if adaptive MusicEngine layers are wired in a future milestone.
  * Procedural music profiles — upbeat major/lydian arcade feel per biome.
- * Consumed by AudioManager for Web Audio scheduling.
  */
 
 export const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);

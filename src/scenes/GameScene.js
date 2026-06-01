@@ -6,7 +6,6 @@ import {
 import { PAL, cssHex } from '../config/Palette.js';
 import { POWERS, powerFillColor, powerColorHex, resolvePowerKey, CANNON_TYPES, BALL_MODS, POWER_KEYS, powerDisplayName, powerPillLabel, powerHasBallMod, powerHasCannon, findActiveBallModKey, findActiveCannonKey } from '../config/PowerUps.js';
 import { rollPower, rollPowerDraft, rollPositivePower, rollPositivePowerDraft, rollCapsuleVariant, rollBlessedPower, DROPPABLE_KEYS } from '../config/DropTables.js';
-import { mutatorDisplay } from '../config/Mutators.js';
 import { goalProgressText } from '../config/LevelGoals.js';
 import { rollContract } from '../config/GnomeContracts.js';
 import { fusionTarget } from '../config/PowerFusion.js';
@@ -39,11 +38,12 @@ import { InputRouter } from '../systems/InputRouter.js';
 import { isArrowHeld } from '../systems/GameKeyboard.js';
 import { pushGameplayHistory } from '../systems/Navigation.js';
 import { hapticPulse } from '../systems/Haptics.js';
+import { FeedbackDirector } from '../systems/FeedbackDirector.js';
 import { scaledBallBaseSpeed, difficultyFor } from '../systems/DifficultyScaler.js';
 import { addCameraFx, spawnConfetti, makeButton } from '../utils/UI.js';
 import { applySceneVfx } from '../utils/SceneVfx.js';
-import { popScale, squashStretch, wobble, rippleRing, staggerDropIn, shardBurst, brickBreakFx, microShake, surgeText, hitSpark, brickNudge, launchBurst, risePop, tierPulse, dropIn, spinIn, powerAcquireBurst, powerPickupFx, explosiveImpactFx, fireImpactFx, electricImpactFx, frostImpactFx, comboFlare } from '../utils/MicroFx.js';
-import { fxParticleScale } from '../utils/FxBudget.js';
+import { popScale, squashStretch, wobble, rippleRing, staggerDropIn, shardBurst, brickBreakFx, microShake, surgeText, hitSpark, brickNudge, launchBurst, risePop, dropIn, spinIn, powerAcquireBurst, powerPickupFx, explosiveImpactFx, fireImpactFx, electricImpactFx, frostImpactFx, comboFlare } from '../utils/MicroFx.js';
+import { fxParticleScale, fxCameraShake } from '../utils/FxBudget.js';
 import { initBulletTimeFx, setBulletTimeIntensity, screenPunch, impactFlash, radialBlast, resetGameplayCamera, clearBulletTimeFx } from '../utils/BulletTimeFx.js';
 import {
   pick, clamp, rand, mulberry32,
@@ -78,6 +78,9 @@ export class GameScene extends Phaser.Scene {
     audio.applyMusicSettings({ musicVolume: musicSettings.musicVolume });
     addCameraFx(this, this.settings);
     initBulletTimeFx(this);
+    this.feedback = new FeedbackDirector(this);
+    audio.init();
+    audio.setSpatialPan(this.settings.spatialPan === true);
 
     this.bg = new Background(this, PAL.accent, { preset: this.settings, gameplay: true });
     this.campaignSeed = this._resumeData?.campaignSeed ?? ((Date.now() ^ 0xdeadbeef) >>> 0);
@@ -213,12 +216,8 @@ export class GameScene extends Phaser.Scene {
     this.game.events.on('req:gnome', () => this.trySpendGnome());
     this._onCosmeticsChanged = () => this.applyEquippedCosmetics();
     this.game.events.on('meta:cosmetics', this._onCosmeticsChanged);
-    this.events.once('shutdown', () => {
-      this.game.events.off('req:gambit');
-      this.game.events.off('req:nexus');
-      this.game.events.off('req:gnome');
-      this.game.events.off('meta:cosmetics', this._onCosmeticsChanged);
-    });
+    this._onVfxSettings = (settings) => this.syncVfxSettings(settings);
+    this.game.events.on('settings:vfx', this._onVfxSettings);
 
     this.time.delayedCall(80, () => this.levelFlash());
     pushGameplayHistory();
@@ -230,6 +229,9 @@ export class GameScene extends Phaser.Scene {
     this.settings = settings;
     applySceneVfx(this, settings);
     this.bg?.applyVfxPreset?.(settings);
+    audio.setSpatialPan(settings.spatialPan === true);
+    if (settings.ambience === true) audio.startAmbience(this.theme?.biome ?? 'garden');
+    else audio.stopAmbience?.();
   }
 
   relayout() {
@@ -283,6 +285,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   cleanup() {
+    this.game.events.off('settings:vfx', this._onVfxSettings);
     this.bus?.emit('hud:flash', { text: '', color: '#fff', ms: 0 });
     this.bus?.emit('hud:toast', { text: '', ms: 0 });
     this.bus?.emit('hud:hint', false);
@@ -301,39 +304,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   levelFlash() {
-    const t = this.theme?.name || '';
-    const band = this.difficulty?.label ?? '';
-    const rating = this.difficulty?.rating ?? Math.ceil(this.level / 5);
-    const layout = this.layoutLabel ? `  ·  ${this.layoutLabel}` : '';
-    const twist = this.twistLabel ? `  ·  ${this.twistLabel}` : '';
-    const pace = this.paceLabel && this.paceLabel !== 'standard' ? `  ·  ${this.paceLabel.toUpperCase()}` : '';
-    const diffTag = `DIFF ${rating}/10`;
     this.flash(
-      (this.isBoss ? `FORTRESS ${this.level}` : `LEVEL ${this.level}`)
-      + `  ·  ${diffTag}`
-      + (band ? `  ·  ${band}` : '')
-      + layout + twist + pace
-      + (t ? `  ·  ${t.toUpperCase()}` : ''),
-      cssHex(this.isBoss ? PAL.gold : (this.theme?.bg ?? PAL.accent)), 1100,
+      this.isBoss ? `FORTRESS ${this.level}` : `LEVEL ${this.level}`,
+      cssHex(this.isBoss ? PAL.gold : (this.theme?.bg ?? PAL.accent)),
+      750,
       'high',
     );
-    tierPulse(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.32, rating, cssHex(this.isBoss ? PAL.gold : PAL.accent3));
-    microShake(this, 0.003 + rating * 0.0004, 100);
-    if (this.challengeSys?.mutator || this.challengeSys?.mutators?.length) {
-      this.time.delayedCall(900, () => this.showMutatorIntroCard());
-    }
-    if (this.goal?.type && this.goal.type !== 'clear') {
-      this.time.delayedCall(1400, () => this.showGoalIntroCard());
-    }
-  }
-
-  showGoalIntroCard() {
-    if (this.over || !this.goal || this.goal.type === 'clear') return;
-    const W = GAME.WIDTH;
-    const card = this.add.text(W / 2, GAME.HEIGHT * 0.52, `${this.goal.label}\n${this.goal.desc}`, {
-      ...orbitronStyle(22, '#cfe9ff', { align: 'center', wordWrap: { width: wrapWidth(0.85) } }),
-    }).setOrigin(0.5).setDepth(1200).setAlpha(0);
-    this.tweens.add({ targets: card, alpha: 1, duration: 280, yoyo: true, hold: 1800, onComplete: () => card.destroy() });
   }
 
   applyEquippedCosmetics() {
@@ -413,43 +389,8 @@ export class GameScene extends Phaser.Scene {
     const j = new Jardinain(this, brick, 'elite', { popping: true });
     this.jardinains.push(j);
     risePop(this, j.c, { peak: 1.25 });
-    rippleRing(this, brick.cx, brick.cy, { tint: 0xffd23d, scale: 2.8, dur: 420 });
+    rippleRing(this, brick.cx, brick.cy, { tint: 0xffd23d, scale: 1.9, dur: 380 });
     this.floatText(brick.cx, brick.y, 'FORTRESS GNOME!', cssHex(PAL.gold), 22);
-  }
-
-  showMutatorIntroCard() {
-    if (this.over || this.transitioning) return;
-    const ids = this.challengeSys?.mutators?.length
-      ? this.challengeSys.mutators
-      : (this.challengeSys?.mutator ? [this.challengeSys.mutator] : []);
-    if (!ids.length) return;
-    const W = GAME.WIDTH;
-    const H = GAME.HEIGHT;
-    const card = this.add.container(W / 2, H * 0.38).setDepth(1200);
-    const bg = this.add.graphics();
-    const cw = Math.min(W * 0.88, 560);
-    const ch = 120 + ids.length * 36;
-    bg.fillStyle(0x0a0e1a, 0.94);
-    bg.fillRoundedRect(-cw / 2, -ch / 2, cw, ch, 18);
-    bg.lineStyle(2, 0xffd23d, 0.75);
-    bg.strokeRoundedRect(-cw / 2, -ch / 2, cw, ch, 18);
-    const tag = this.add.text(0, -ch / 2 + uiPx(24, { min: 18, max: 24 }), ids.length > 1 ? 'LEVEL MUTATORS' : 'LEVEL MUTATOR', {
-      ...orbitronStyle(14, '#8899aa', { fontStyle: 'bold' }),
-    }).setOrigin(0.5);
-    card.add([bg, tag]);
-    ids.forEach((id, i) => {
-      const info = mutatorDisplay(id);
-      const t = this.add.text(0, -ch / 2 + uiPx(56, { min: 44, max: 56 }) + i * uiPx(34, { min: 28, max: 34 }), `${info.label} — ${info.desc}`, {
-        ...orbitronStyle(15, cssHex(info.color), { align: 'center', wordWrap: { width: cw - 40 } }),
-      }).setOrigin(0.5, 0);
-      card.add(t);
-    });
-    card.setScale(0.85).setAlpha(0);
-    this.tweens.add({ targets: card, scale: 1, alpha: 1, duration: 280, ease: 'Back.easeOut' });
-    this.time.delayedCall(2600, () => {
-      if (!card.active) return;
-      this.tweens.add({ targets: card, alpha: 0, y: card.y - 24, duration: 320, onComplete: () => card.destroy() });
-    });
   }
 
   /** Collision bounds use WALL_X / WALL_TOP — no side slab overlays (avoids black edge strips). */
@@ -573,17 +514,22 @@ export class GameScene extends Phaser.Scene {
     }).setDepth(29);
   }
 
-  burst(x, y, color, count = 8) {
+  burst(x, y, color, count = 8, heavy = false) {
+    this.feedback?.requestBurst(x, y, color, count, heavy);
+  }
+
+  _burstRaw(x, y, color, count = 8, heavy = false) {
     if (!this.settings.particles) return;
     const mult = this.settings.particleMult ?? 1;
-    const n = Math.round(count * mult);
+    if (mult <= 0) return;
+    const n = Math.max(1, Math.round(count * mult));
     this.hitEmitter.setParticleTint(color);
     this.hitEmitter.explode(n, x, y);
     this.dustEmitter.setParticleTint(color);
-    this.dustEmitter.explode(Math.max(3, Math.round(n * 0.55)), x, y);
-    if (n >= 6) {
+    this.dustEmitter.explode(Math.max(2, Math.round(n * 0.35)), x, y);
+    if (heavy) {
       this.explodeEmitter.setParticleTint(color);
-      this.explodeEmitter.explode(Math.max(4, Math.round(n * 0.4)), x, y);
+      this.explodeEmitter.explode(Math.max(2, Math.round(n * 0.25)), x, y);
     }
   }
 
@@ -651,6 +597,12 @@ export class GameScene extends Phaser.Scene {
       if (spec.linkedPartnerIndex != null) br.linkedPartner = this.bricks[spec.linkedPartnerIndex] ?? null;
     });
     staggerDropIn(this, this.bricks, { delay: 22, drop: 28, dur: 300 });
+    const dropMs = this.bricks.length * 22 + 320;
+    this.time.delayedCall(dropMs, () => {
+      if (this.settings.ambience === true) {
+        audio.startAmbience(theme?.biome ?? 'garden');
+      }
+    });
     this.initGnomeSpawner();
     this.scheduleIntroGnomes();
     this.bricks.forEach((b) => this.telegraphBrick(b));
@@ -672,6 +624,7 @@ export class GameScene extends Phaser.Scene {
       biome: theme.biome ?? 'garden',
       isBoss,
     });
+    audio.setBiomeFilter(theme?.biome ?? 'garden');
     this.applyBrickDamageSnapshot();
 
     this.escortBrick = null;
@@ -835,17 +788,21 @@ export class GameScene extends Phaser.Scene {
     const intensity = GAME.BT_NEXUS_INTENSITY_MIN
       + ratio * (GAME.BT_NEXUS_INTENSITY_MAX - GAME.BT_NEXUS_INTENSITY_MIN);
     const cleared = this.clearNexusHazards();
-    this.triggerBulletTime(ms, { intensity, punch: true, player: true, nexus: true, wow: true });
-    this.flash(cleared > 0 ? 'NEXUS UNLEASHED' : 'NEXUS SLOW-MO', '#8ec5ff', 500);
-    hapticPulse(12);
+    this.triggerBulletTime(ms, { intensity, punch: false, player: true, nexus: true, wow: false });
+    this.feedback.playMoment('nexus.unleashed', {
+      x: this.paddle?.x ?? GAME.WIDTH / 2,
+      y: GAME.HEIGHT * 0.38,
+      hazardCount: cleared,
+    });
+    if (cleared === 0) {
+      this.flash('NEXUS SLOW-MO', '#8ec5ff', 500);
+    }
     return true;
   }
 
   /** Spend Nexus slow-mo — wipe pots, pests, and paddle debuffs for a brief advantage. */
   clearNexusHazards() {
     let count = 0;
-    const cx = this.paddle?.x ?? GAME.WIDTH / 2;
-    const cy = GAME.HEIGHT * 0.38;
 
     for (let i = this.pots.length - 1; i >= 0; i--) {
       const p = this.pots[i];
@@ -889,10 +846,6 @@ export class GameScene extends Phaser.Scene {
 
     if (count > 0) {
       this.score += count * GAME.BT_NEXUS_HAZARD_SCORE;
-      rippleRing(this, cx, cy, { tint: 0x8ec5ff, scale: 3.2, dur: 420, depth: 33 });
-      hitSpark(this, cx, cy, { tint: 0x8ec5ff, count: 8, spread: 40 });
-      surgeText(this, cx, cy - 32, 'NEXUS UNLEASHED', '#8ec5ff', 36);
-      audio.blip(920);
     }
     return count;
   }
@@ -950,14 +903,8 @@ export class GameScene extends Phaser.Scene {
 
   /** Nexus meter bonus for a clutch edge save — only on paddle bounce near the corner. */
   awardClutchBounce(ball) {
-    const rel = Math.abs((ball.x - this.paddle.x) / (this.paddle.w / 2));
-    if (rel < 0.78) return;
     this.addBtMeter(GAME.BT_METER_NEAR_MISS_FILL);
-    surgeText(this, ball.x, ball.y, 'CLUTCH!', '#8ec5ff', 28);
-    rippleRing(this, ball.x, ball.y, { tint: 0x8ec5ff, scale: 2, dur: 320, depth: 32 });
-    hitSpark(this, ball.x, ball.y, { tint: 0x8ec5ff, count: 5, spread: 18 });
-    audio.clutch?.();
-    hapticPulse(6);
+    return true;
   }
 
   comboScoreMult() {
@@ -1110,7 +1057,7 @@ export class GameScene extends Phaser.Scene {
 
     container.setAlpha(0);
     this.tweens.add({ targets: container, alpha: 1, duration: 220 });
-    rippleRing(this, W / 2, H * 0.3, { tint: isNexus ? PAL.accent : PAL.accent2, scale: 3.2, dur: 520 });
+    rippleRing(this, W / 2, H * 0.3, { tint: isNexus ? PAL.accent : PAL.accent2, scale: 2, dur: 460 });
     audio.wowHit?.();
     hapticPulse(16);
   }
@@ -1186,7 +1133,7 @@ export class GameScene extends Phaser.Scene {
       microShake(this, 0.005, 90);
       if (this.settings.bulletTime) this.triggerBulletTime(320, { intensity: 0.65 });
     }
-    this.cameras.main.shake(80, 0.004);
+    fxCameraShake(this, 80, 0.004);
     audio.juggle?.(n);
     this.addGnomeStreak(GAME.GNOME_STREAK_JUGGLE);
   }
@@ -1195,8 +1142,8 @@ export class GameScene extends Phaser.Scene {
     const pts = this.jugglePoints(Math.max(1, j.juggleCount + 1));
     this.score += pts;
     this.floatText(j.x, j.y, `ZAP +${pts}`, '#a78bfa', 32);
-    this.burst(j.x, j.y, 0xa78bfa, 14);
-    radialBlast(this, j.x, j.y, { tint: 0xa78bfa, scale: 3.6 });
+    this.burst(j.x, j.y, 0xa78bfa, 8);
+    radialBlast(this, j.x, j.y, { tint: 0xa78bfa, scale: 2.2 });
     if (this.settings.bulletTime) this.triggerBulletTime(420, { intensity: 0.85, punch: true });
     if (this.spawnGnomePower(j.x, j.y, true)) {
       this.floatText(j.x, j.y, 'POWER!', '#ffd23d', 26);
@@ -1214,19 +1161,16 @@ export class GameScene extends Phaser.Scene {
     const pts = this.jugglePoints(Math.max(1, j.juggleCount)) + GAME.SCORE_JARDINAIN;
     this.score += pts;
     this.floatText(j.x, j.y, `KNOCKOUT +${pts}`, cssHex(PAL.accent2), 38);
-    surgeText(this, j.x, j.y - 28, 'KNOCKOUT!', cssHex(PAL.accent2), 44);
-    this.burst(j.x, j.y, PAL.accent2, 20);
-    shardBurst(this, j.x, j.y, PAL.accent2, this.settings.reducedFx ? 8 : 14);
-    radialBlast(this, j.x, j.y, { tint: PAL.accent2, scale: 5.2, dur: 620 });
-    spawnConfetti(this, j.x, j.y, this.settings.reducedFx ? 24 : 48);
+    this.feedback.playMoment('knockout.levelClear', {
+      x: j.x,
+      y: j.y,
+      tint: PAL.accent2,
+      reduced: this.settings.reducedFx,
+    });
     if (this.settings.bulletTime) this.triggerBulletTime(680, { hitStop: true, punch: true, intensity: 1.15, wow: true });
     else {
-      this.hitStopRemaining = GAME.HIT_STOP_MS;
       screenPunch(this, 0.07, 90);
     }
-    this.cameras.main.shake(160, 0.009);
-    audio.wowHit?.();
-    audio.explode?.();
     if (this.spawnGnomePower(j.x, j.y, true)) {
       surgeText(this, j.x, j.y - 52, 'POWER!', '#ffd23d', 36);
     }
@@ -1516,11 +1460,16 @@ export class GameScene extends Phaser.Scene {
       else if (mod === 'heavy') {
         ball.heavyMode = true;
         if (!ball.stuck) ball.setSpeed(Math.max(GAME.BALL_MIN_SPEED, ball.speed * 0.55));
-      } else if (mod === 'wrap') ball.wrap = true;
-      else if (mod === 'charge') ball.chargeShot = true;
+      } else if (mod === 'wrap') {
+        ball.wrap = true;
+        ball.applyCosmetic(0xffe156, 'gold');
+      } else if (mod === 'charge') ball.chargeShot = true;
       else if (mod === 'missile') ball.missileMode = true;
       else if (mod === 'gravity') ball.gravityMode = true;
-      else if (mod === 'echo') ball.echoMode = true;
+      else if (mod === 'echo') {
+        ball.echoMode = true;
+        ball.applyCosmetic(0xe8e0ff, 'nexus');
+      }
       else ball.setElement(mod);
     } else {
       this.activeBallMod = null;
@@ -1643,48 +1592,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   playPowerAcquireFx(key, def, opts = {}) {
-    const { skipPunch = false } = opts;
     const neg = def.polarity === 'neg';
-    const tint = powerFillColor(key);
-    const px = this.paddle.x;
-    const py = this.paddle.top;
-    const big = def.kind === 'instant' || def.bulletTime || key === 'BallSplitter';
-
-    powerAcquireBurst(this, px, py, { tint, neg, big });
-    popScale(this, this.paddle.body, { peak: neg ? 0.92 : 1.1, dur: neg ? 140 : 120, from: neg ? 1.05 : 0.94 });
-
     if (neg) {
-      impactFlash(this, PAL.powerNeg, 0.28);
-      microShake(this, 0.014, 180);
-      if (!skipPunch) screenPunch(this, 0.045, 110);
-      surgeText(this, px, py - 52, 'CURSED!', cssHex(PAL.powerNeg), 34);
-      wobble(this, this.paddle.body, { angle: 14, dur: 300, repeat: 2 });
-      this.balls.forEach((b) => {
-        if (!b.stuck) wobble(this, b.core, { angle: 8, dur: 260, repeat: 1 });
-      });
+      this.feedback.playMoment('power.cursed', { key, def, ...opts });
       this.settleCameraAfterFx(120);
       return;
     }
-
-    if (!skipPunch) screenPunch(this, big ? 0.065 : 0.032, big ? 95 : 75);
-    if (big) {
-      radialBlast(this, px, py, { tint, scale: 4.2, dur: 520 });
-      spawnConfetti(this, px, py - 20, this.settings.reducedFx ? 16 : 32);
-      impactFlash(this, tint, 0.15);
-    }
-    if (CANNON_TYPES.includes(key)) {
-      launchBurst(this, px, py, tint);
-      shardBurst(this, px, py - 16, tint, this.settings.reducedFx ? 5 : 9);
-    } else if (BALL_MODS.includes(key)) {
-      this.balls.forEach((b) => {
-        rippleRing(this, b.x, b.y, { tint, scale: 2.4, dur: 360 });
-        risePop(this, b.core, { peak: 1.35, dur: 220 });
-      });
-    } else if (def.kind === 'timed') {
-      rippleRing(this, px, py, { tint, scale: 2.8, dur: 440 });
-    }
-    powerPickupFx(this, key, px, py, def);
-    this.settleCameraAfterFx(big ? 130 : 95);
+    this.feedback.playMoment('power.pickup', { key, def, ...opts });
+    this.settleCameraAfterFx(def.kind === 'instant' || def.bulletTime || key === 'BallSplitter' ? 130 : 95);
   }
 
   applyPower(rawKey) {
@@ -1719,7 +1634,6 @@ export class GameScene extends Phaser.Scene {
 
     const neg = def.polarity === 'neg';
     if (neg) {
-      hapticPulse(20);
       if (!this._firstNegativeRun) {
         this._firstNegativeRun = true;
         this.cameras.main.setAlpha(0.55);
@@ -1727,7 +1641,6 @@ export class GameScene extends Phaser.Scene {
       }
     }
     if (this.settings.flashText) this.flash(powerPillLabel(key), powerColorHex(key), 650);
-    audio.powerPickup?.(key);
     const willBt = def.bulletTime && this.settings.bulletTime;
     if (willBt) this.triggerBulletTime(undefined, { punch: false, intensity: 0.9 });
     if (def.kind === 'timed') this.powerSys.activate(key, def.dur);
@@ -1738,7 +1651,7 @@ export class GameScene extends Phaser.Scene {
       case 'ExtraPaddle':
         this.lives++;
         this.emitLifeHud();
-        rippleRing(this, this.paddle.x, this.paddle.y, { tint: powerFillColor('ExtraPaddle'), scale: 3, dur: 480 });
+        rippleRing(this, this.paddle.x, this.paddle.y, { tint: powerFillColor('ExtraPaddle'), scale: 2, dur: 420 });
         break;
       case 'InstantWin':
         this.forceClearDestructibles();
@@ -1812,6 +1725,11 @@ export class GameScene extends Phaser.Scene {
       case 'Missile':
       case 'Gravity':
       case 'Echo':
+        this.clearAllBallEchoFx();
+        if (this.activeBallMod === key) {
+          this.activeBallMod = findActiveBallModKey(this.powerSys);
+        }
+        break;
       case 'ChargeShot':
       case 'Wrap':
         if (this.activeBallMod === key) {
@@ -1820,12 +1738,13 @@ export class GameScene extends Phaser.Scene {
         break;
     }
     this.balls.forEach((b) => this.applyActiveStateToBall(b));
+    this.applyEquippedCosmetics();
   }
 
   doEarthquake() {
     audio.explode?.();
-    this.cameras.main.shake(450, 0.018);
-    explosiveImpactFx(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.35, PAL.accent3, { scale: 5, shake: 0.016, shards: 18 });
+    fxCameraShake(this, 320, 0.01);
+    explosiveImpactFx(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.35, PAL.accent3, { scale: 2.6, shake: 0.008, shards: 8 });
     this.flash('EARTHQUAKE!', cssHex(PAL.accent3), 800);
     this.jardinains.forEach((j) => {
       if (j._destroyed) return;
@@ -1888,104 +1807,196 @@ export class GameScene extends Phaser.Scene {
     const R = Math.min(GAME.WIDTH, GAME.HEIGHT) * GAME.BLACK_HOLE_RADIUS;
 
     this._bhDisk = this.add.graphics().setDepth(7);
+    this._bhSpiral = this.add.graphics().setDepth(8).setBlendMode('ADD');
     this._bhCore = this.add.image(x, y, 'orb')
       .setDepth(9).setTint(0x1a0008).setAlpha(0.95).setScale(R / 90);
     this._bhRing = this.add.image(x, y, 'ring')
-      .setDepth(10).setTint(0xff3355).setAlpha(0.62).setBlendMode('ADD')
+      .setDepth(10).setTint(0xff3355).setAlpha(0.72).setBlendMode('ADD')
       .setDisplaySize(R * 1.05, R * 1.05);
     this._bhRingOuter = this.add.image(x, y, 'ring')
-      .setDepth(9).setTint(0xaa1144).setAlpha(0.28).setBlendMode('ADD')
+      .setDepth(9).setTint(0xaa1144).setAlpha(0.38).setBlendMode('ADD')
       .setDisplaySize(R * 1.65, R * 1.65);
-    this.tweens.add({
+    this._bhRingTween = this.tweens.add({
       targets: this._bhRing,
       angle: 360,
       duration: 2800,
       repeat: -1,
       ease: 'Linear',
     });
-    this.tweens.add({
+    this._bhRingOuterTween = this.tweens.add({
       targets: this._bhRingOuter,
       angle: -360,
       duration: 5200,
       repeat: -1,
       ease: 'Linear',
     });
-    microShake(this, 0.008, 320);
+    fxCameraShake(this, 0.012, 380);
+    screenPunch(this, 0.04, 90);
+    radialBlast(this, x, y, { tint: 0xff2244, scale: 2.8, dur: 520 });
     this.flash('VOID VORTEX', '#ff5577', 750);
     this.drawBlackHoleDisk();
   }
 
   drawBlackHoleDisk() {
     if (!this.blackHole || !this._bhDisk) return;
-    const { x, y, pulse } = this.blackHole;
+    const { x, y, pulse, angle } = this.blackHole;
     const R = Math.min(GAME.WIDTH, GAME.HEIGHT) * GAME.BLACK_HOLE_RADIUS;
     const g = this._bhDisk;
     g.clear();
-    for (let i = 4; i >= 0; i--) {
-      const wobble = Math.sin(pulse * 0.12 + i * 1.1) * 8;
-      const r = R * (0.22 + i * 0.17) + wobble;
-      g.fillStyle(0x220008, 0.06 + i * 0.05);
+    for (let i = 5; i >= 0; i--) {
+      const wobble = Math.sin(pulse * 0.12 + i * 1.1) * 10;
+      const r = R * (0.18 + i * 0.15) + wobble;
+      g.fillStyle(0x220008, 0.08 + i * 0.06);
       g.fillCircle(x, y, r);
     }
-    g.lineStyle(2, 0xff4466, 0.35);
-    g.strokeCircle(x, y, R * 0.55 + Math.sin(pulse * 0.15) * 4);
+    g.lineStyle(2.5, 0xff4466, 0.45);
+    g.strokeCircle(x, y, R * 0.58 + Math.sin(pulse * 0.15) * 5);
+    g.lineStyle(1, 0xff8899, 0.22);
+    g.strokeCircle(x, y, R * 0.82 + Math.sin(pulse * 0.11 + 1) * 4);
+
+    if (this._bhSpiral) {
+      const sg = this._bhSpiral;
+      sg.clear();
+      for (let arm = 0; arm < 3; arm++) {
+        const base = angle + (arm * Math.PI * 2) / 3;
+        sg.lineStyle(2, 0xff5577, 0.28);
+        sg.beginPath();
+        for (let t = 0; t <= 1; t += 0.04) {
+          const r = R * (0.12 + t * 0.72);
+          const a = base + t * Math.PI * 2.4 + pulse * 0.04;
+          const px = x + Math.cos(a) * r;
+          const py = y + Math.sin(a) * r;
+          if (t === 0) sg.moveTo(px, py);
+          else sg.lineTo(px, py);
+        }
+        sg.strokePath();
+      }
+    }
   }
 
   pullBlackHole(dtSec = 1 / 60) {
-    if (!this.blackHole || !this.powerSys.isActive('BlackHole')) return;
+    if (!this.blackHole || !this.powerSys.isActive('BlackHole')) {
+      this.stopBlackHole();
+      return;
+    }
     const { x, y } = this.blackHole;
     const R = Math.min(GAME.WIDTH, GAME.HEIGHT) * GAME.BLACK_HOLE_RADIUS;
-    const pull = 0.14 + dtSec * 4.5;
+    const pull = 0.16 + dtSec * 5.2;
 
     for (const b of this.bricks) {
       if (!b.alive || b.indestructible) continue;
       const d = Math.hypot(b.cx - x, b.cy - y);
-      if (d > R) continue;
+      if (d > R) {
+        if (b._bhAnchorX != null) {
+          b.x = b._bhAnchorX;
+          b.y = b._bhAnchorY;
+          delete b._bhAnchorX;
+          delete b._bhAnchorY;
+          b.sync?.();
+        }
+        continue;
+      }
+      if (b._bhAnchorX == null) {
+        b._bhAnchorX = b.x;
+        b._bhAnchorY = b.y;
+      }
       const t = 1 - d / R;
       const f = pull * t * t;
       b.x += (x - b.cx) * f;
       b.y += (y - b.cy) * f;
-      b.baseX = b.x;
-      if (d < R * 0.14 && b.hit(99)) this.destroyBrick(b, false);
-      b.sync();
+      if (d < R * 0.12 && b.hit(99)) this.destroyBrick(b, false);
+      b.sync?.();
     }
 
     this.blackHole.pulse++;
-    this.blackHole.angle += dtSec * 2.5;
+    this.blackHole.angle += dtSec * 3.2;
     const pulse = this.blackHole.pulse;
-    const wobble = Math.sin(pulse * 0.1) * 0.06;
-    this._bhCore?.setPosition(x, y).setScale((R / 85) * (0.92 + wobble));
+    const wobble = Math.sin(pulse * 0.1) * 0.08;
+    this._bhCore?.setPosition(x, y).setScale((R / 85) * (0.9 + wobble));
     this._bhRing?.setPosition(x, y);
     this._bhRingOuter?.setPosition(x, y);
     this.drawBlackHoleDisk();
 
-    if (pulse % 8 === 0 && this.settings.particles) {
+    if (pulse % 6 === 0 && this.settings.particles) {
       const a = this.blackHole.angle;
-      shardBurst(this, x + Math.cos(a) * R * 0.4, y + Math.sin(a) * R * 0.4, 0xff2244, 3);
+      shardBurst(this, x + Math.cos(a) * R * 0.35, y + Math.sin(a) * R * 0.35, 0xff2244, 4);
     }
   }
 
   stopBlackHole() {
-    this._bhDisk?.destroy();
-    this._bhCore?.destroy();
-    this._bhRing?.destroy();
-    this._bhRingOuter?.destroy();
+    const fadeTargets = [this._bhDisk, this._bhSpiral, this._bhCore, this._bhRing, this._bhRingOuter].filter(Boolean);
+    this._bhRingTween?.remove();
+    this._bhRingOuterTween?.remove();
+    this._bhRingTween = null;
+    this._bhRingOuterTween = null;
+    fadeTargets.forEach((o) => this.tweens.killTweensOf(o));
+
+    for (const b of this.bricks) {
+      if (b._bhAnchorX != null) {
+        b.x = b._bhAnchorX;
+        b.y = b._bhAnchorY;
+        delete b._bhAnchorX;
+        delete b._bhAnchorY;
+        b.sync?.();
+      }
+    }
+
+    if (this.blackHole && fadeTargets.length && this.settings.particles) {
+      const { x, y } = this.blackHole;
+      rippleRing(this, x, y, { tint: 0xff4466, scale: 2.4, dur: 420, pulse: true });
+    }
+
+    fadeTargets.forEach((o) => o.destroy());
     this._bhDisk = null;
+    this._bhSpiral = null;
     this._bhCore = null;
     this._bhRing = null;
     this._bhRingOuter = null;
     this.blackHole = null;
   }
 
+  clearAllBallEchoFx() {
+    this.balls.forEach((b) => this.clearBallEchoFx(b));
+  }
+
   clearBallEchoFx(ball) {
-    if (!ball?._echoSprites?.length) return;
-    ball._echoSprites.forEach((s) => {
+    if (!ball) return;
+    ball._echoTweens?.forEach((tw) => tw.remove());
+    ball._echoTweens = null;
+    ball._echoSprites?.forEach((s) => {
+      if (s?.core) this.tweens.killTweensOf(s.core);
+      if (s?.halo) this.tweens.killTweensOf(s.halo);
       s?.core?.destroy?.();
       s?.halo?.destroy?.();
     });
     ball._echoSprites = null;
-    if (ball._echoCd) ball._echoCd.clear?.();
+    ball._echoRingGfx?.destroy?.();
+    ball._echoRingGfx = null;
+    ball._echoCd?.clear?.();
     ball._echoCd = null;
+    ball._echoNextDamageAt = 0;
+    ball._echoHitThisTick = null;
+  }
+
+  playWrapTunnelFx(x, y, side) {
+    const lw = ballSideInset();
+    const rw = GAME.WIDTH - ballSideInset();
+    const edgeX = side === 'left' ? lw : rw;
+    const g = this.add.graphics().setDepth(28).setBlendMode('ADD');
+    const h = Math.min(GAME.HEIGHT * 0.35, 180);
+    g.fillStyle(0xffe156, 0.12);
+    g.fillRect(edgeX - (side === 'left' ? 0 : 14), y - h / 2, 14, h);
+    g.lineStyle(2, 0xffe156, 0.75);
+    g.lineBetween(edgeX, y - h * 0.42, edgeX, y + h * 0.42);
+    this.tweens.add({
+      targets: g,
+      alpha: 0,
+      duration: 320,
+      ease: 'Cubic.easeOut',
+      onComplete: () => g.destroy(),
+    });
+    rippleRing(this, edgeX, y, { tint: 0xffe156, scale: 2.4, dur: 360, pulse: true });
+    hitSpark(this, x, y, { tint: 0xfff0a0, count: 6, spread: 20 });
   }
 
   freezeMovingBricks(ms) {
@@ -2035,53 +2046,95 @@ export class GameScene extends Phaser.Scene {
   }
 
   updateEchoOrbs(ball, dtSec) {
-    if (!ball.echoMode) {
+    if (!ball.echoMode || !ball.core?.active) {
       this.clearBallEchoFx(ball);
       return;
     }
     ball.echoAngle += dtSec * GAME.ECHO_ORBIT_SPEED;
     const orbitR = Math.max(
       ball.r * GAME.ECHO_ORBIT_RADIUS,
-      BRICK.HEIGHT * 1.15,
-      BRICK.WIDTH * 0.55,
-      52,
+      BRICK.HEIGHT * 0.95,
+      BRICK.WIDTH * 0.45,
+      44,
     );
     const count = GAME.ECHO_ORBIT_COUNT;
-    const nodeR = Math.max(ball.r * 1.1, 10);
+    const nodeR = Math.max(ball.r * 1.05, 9);
+    const hitR = nodeR + BRICK.HEIGHT * (GAME.ECHO_HIT_REACH ?? 0.38);
+    const now = this.time.now;
+    const damageTick = now >= (ball._echoNextDamageAt ?? 0);
 
     if (!ball._echoSprites || ball._echoSprites.length !== count) {
       this.clearBallEchoFx(ball);
       ball._echoSprites = [];
+      ball._echoTweens = [];
       for (let i = 0; i < count; i++) {
         const core = this.add.image(0, 0, 'ball-core')
-          .setDepth(23).setTint(0xf0f0ff).setAlpha(0.9).setBlendMode('ADD');
-        const halo = this.add.image(0, 0, 'orb')
-          .setDepth(22).setTint(0xc8b8ff).setAlpha(0.45).setBlendMode('ADD');
+          .setDepth(23).setTint(0xf0f0ff).setAlpha(0.95).setBlendMode('ADD');
+        const halo = this.add.image(0, 0, 'ring')
+          .setDepth(22).setTint(0xc8b8ff).setAlpha(0.55).setBlendMode('ADD');
         ball._echoSprites.push({ core, halo });
+        ball._echoTweens.push(this.tweens.add({
+          targets: halo,
+          scaleX: { from: 1, to: 1.18 },
+          scaleY: { from: 1, to: 1.18 },
+          alpha: { from: 0.45, to: 0.75 },
+          duration: 420 + i * 40,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        }));
+      }
+      ball._echoRingGfx = this.add.graphics().setDepth(21).setBlendMode('ADD');
+    }
+
+    if (damageTick) {
+      ball._echoNextDamageAt = now + (GAME.ECHO_TICK_MS ?? 180);
+      ball._echoHitThisTick = new Set();
+    }
+
+    if (ball._echoRingGfx) {
+      const rg = ball._echoRingGfx;
+      rg.clear();
+      rg.lineStyle(1.5, 0xc8b8ff, 0.22);
+      rg.strokeCircle(ball.x, ball.y, orbitR);
+      rg.lineStyle(1, 0xe8e0ff, 0.35);
+      for (let i = 0; i < count; i++) {
+        const a = ball.echoAngle + (i * Math.PI * 2) / count;
+        const ex = ball.x + Math.cos(a) * orbitR;
+        const ey = ball.y + Math.sin(a) * orbitR;
+        rg.lineBetween(ball.x, ball.y, ex, ey);
       }
     }
 
     ball._echoCd = ball._echoCd ?? new Map();
-    const now = this.time.now;
+    for (const [br, until] of ball._echoCd) {
+      if (until <= now || !br?.alive) ball._echoCd.delete(br);
+    }
+
     for (let i = 0; i < count; i++) {
       const a = ball.echoAngle + (i * Math.PI * 2) / count;
       const ex = ball.x + Math.cos(a) * orbitR;
       const ey = ball.y + Math.sin(a) * orbitR;
       const sprites = ball._echoSprites[i];
       if (sprites) {
-        sprites.core.setPosition(ex, ey).setDisplaySize(nodeR * 2, nodeR * 2);
-        sprites.halo.setPosition(ex, ey).setDisplaySize(nodeR * 4.2, nodeR * 4.2)
-          .setAlpha(0.38 + 0.12 * Math.sin(this.frame * 0.2 + i));
+        sprites.core.setPosition(ex, ey).setDisplaySize(nodeR * 1.85, nodeR * 1.85);
+        sprites.halo.setPosition(ex, ey).setDisplaySize(nodeR * 3.6, nodeR * 3.6);
       }
-      const hitR = nodeR + BRICK.HEIGHT * 0.65;
+      if (!damageTick) continue;
+      ball._echoHitThisTick ??= new Set();
       for (const br of this.bricks) {
         if (!br.alive || br.indestructible) continue;
+        if (ball._echoHitThisTick.has(br)) continue;
         if ((ball._echoCd.get(br) ?? 0) > now) continue;
         if (Math.hypot(ex - br.cx, ey - br.cy) > hitR) continue;
+        ball._echoHitThisTick.add(br);
+        ball._echoCd.set(br, now + (GAME.ECHO_HIT_COOLDOWN_MS ?? 480));
         if (br.hit(1)) {
           this.destroyBrick(br, true, ball);
-          ball._echoCd.set(br, now + 120);
           hitSpark(this, ex, ey, { tint: 0xe8e0ff, count: 4, spread: 16 });
+          rippleRing(this, ex, ey, { tint: 0xc8b8ff, scale: 1.25, dur: 220 });
+        } else {
+          hitSpark(this, ex, ey, { tint: 0xc8b8ff, count: 2, spread: 10 });
         }
       }
     }
@@ -2156,7 +2209,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.settings.bulletTime && !hitStop && !player) return;
     if (hitStop) this.hitStopRemaining = Math.max(this.hitStopRemaining, GAME.HIT_STOP_MS);
     if (punch) screenPunch(this, wow ? 0.09 : 0.045);
-    if (wow) impactFlash(this, nexus ? 0x4488ff : PAL.accent2, nexus ? 0.14 : 0.18);
+    if (wow) impactFlash(this, nexus ? 0x4488ff : PAL.accent2, nexus ? 0.08 : 0.1);
     if (this.bulletTimeRemaining <= 0) audio.bulletTime();
     if (nexus) {
       this._nexusSlowMo = true;
@@ -2171,7 +2224,7 @@ export class GameScene extends Phaser.Scene {
   fireBlastAt(x, y, radiusMult = 1) {
     audio.fireHit?.();
     fireImpactFx(this, x, y, { tint: PAL.powerFire });
-    this.cameras.main.shake(100, 0.005);
+    fxCameraShake(this, 100, 0.005);
     if (this.settings.particles) this.burst(x, y, PAL.powerFire, 10);
     this.spawnRipple(x, y, PAL.powerFire);
     const R = GAME.EXPLODE_RADIUS * 0.75 * radiusMult;
@@ -2184,47 +2237,53 @@ export class GameScene extends Phaser.Scene {
   /** Electric ball / shock — one-hit any brick type. */
   electricHitBrick(br, ball) {
     audio.cannonHit?.();
-    electricImpactFx(this, br.cx, br.cy);
+    const pen = this.brickPenetration(ball, br);
+    const contact = pen ? this.ballBrickContact(ball, pen) : { x: br.cx, y: br.cy };
+    electricImpactFx(this, contact.x, contact.y);
     this.spawnRipple(br.cx, br.cy, 0xa78bfa);
     br.frostMarked = false;
+    br.electricFlashUntil = this.time.now + 280;
+    br.drawFx?.();
     if (br.indestructible) {
       br.alive = false;
       this.destroyBrick(br, true, ball);
       return;
     }
     if (br.hit(999)) this.destroyBrick(br, true, ball);
+    else br.drawFx?.();
     if (this.powerSys.isActive('ElectricBallII')) {
       for (const nb of this.bricks) {
         if (!nb.alive || nb === br || nb.indestructible) continue;
-        if (Math.hypot(nb.cx - br.cx, nb.cy - br.cy) < br.w * 2.2 && nb.hit(2)) this.destroyBrick(nb, true, ball);
+        if (Math.hypot(nb.cx - br.cx, nb.cy - br.cy) < br.w * 2.2) {
+          nb.electricFlashUntil = this.time.now + 280;
+          nb.drawFx?.();
+          if (nb.hit(2)) this.destroyBrick(nb, true, ball);
+        }
       }
     }
   }
 
   explodeGrid3x3(center, ball = null) {
     audio.explode();
-    this.cameras.main.shake(200, 0.009);
-    explosiveImpactFx(this, center.cx, center.cy, PAL.explosive, { scale: 3.6, shake: 0.009, shards: 14 });
-    if (this.settings.particles) this.explodeEmitter.explode(26, center.cx, center.cy);
+    fxCameraShake(this, 200, 0.009);
+    explosiveImpactFx(this, center.cx, center.cy, PAL.explosive, { scale: 2.2, shake: 0.006, shards: 7 });
+    if (this.settings.particles) this.explodeEmitter.explode(12, center.cx, center.cy);
     this.spawnRipple(center.cx, center.cy, PAL.explosive);
-    const cellW = center.w + BRICK.GAP;
-    const cellH = center.h + BRICK.GAP;
     for (const b of this.bricks) {
       if (!b.alive || b.indestructible) continue;
-      const colD = Math.round(Math.abs(b.cx - center.cx) / cellW);
-      const rowD = Math.round(Math.abs(b.cy - center.cy) / cellH);
-      if (colD <= 1 && rowD <= 1 && b.hit(99)) this.destroyBrick(b, true, ball);
+      if (this.statusSys.gridChebyshev(center, b) > 1) continue;
+      if (b.hit(99)) this.destroyBrick(b, true, ball);
     }
   }
 
   /** Nuke ball — cross-shaped row + column wipe. */
   explodeCrossAt(center, ball = null) {
     audio.explode();
-    this.cameras.main.shake(320, 0.014);
-    screenPunch(this, 0.08, 100);
-    radialBlast(this, center.cx, center.cy, { tint: 0xff2244, scale: 5.5, dur: 680 });
+    fxCameraShake(this, 220, 0.008);
+    screenPunch(this, 0.045, 80);
+    radialBlast(this, center.cx, center.cy, { tint: 0xff2244, scale: 2.8, dur: 520 });
     if (this.settings.bulletTime) this.triggerBulletTime(620, { intensity: 1.1, wow: true, hitStop: true });
-    if (this.settings.particles) this.explodeEmitter.explode(40, center.cx, center.cy);
+    if (this.settings.particles) this.explodeEmitter.explode(18, center.cx, center.cy);
     this.spawnRipple(center.cx, center.cy, 0xff2244);
     for (const b of this.bricks) {
       if (!b.alive) continue;
@@ -2240,8 +2299,11 @@ export class GameScene extends Phaser.Scene {
   chainExplosiveProximity(brick) {
     for (const b of this.bricks) {
       if (!b.alive || b.indestructible || b === brick) continue;
-      if (b.color !== brick.color) continue;
-      if (this.statusSys.gridDistance(brick, b) <= 2 && b.hit(1)) this.destroyBrick(b, false);
+      if (brick.type === 'explosive') {
+        if (b.type !== 'explosive') continue;
+      } else if (b.color !== brick.color) continue;
+      if (this.statusSys.gridChebyshev(brick, b) > 2) continue;
+      if (b.hit(1)) this.destroyBrick(b, false);
     }
   }
 
@@ -2259,7 +2321,12 @@ export class GameScene extends Phaser.Scene {
     entity.syncPosition?.();
     entity.sync?.();
     this.spawnRipple(exit.cx, exit.cy, 0x72f2eb);
-    audio.blip(660);
+    this.feedback.playMoment('portal.teleport', {
+      entryX: entryPortal.cx,
+      entryY: entryPortal.cy,
+      exitX: exit.cx,
+      exitY: exit.cy,
+    });
     return true;
   }
 
@@ -2503,27 +2570,45 @@ export class GameScene extends Phaser.Scene {
       audio.lose();
     }
     this.burst(p.x, p.y, 0xc8773f, 8);
+    p._shadowGfx?.destroy?.();
+    p._shadowGfx = null;
   }
 
-  explodeAt(x, y) {
+  explodeAt(brickOrX, y) {
+    const center = typeof brickOrX === 'object' ? brickOrX : null;
+    const x = center ? center.baseX + center.w / 2 : brickOrX;
+    const cy = center ? center.y + center.h / 2 : y;
     audio.explode();
-    this.cameras.main.shake(240, 0.012);
-    screenPunch(this, 0.06, 85);
-    radialBlast(this, x, y, { tint: PAL.explosive, scale: 4.8, dur: 580 });
+    fxCameraShake(this, 180, 0.007);
+    screenPunch(this, 0.035, 70);
+    radialBlast(this, x, cy, { tint: PAL.explosive, scale: 2.6, dur: 480 });
     if (this.settings.bulletTime) this.triggerBulletTime(520, { intensity: 0.95, punch: false });
-    if (this.settings.particles) this.explodeEmitter.explode(32, x, y);
-    this.spawnRipple(x, y);
+    if (this.settings.particles) this.explodeEmitter.explode(14, x, cy);
+    this.spawnRipple(x, cy);
     this.bricks.forEach((b) => {
       if (!b.alive || b.type === 'gold') return;
-      if (Math.hypot(b.cx - x, b.cy - y) < GAME.EXPLODE_RADIUS) {
-        if (b.hit(99)) { this.score += GAME.SCORE_EXPLODE_CHAIN; if (this.settings.particles) this.burst(b.cx, b.cy, b.color, 4); }
+      const inRange = center?.col != null && b.col != null
+        ? this.statusSys.gridChebyshev(center, b) <= 1
+        : Math.hypot((b.baseX ?? b.x) + b.w / 2 - x, b.y + b.h / 2 - cy) < GAME.EXPLODE_RADIUS;
+      if (!inRange) return;
+      if (b.hit(99)) {
+        this.score += GAME.SCORE_EXPLODE_CHAIN;
+        if (this.settings.particles) this.burst(b.cx, b.cy, b.color, 4);
+        this.destroyBrick(b, false);
       }
     });
   }
 
   spawnRipple(x, y, tint = 0xffb24d) {
-    const ring = this.add.image(x, y, 'ring').setDepth(32).setTint(tint).setBlendMode('ADD').setScale(0.1).setAlpha(0.9);
-    this.tweens.add({ targets: ring, scale: 3.2, alpha: 0, duration: 600, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+    rippleRing(this, x, y, { tint, scale: 1.9, dur: 520, depth: 32 });
+  }
+
+  /** Contact point on ball surface along brick collision normal. */
+  ballBrickContact(ball, pen) {
+    return {
+      x: ball.x - pen.nx * ball.r,
+      y: ball.y - pen.ny * ball.r,
+    };
   }
 
   bounceBallOffBrick(ball, br, passThrough) {
@@ -2550,7 +2635,8 @@ export class GameScene extends Phaser.Scene {
 
     if (br.alive && br.panel?.active) {
       brickNudge(this, br.panel, pen.nx, pen.ny);
-      hitSpark(this, ball.x, ball.y, { tint: br.color, count: 3, spread: 14 });
+      const contact = this.ballBrickContact(ball, pen);
+      hitSpark(this, contact.x, contact.y, { tint: br.color, count: 3, spread: 14 });
     }
   }
 
@@ -2576,16 +2662,16 @@ export class GameScene extends Phaser.Scene {
 
     const base = brick.type === 'silver' || brick.type === 'boss' || brick.type === 'reinforced'
       ? GAME.SCORE_SILVER : GAME.SCORE_BRICK;
-    audio.brickBreak?.(brick.type, fromBall ? this.combo : 0, brick.hp) ?? audio.brick(fromBall ? this.combo : 0);
+    this._lastBreakPos = { x: brick.cx, y: brick.cy };
     if (fromBall) {
       this.combo++;
       this.addBtMeter(GAME.BT_METER_COMBO_FILL);
       this.tryComboBank();
-      this.checkComboWow();
       const mult = this.comboScoreMult();
       const pts = Math.round(base * mult * (this.scoreMultLevel ?? 1));
       this.score += pts;
       this.floatText(brick.cx, brick.cy, mult > 1 ? `+${pts} x${mult}` : `+${pts}`, mult > 1 ? '#ffd23d' : '#e8eefc', mult > 1 ? 32 : 24);
+      this.emitStats();
     } else { this.score += base; }
 
     if (ball?.element === 'frost') audio.frostHit?.();
@@ -2596,16 +2682,20 @@ export class GameScene extends Phaser.Scene {
     else if (ball?.element === 'nuke') breakStyle = 'nuke';
     else if (ball?.element === 'frost') breakStyle = 'frost';
     else if (ball?.element === 'electric') breakStyle = 'electric';
-    brickBreakFx(this, brick.cx, brick.cy, brick.color, {
-      reduced: this.settings.reducedFx,
-      particles: this.settings.particles,
-      style: breakStyle,
+
+    const momentId = breakStyle === 'normal' ? 'brickBreak.normal' : `brickBreak.${breakStyle}`;
+    this.feedback.playMoment(momentId, {
+      x: brick.cx,
+      y: brick.cy,
+      tint: brick.color,
+      brickType: brick.type,
+      fromBall,
+      ball,
+      panX: brick.cx,
     });
-    if (this.settings.particles && breakStyle === 'normal') {
-      const n = fromBall
-        ? (this.settings.reducedFx ? 5 : 9)
-        : 4;
-      this.burst(brick.cx, brick.cy, brick.color, n);
+
+    if (fromBall) {
+      this.checkComboWow();
     }
     if (brick.panel?.active) {
       this.tweens.add({
@@ -2619,7 +2709,7 @@ export class GameScene extends Phaser.Scene {
       });
     }
     if (exploded) {
-      this.explodeAt(brick.cx, brick.cy);
+      this.explodeAt(brick);
       this.chainExplosiveProximity(brick);
     }
 
@@ -2708,6 +2798,8 @@ export class GameScene extends Phaser.Scene {
     this.emitLifeHud();
     this.gnomeStreak = 0;
     this.emitGnomeStreak();
+    this.clearAllBallEchoFx();
+    this.stopBlackHole();
     this.powerSys.clearAll();
     this.paddle.reset();
     this.bullets.forEach((b) => b.destroy());
@@ -2765,16 +2857,14 @@ export class GameScene extends Phaser.Scene {
     const milestones = [8, 16, 24, 32];
     if (!milestones.includes(this.combo)) return;
     const mult = this.comboScoreMult();
-    surgeText(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.38, `COMBO SURGE x${mult}`, '#ffd23d', 40);
-    comboFlare(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.42, 0xffd23d, this.combo);
-    rippleRing(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.42, { tint: 0xffd23d, scale: 3.6, dur: 500 });
-    if (this.combo >= 16 && !this.settings.reducedFx) {
-      impactFlash(this, 0xff44aa, 0.12);
-      microShake(this, 0.008, 140);
-    }
+    const pos = this._lastBreakPos ?? { x: GAME.WIDTH / 2, y: GAME.HEIGHT * 0.4 };
+    this.feedback.playMoment(`brickBreak.combo${this.combo}`, {
+      x: pos.x,
+      y: pos.y,
+      combo: this.combo,
+      mult,
+    });
     if (this.settings.bulletTime) this.triggerBulletTime(360, { intensity: 0.75, punch: true });
-    audio.wowHit?.();
-    hapticPulse(12);
   }
 
   canCompleteLevel() {
@@ -2797,9 +2887,9 @@ export class GameScene extends Phaser.Scene {
     if (this.contract?.id === 'noPotHit') this.contractDone = false;
     this.paddle.stun(GAME.PADDLE_STUN_MS);
     this.combo = 0;
-    impactFlash(this, 0xff5a6e, 0.14);
+    impactFlash(this, 0xff5a6e, 0.08);
     wobble(this, this.paddle.body, { angle: 6, dur: 220, repeat: 0 });
-    rippleRing(this, this.paddle.x, this.paddle.y, { tint: PAL.danger, scale: 2, dur: 280 });
+    rippleRing(this, this.paddle.x, this.paddle.y, { tint: PAL.danger, scale: 1.5, dur: 280 });
     if (this.settings.bulletTime) this.triggerBulletTime(320, { intensity: 0.55 });
     if (this.settings.flashText) this.flash(msg, '#ff5a6e', 450);
     this.score = Math.max(0, this.score - GAME.SCORE_STUN_PENALTY);
@@ -2965,13 +3055,13 @@ export class GameScene extends Phaser.Scene {
       const W = GAME.WIDTH;
       const H = GAME.HEIGHT;
       audio.fortressShatter?.();
-      microShake(this, 0.014, 220);
-      screenPunch(this, 0.11, 150);
-      impactFlash(this, PAL.accent2, 0.18);
-      const shardN = this.settings.reducedFx ? 6 : 12;
+      microShake(this, 0.008, 180);
+      screenPunch(this, 0.06, 120);
+      impactFlash(this, PAL.accent2, 0.1);
+      const shardN = this.settings.reducedFx ? 4 : 7;
       shardBurst(this, wx + 8, wt + 48, PAL.accent2, shardN);
       shardBurst(this, W - wx - 8, wt + 48, PAL.accent2, shardN);
-      shardBurst(this, W / 2, wt + 24, 0xffd23d, this.settings.reducedFx ? 8 : 16);
+      shardBurst(this, W / 2, wt + 24, 0xffd23d, this.settings.reducedFx ? 5 : 9);
       this.tweens.add({
         targets: this.arenaGfx,
         scaleX: 1.12,
@@ -2981,8 +3071,8 @@ export class GameScene extends Phaser.Scene {
         ease: 'Cubic.easeOut',
       });
     }
-    spawnConfetti(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.35, this.settings.reducedFx ? 28 : 56);
-    radialBlast(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.35, { tint: PAL.accent2, scale: 5, dur: 640 });
+    spawnConfetti(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.35, this.settings.reducedFx ? 16 : 32);
+    radialBlast(this, GAME.WIDTH / 2, GAME.HEIGHT * 0.35, { tint: PAL.accent2, scale: 2.6, dur: 520 });
     if (this.settings.bulletTime) this.triggerBulletTime(550, { punch: true, intensity: 1, wow: true });
     RunPersistence.saveRun(this);
     this.scene.pause();
@@ -3039,6 +3129,7 @@ export class GameScene extends Phaser.Scene {
       this.arenaGfx.setScale(1);
     }
     this.powerDropSeq = 0;
+    this.clearAllBallEchoFx();
     this.powerSys.clearAll();
     this.statusSys.clear();
     this.stopBlackHole();
@@ -3088,6 +3179,7 @@ export class GameScene extends Phaser.Scene {
     const bricksTotal = Math.max(1, this._levelDestructibles ?? bricksLeft);
     this.bus?.emit('hud:stats', {
       score: this.score, lives: this.lives, level: this.level,
+      combo: this.combo,
       bricksLeft,
       brickProgress: clamp(1 - bricksLeft / bricksTotal, 0, 1),
       difficulty: this.difficulty?.rating ?? 1,
@@ -3217,6 +3309,9 @@ export class GameScene extends Phaser.Scene {
     const dtSec = Math.min(realDt / 1000, 1 / 20) * ts;
     const dtMs = realDt * ts;
     this.frame++;
+    this.feedback?.resetBurstBudget(this.frame);
+    const musicIntensity = (this.combo > 8 || this.isBoss) ? Math.min(1, (this.combo - 8) / 16 + (this.isBoss ? 0.3 : 0)) : 0;
+    audio.setMusicIntensity(musicIntensity);
 
     this.powerSys.tick(dtMs);
     this.statusSys.tick();
@@ -3318,6 +3413,9 @@ export class GameScene extends Phaser.Scene {
       const frozen = this.isTimeFrozen();
 
       const throwResult = j.update(dtMs * throwScale, dtSec, env, frozen);
+      if (j.state === JSTATE.IDLE && j.brick?.alive && Math.random() < 0.002) {
+        audio.gnomeIdleClink?.({ pan: j.x });
+      }
       if (throwResult === 'throw' && !this._nexusSlowMo && this.pots.length < 8) {
         const payload = j.createThrowPayload(this.paddle.x);
         this.pots.push(new GnomeProjectile(this, j.x, j.y, this.paddle.x, {
@@ -3365,7 +3463,7 @@ export class GameScene extends Phaser.Scene {
     this.score += SCORE_ENEMY;
     this.floatText(e.x, e.y, `+${SCORE_ENEMY}`, '#' + e.color.toString(16).padStart(6, '0'), 28);
     this.burst(e.x, e.y, e.color, 12);
-    this.cameras.main.shake(120, 0.006);
+    fxCameraShake(this, 120, 0.006);
     audio.blip(660);
   }
 
@@ -3431,33 +3529,31 @@ export class GameScene extends Phaser.Scene {
       const span = rw - lw;
       if (ball.x < lw + ball.r) {
         ball.x += span;
-        hitSpark(this, ball.x, ball.y, { tint: 0xffe156, count: 4, spread: 16 });
-        rippleRing(this, ball.x, ball.y, { tint: 0xffe156, scale: 1.8, dur: 220 });
-        audio.wall();
+        this.playWrapTunnelFx(ball.x, ball.y, 'left');
+        audio.wall({ pan: ball.x, volScale: 0.85 });
       } else if (ball.x > rw - ball.r) {
         ball.x -= span;
-        hitSpark(this, ball.x, ball.y, { tint: 0xffe156, count: 4, spread: 16 });
-        rippleRing(this, ball.x, ball.y, { tint: 0xffe156, scale: 1.8, dur: 220 });
-        audio.wall();
+        this.playWrapTunnelFx(ball.x, ball.y, 'right');
+        audio.wall({ pan: ball.x, volScale: 0.85 });
       }
     } else {
       if (ball.x <= lw + ball.r) {
         ball.x = lw + ball.r;
         if (ball.vx < 0) ball.vx = -ball.vx;
         hitSpark(this, ball.x, ball.y, { tint: PAL.accent, count: 2, spread: 10 });
-        audio.wall();
+        audio.wall({ pan: ball.x, volScale: Math.abs(ball.vx) < 200 ? 0.5 : 1 });
       } else if (ball.x >= rw - ball.r) {
         ball.x = rw - ball.r;
         if (ball.vx > 0) ball.vx = -ball.vx;
         hitSpark(this, ball.x, ball.y, { tint: PAL.accent, count: 2, spread: 10 });
-        audio.wall();
+        audio.wall({ pan: ball.x, volScale: Math.abs(ball.vx) < 200 ? 0.5 : 1 });
       }
     }
     if (ball.y < tw + ball.r) {
       ball.y = tw + ball.r;
       ball.vy = Math.abs(ball.vy);
       hitSpark(this, ball.x, ball.y, { tint: PAL.accent3, count: 2, spread: 10 });
-      audio.wall();
+      audio.wall({ pan: ball.x, volScale: Math.abs(ball.vy) < 200 ? 0.5 : 1 });
     }
   }
 
@@ -3471,15 +3567,24 @@ export class GameScene extends Phaser.Scene {
     ball.enforceMinVertical();
     ball.accelerateOnBounce();
     this.combo = 0;
-    audio.paddle();
-    squashStretch(this, this.paddle.body);
-    hitSpark(this, ball.x, this.paddle.top, { tint: this.paddle.glowColor(), count: 5, spread: 18 });
-    if (this.settings.particles) this.burst(ball.x, this.paddle.top, this.paddle.glowColor(), 4);
+    this.emitStats();
+    const clutchRel = Math.abs(rel);
+    const clutch = clutchRel >= 0.78 && this.awardClutchBounce(ball);
+    const edgeX = clutch
+      ? (ball.x < this.paddle.x ? this.paddle.left : this.paddle.right)
+      : ball.x;
+    const velocity = sp / (GAME.BALL_MAX_SPEED || 1220);
+    this.feedback.playMoment('paddle.catch', {
+      x: edgeX,
+      y: this.paddle.top,
+      tint: this.paddle.glowColor(),
+      velocity,
+      clutch,
+    });
     if (this.paddle.sticky) {
       ball.stuck = true;
       ball.stuckOffset = clamp(ball.x - this.paddle.x, -this.paddle.w / 2, this.paddle.w / 2);
     }
-    this.awardClutchBounce(ball);
     return true;
   }
 
@@ -3556,11 +3661,10 @@ export class GameScene extends Phaser.Scene {
       ) {
         ball.vy = -Math.abs(ball.vy);
         ball.y = shieldBar.top - ball.r - 0.5;
-        rippleRing(this, ball.x, shieldBar.top, {
+        this.feedback.playMoment('shield.save', {
+          x: ball.x,
+          y: shieldBar.top,
           tint: this.powerSys.isActive('ShieldII') ? 0xffffff : powerFillColor('Shield'),
-          scale: 2.2,
-          dur: 280,
-          depth: 22,
         });
         this.shieldHitsLeft = (this.shieldHitsLeft || 1) - 1;
         if (this.shieldHitsLeft <= 0) {
@@ -3759,16 +3863,31 @@ export class GameScene extends Phaser.Scene {
 
   updatePots(dtSec, ts) {
     const g = this.fallGravityMult();
+    const lowerThird = GAME.HEIGHT * 0.66;
     for (let i = this.pots.length - 1; i >= 0; i--) {
       const p = this.pots[i];
       p.update(dtSec, ts * g, this.paddle);
+      if (!p._telegraphed && p.y > lowerThird) {
+        p._telegraphed = true;
+        this.feedback.playMoment('pot.incoming', { x: p.x, y: p.y });
+        if (!p._shadowGfx && this.settings.particles) {
+          const landX = p.tracking ? this.paddle.x : p.x + p.vx * 0.4;
+          p._shadowGfx = this.add.graphics().setDepth(28);
+          p._shadowGfx.fillStyle(0x08050c, 0.25);
+          p._shadowGfx.fillEllipse(landX, GAME.HEIGHT - 48, p.r * 2.2, p.r * 0.5);
+        }
+      }
       if (p.hitsPaddle(this.paddle)) {
         this.handleProjectileHit(p);
         p.destroy();
         this.pots.splice(i, 1);
         continue;
       }
-      if (p.y > GAME.HEIGHT + 40) { p.destroy(); this.pots.splice(i, 1); }
+      if (p.y > GAME.HEIGHT + 40) {
+        p._shadowGfx?.destroy?.();
+        p.destroy();
+        this.pots.splice(i, 1);
+      }
     }
   }
 

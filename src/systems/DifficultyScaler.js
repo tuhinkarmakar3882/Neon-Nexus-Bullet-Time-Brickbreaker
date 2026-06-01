@@ -1,12 +1,8 @@
-import { GAME, JARDINAIN, playfieldLayoutScale } from '../config/Constants.js';
+import { GAME, JARDINAIN, playfieldLayoutScale, isCompactLayout } from '../config/Constants.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 const BAND_LABELS = ['GARDEN', 'GROWING', 'WILD', 'OVERGROWN', 'CHAOS', 'NEXUS'];
-
-function layoutIsMobile() {
-  return GAME.IS_PORTRAIT;
-}
 
 /**
  * Progressive difficulty — driven by level index only (not campaign seed).
@@ -15,7 +11,7 @@ function layoutIsMobile() {
 export function difficultyFor(level) {
   const t = Math.max(0, level - 1);
   const band = Math.min(BAND_LABELS.length - 1, Math.floor(t / 5));
-  const mobile = layoutIsMobile();
+  const compact = isCompactLayout();
 
   return {
     level,
@@ -28,17 +24,19 @@ export function difficultyFor(level) {
     bounceAccelMult: clamp(1 + t * 0.004, 1, 1.12),
     brickHpMult: clamp(1 + t * 0.018 + (level <= 5 ? 0.08 : 0), 1, 1.55),
 
-    rowBonus: Math.min(14, Math.floor(t / 0.95) + (level <= 4 ? 0 : level <= 8 ? 1 : 2)),
-    layoutRowBonus: (mobile
-      ? (level <= 4 ? 1 : 3) + Math.floor(t / 1.4)
-      : (level <= 4 ? 1 : 2) + Math.floor(t / 2.8))
+    rowBonus: Math.min(12, Math.floor(t / 1.05) + (level <= 4 ? 0 : level <= 8 ? 1 : 2)),
+    layoutRowBonus: (compact
+      ? (level <= 4 ? 2 : 3) + Math.floor(t / 1.1)
+      : (level <= 4 ? 1 : 2) + Math.floor(t / 3))
       + Math.floor((playfieldLayoutScale() - 1) * 4),
-    layoutMaxRows: mobile ? 24 : 22,
-    layoutDensityBoost: (mobile ? 0.12 : 0.09) + (playfieldLayoutScale() - 1) * 0.06,
+    layoutMaxRows: compact ? 24 : 20,
+    layoutDensityBoost: (compact ? 0.14 : 0.08) + (playfieldLayoutScale() - 1) * 0.06,
     /** Small deterministic row wobble from level (not RNG) */
     rowJitter: (level % 3) - 1,
-    patternDensity: clamp(1.14 + t * 0.012, 1.14, 1.28),
-    sparsePatternBoost: clamp(1.08 + t * 0.006, 1.08, 1.18),
+    patternDensity: clamp(1.1 + t * 0.01, 1.1, 1.24),
+    sparsePatternBoost: compact
+      ? clamp(0.94 + t * 0.004, 0.94, 1.04)
+      : clamp(1.06 + t * 0.005, 1.06, 1.16),
     /** Gnome pot cadence — slow early, ramps to full pressure (~level 22+). */
     potThrowRateMult: clamp(0.42 + t * 0.028, 0.42, 1.05),
     potSpeedMult: clamp(0.5 + t * 0.026, 0.5, 1.12),
@@ -65,7 +63,7 @@ export function difficultyFor(level) {
 
     lifeRewardEvery: level <= 5 ? 2 : level <= 15 ? 3 : 4,
 
-    zoneCount: levelZoneCount(level, mobile),
+    zoneCount: levelZoneCount(level, compact),
     /** Per-level brick HP multiplier from layout pace (siege / standard / blitz). */
     brickHpPaceMult: 1,
     typeRolls: brickTypeRolls(level, t),
@@ -74,9 +72,9 @@ export function difficultyFor(level) {
 }
 
 /** How many vertical zones a non-boss level uses (level-only). */
-export function levelZoneCount(level, isMobile = layoutIsMobile()) {
-  /** Stacked hybrid zones — early levels use 3+ distinct patterns (no plain rows grid). */
-  if (isMobile) {
+export function levelZoneCount(level, isCompact = isCompactLayout()) {
+  /** Stacked hybrid zones — early levels still use multiple distinct patterns. */
+  if (isCompact) {
     if (level <= 8) return 3;
     if (level <= 14) return level % 5 === 0 ? 4 : 3;
     return level % 5 === 0 ? 4 : 3;
@@ -126,9 +124,10 @@ export function scaledBallBaseSpeed(level) {
 /** Total brick rows for a level (boss or normal). */
 export function levelBrickRows(level, diff, isBoss, rowCap) {
   const rowJitter = diff.rowJitter ?? 0;
+  const compact = isCompactLayout();
   const base = isBoss
     ? 8 + (level % 2)
     : 6 + diff.rowBonus + diff.layoutRowBonus + rowJitter + (level % 2);
-  const floor = level <= 4 ? 6 : 7;
+  const floor = compact ? (level <= 4 ? 5 : 6) : (level <= 4 ? 4 : 5);
   return clamp(base, floor, rowCap);
 }
