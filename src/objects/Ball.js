@@ -1,16 +1,16 @@
 import { GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
-import { fxTrailMult, fxGlowScale } from '../utils/FxBudget.js';
+import { fxTrailMult, fxParticleScale } from '../utils/FxBudget.js';
 import { clamp } from '../utils/Helpers.js';
 
 const TRAIL_PROFILES = {
-  comet: { tex: 'trail-plasma', frequency: 14, lifespan: 320, scale: 0.38, speedMin: 4, speedMax: 18 },
-  gold: { tex: 'ember', frequency: 10, lifespan: 400, scale: 0.36, speedMin: 6, speedMax: 22 },
-  rose: { tex: 'spark-shard', frequency: 16, lifespan: 300, scale: 0.18, speedMin: 4, speedMax: 16 },
-  ember: { tex: 'ember', frequency: 9, lifespan: 380, scale: 0.4, speedMin: 8, speedMax: 24 },
-  frost: { tex: 'spark-shard', frequency: 12, lifespan: 340, scale: 0.22, speedMin: 3, speedMax: 14 },
-  nexus: { tex: 'trail-plasma', frequency: 8, lifespan: 420, scale: 0.44, speedMin: 8, speedMax: 28 },
-  void: { tex: 'trail-plasma', frequency: 7, lifespan: 450, scale: 0.42, speedMin: 6, speedMax: 20 },
+  comet: { tex: 'trail-plasma', targetPx: 14, frequency: 12, lifespan: 340, speedMin: 4, speedMax: 20 },
+  gold: { tex: 'ember', targetPx: 12, frequency: 9, lifespan: 420, speedMin: 6, speedMax: 24 },
+  rose: { tex: 'spark-shard', targetPx: 9, frequency: 14, lifespan: 320, speedMin: 4, speedMax: 18 },
+  ember: { tex: 'ember', targetPx: 13, frequency: 8, lifespan: 400, speedMin: 8, speedMax: 26 },
+  frost: { tex: 'spark-shard', targetPx: 10, frequency: 11, lifespan: 360, speedMin: 3, speedMax: 16 },
+  nexus: { tex: 'trail-plasma', targetPx: 16, frequency: 7, lifespan: 440, speedMin: 8, speedMax: 30 },
+  void: { tex: 'trail-plasma', targetPx: 15, frequency: 6, lifespan: 460, speedMin: 6, speedMax: 22 },
 };
 
 /** Per-ball hue when several balls are on screen — ring/trail only until a mod is active. */
@@ -63,12 +63,13 @@ export class Ball {
   buildTrail() {
     const p = TRAIL_PROFILES[this._trailId] ?? TRAIL_PROFILES.comet;
     const tm = fxTrailMult(this.scene);
+    const trailScale = fxParticleScale(this.scene, p.tex, p.targetPx ?? 14) * Math.min(1.25, tm);
     this._trailTex = p.tex;
     return this.scene.add.particles(0, 0, p.tex, {
       follow: this.trailTarget,
       speed: { min: p.speedMin * tm, max: p.speedMax * tm },
-      scale: { start: p.scale * tm, end: 0 },
-      alpha: { start: 0.72 * Math.min(1.2, tm), end: 0 },
+      scale: { start: trailScale, end: 0 },
+      alpha: { start: 0.78 * Math.min(1.25, tm), end: 0 },
       lifespan: p.lifespan,
       frequency: tm > 0 ? Math.max(4, Math.round(p.frequency / tm)) : 9999,
       tint: 0xffffff,

@@ -498,9 +498,10 @@ export function spawnConfetti(scene, x, y, count = 64) {
   const n = fxConfettiCount(scene, count);
   if (n <= 0 || !scene.textures.exists('soft')) return;
   const tex = scene.textures.exists('spark-shard') ? ['soft', 'spark-shard', 'ember'] : ['soft'];
+  const sizeMult = scene?.settings?.particleSizeMult ?? 0.82;
   scene.add.particles(x, y, tex, {
     speed: { min: 180, max: 520 },
-    scale: { start: 0.7, end: 0 },
+    scale: { start: 0.52 * sizeMult, end: 0 },
     lifespan: 900,
     blendMode: 'ADD',
     quantity: n,

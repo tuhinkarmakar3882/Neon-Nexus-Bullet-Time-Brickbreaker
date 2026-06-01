@@ -82,7 +82,8 @@ export const GAME = {
   /** Reserved strip at bottom for paddle, ball, and touch targets. */
   PLAY_MARGIN_BOTTOM: 72,
   MAX_BULLETS: 160,
-  MAX_POWERS: 24,
+  /** Max falling power-up capsules on screen at once. */
+  MAX_POWERS: 5,
 
   SCORE_BRICK: 50,
   SCORE_SILVER: 90,
@@ -94,8 +95,8 @@ export const GAME = {
   JUGGLE_CONCURRENCY_CAP: 3,
   COMBO_MULT_STEP: 8,
   COMBO_MULT_MAX: 3,
-  GNOME_DROP_CHANCE: 0.35,
-  GNOME_DISLODGE_DROP_CHANCE: 0.55,
+  GNOME_DROP_CHANCE: 0.18,
+  GNOME_DISLODGE_DROP_CHANCE: 0.28,
   /** Gnome streak meter — fills toward a 3-choice power draft */
   GNOME_STREAK_MAX: 100,
   /** Slow in-run trickle — main fill comes from level bonus. */
@@ -134,6 +135,8 @@ export const GAME = {
   BT_NEXUS_TIME_SCALE: 0.10,
   BT_NEXUS_INTENSITY_MIN: 1.2,
   BT_NEXUS_INTENSITY_MAX: 1.75,
+  /** Score per hazard removed when spending Nexus slow-mo. */
+  BT_NEXUS_HAZARD_SCORE: 35,
 
   /** Cooldown after portal teleport — prevents ping-pong between linked bricks. */
   PORTAL_GRACE_MS: 220,
@@ -156,7 +159,7 @@ export const BRICK = {
   /** Classic tile proportions (width : height). */
   WIDTH: 96,
   HEIGHT: 38,
-  GAP: 10,
+  GAP: 0,
   DESIGN_RATIO: 96 / 38,
   HP: { normal: 1, silver: 2, gold: Infinity, steel: Infinity, explosive: 1, nest: 1, boss: 3, reinforced: 2, invisible: 1, portal: 1, shifting: 1, mirror: 1, moss: 2, beehive: 1, seedpod: 1, linked: 1, hostage: 1 },
 };
@@ -296,8 +299,10 @@ export function computeLayout(winW, winH, insets) {
   JARDINAIN.LAUNCH_SPEED = Math.round(H * 1.15);
   JARDINAIN.DISLODGE_SPEED = Math.round(H * 0.65);
 
-  BRICK.GAP = Math.round(clampN(H * (isPortrait ? 0.0032 : 0.004), 3, 6));
-  BRICK.HEIGHT = Math.round(clampN(H * (isPortrait ? 0.052 : 0.048), 32, 46));
+  /** No gutter between bricks — grid is flush (pattern holes only). */
+  BRICK.GAP = 0;
+  /** Readable tile size — scales with viewport, capped for very tall screens. */
+  BRICK.HEIGHT = Math.round(clampN(H * (isPortrait ? 0.054 : 0.048), 34, 52));
   BRICK.WIDTH = Math.round(BRICK.HEIGHT * BRICK.DESIGN_RATIO);
 
   if (typeof document !== 'undefined') {
@@ -325,6 +330,22 @@ export function ballSideInset() {
 export function playfieldSideInset() {
   if (GAME.USE_DOM_HUD) return BRICK.GAP;
   return GAME.WALL_X + BRICK.GAP;
+}
+
+/**
+ * Playfield area vs reference phone layout — drives column/row/density on large screens.
+ * ~1.0 on typical mobile portrait; up to ~1.5 on wide desktop.
+ */
+export function playfieldLayoutScale() {
+  const inset = playfieldSideInset();
+  const w = Math.max(200, GAME.WIDTH - inset * 2);
+  const top = GAME.WALL_TOP + BRICK.GAP * 2;
+  const bottom = (GAME.ARENA_FLOOR ?? GAME.HEIGHT) - BRICK.GAP * 2;
+  const h = Math.max(200, bottom - top);
+  const refW = 360;
+  const refH = GAME.IS_PORTRAIT ? 520 : 440;
+  const scale = Math.sqrt((w * h) / (refW * refH));
+  return Math.max(0.92, Math.min(1.5, scale));
 }
 
 export const STORAGE = {

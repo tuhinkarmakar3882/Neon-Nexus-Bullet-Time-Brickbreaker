@@ -67,7 +67,8 @@ export function regenerateBrickPanelTextures(scene) {
 }
 
 export function generateTextures(scene) {
-  makeSoftCircle(scene, 'soft', ts(64));
+  makeSoftCircle(scene, 'soft', ts(48));
+  makeFxGlow(scene, 'fx-glow', ts(32));
   makeSoftCircle(scene, 'spark', ts(20));
   makeSparkStreak(scene, 'spark-streak', ts(28), ts(10));
   makeSparkShard(scene, 'spark-shard', ts(14));
@@ -124,6 +125,21 @@ function makeSoftCircle(scene, key, size) {
   grad.addColorStop(0, 'rgba(255,252,245,1)');
   grad.addColorStop(0.35, 'rgba(255,255,255,0.75)');
   grad.addColorStop(0.7, 'rgba(255,255,255,0.15)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  canvas.refresh();
+}
+
+/** Tint-friendly gameplay glow — less white core than `soft` (avoids blocky bursts). */
+function makeFxGlow(scene, key, size) {
+  if (scene.textures.exists(key)) return;
+  const { canvas, ctx } = ctxOf(scene, key, size, size);
+  const r = size / 2;
+  const grad = ctx.createRadialGradient(r * 0.88, r * 0.88, 0, r, r, r);
+  grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+  grad.addColorStop(0.45, 'rgba(200,230,255,0.55)');
+  grad.addColorStop(0.75, 'rgba(120,180,255,0.2)');
   grad.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);

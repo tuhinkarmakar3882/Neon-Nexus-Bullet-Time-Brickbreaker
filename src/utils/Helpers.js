@@ -13,10 +13,18 @@ export const randInt = (a, b) => Math.floor(rand(a, b + 1));
 export const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
 export const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 
-// Brick power-up drop chance — ~30% at level 1, exponential decay to 12% floor.
-export function dropChance(level, min = 0.12, max = 0.3, rate = 0.08) {
+// Brick power-up drop ceiling — actual rate is min(this, budget / bricks left) in GameScene.
+export function dropChance(level, min = 0.02, max = 0.06, rate = 0.11) {
   const t = Math.max(0, (level ?? 1) - 1);
   return Math.max(min, max * Math.exp(-rate * t));
+}
+
+/** Max brick-sourced capsules per level (dense boards use scaled per-brick chance). */
+export function brickPowerDropBudget(level) {
+  const lv = level ?? 1;
+  if (lv % 5 === 0) return 4;
+  if (lv < 6) return 2;
+  return 3;
 }
 
 // Cannon fire-rate / black-hole scaling: shrinks toward `min` as level rises.

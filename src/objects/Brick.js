@@ -40,13 +40,18 @@ export class Brick {
     this.moveSpeed = opts.moveSpeed ?? 1;
     this.moveAmp = opts.moveAmp ?? 0;
     this.t = 0;
+    this._lastCx = x + w / 2;
+    this._vxSmoothed = 0;
+    this.sizePulse = type === 'shifting'
+      || Math.abs(h - BRICK.HEIGHT) > BRICK.HEIGHT * 0.06;
     this.revealed = type !== 'invisible';
 
     let hp = BRICK.HP[type] ?? 1;
     if (type === 'silver') hp = Math.min(5, 2 + Math.floor(level / 4));
     if (type === 'reinforced') hp = clamp(2 + Math.floor(level / 8), 2, 4);
     const diff = difficultyFor(level);
-    hp = Math.max(1, Math.round(hp * diff.brickHpMult));
+    const paceMult = opts.hpPaceMult ?? diff.brickHpPaceMult ?? 1;
+    hp = Math.max(1, Math.round(hp * diff.brickHpMult * paceMult));
     this.maxHp = hp;
     this.hp = hp;
 
@@ -59,6 +64,7 @@ export class Brick {
     const panelKey = INDESTRUCTIBLE_PANEL[type] ?? 'panel';
     const useTint = !INDESTRUCTIBLE_PANEL[type];
     const slice = brickPanelInsets(w, h);
+    const bleed = 0;
     this.panel = scene.add.nineslice(
       this.cx, this.cy, panelKey, undefined, w, h,
       slice.left, slice.right, slice.top, slice.bottom,
@@ -169,9 +175,6 @@ export class Brick {
       g.strokeCircle(w / 2, h / 2, h * 0.34);
       g.fillStyle(0x2fe6c7, 0.22);
       g.fillCircle(w / 2, h / 2, h * 0.22);
-    } else if (this.type === 'invisible' && !this.revealed) {
-      g.lineStyle(1, 0xffffff, 0.1);
-      g.strokeRoundedRect(3, 3, w - 6, h - 6, 6);
     }
 
     if (this.isBonus) {
@@ -196,12 +199,18 @@ export class Brick {
       g.lineStyle(2, 0xffaa44, 0.85);
       g.strokeRoundedRect(2, 2, w - 4, h - 4, 6);
     }
+
   }
 
   update(dtSec) {
-    if (!this.moving || !this.alive || this.frozen) return;
-    this.t += dtSec * this.moveSpeed;
-    this.x = this.baseX + Math.sin(this.t + this.movePhase) * this.moveAmp;
+    this.t += dtSec * (this.sizePulse ? this.moveSpeed * 0.85 : this.moveSpeed);
+    if (this.moving && this.alive && !this.frozen) {
+      const prevCx = this.cx;
+      this.x = this.baseX + Math.sin(this.t + this.movePhase) * this.moveAmp;
+      const vx = (this.cx - prevCx) / Math.max(dtSec, 0.001);
+      this._vxSmoothed += (vx - this._vxSmoothed) * Math.min(1, dtSec * 14);
+      this._lastCx = this.cx;
+    }
   }
 
   hit(damage = 1) {
@@ -256,10 +265,29 @@ export class Brick {
   }
 
   sync() {
+    let pulse = 1;
+    if (this.sizePulse && this.alive) {
+      pulse = 1 + 0.04 * Math.sin(this.t * 2.1 + this.movePhase);
+    }
     this.panel.setPosition(this.cx, this.cy);
+    if (pulse !== 1) {
+      this.panel.setSize(this.w * pulse, this.h * pulse);
+    } else if (this.panel.width !== this.w || this.panel.height !== this.h) {
+      this.panel.setSize(this.w, this.h);
+    }
+    if (this.moving && this.alive && !this.frozen) {
+      const tilt = clamp(this._vxSmoothed * 0.08, -3, 3);
+      this.panel.setAngle(tilt);
+    } else {
+      this.panel.setAngle(0);
+    }
     this.badge?.setPosition(this.cx, this.cy);
+    if (this.badge && pulse !== 1) this.badge.setScale(pulse);
     this.fx.x = this.x; this.fx.y = this.y;
-    if (this.crackImg) this.crackImg.setPosition(this.cx, this.cy);
+    if (this.crackImg) {
+      this.crackImg.setPosition(this.cx, this.cy);
+      if (pulse !== 1) this.crackImg.setDisplaySize(this.w * pulse, this.h * pulse);
+    }
   }
 
   destroy() {

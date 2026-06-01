@@ -39,3 +39,18 @@ export function fxGlowScale(scene, base = 1) {
 export function fxImpactScale(scene, base = 1) {
   return base * fxMult(scene, 'impactMult', 1);
 }
+
+/** On-screen particle diameter in logical px (before quality tier). */
+export function fxParticleSize(scene, basePx = 10) {
+  return basePx * fxMult(scene, 'particleSizeMult', 0.82);
+}
+
+/** Emitter scale so particles render near `targetPx` regardless of texture bake size. */
+export function fxParticleScale(scene, texKey, targetPx = 10) {
+  const frame = scene?.textures?.get(texKey)?.get();
+  const w = frame?.width ?? 64;
+  const sizePx = fxParticleSize(scene, targetPx);
+  const scale = sizePx / Math.max(4, w);
+  const cap = (sizePx * 1.35) / Math.max(4, w);
+  return Math.min(scale, cap);
+}

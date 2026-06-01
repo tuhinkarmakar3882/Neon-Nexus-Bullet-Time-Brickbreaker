@@ -1,6 +1,6 @@
 /** Lightweight micro-animation helpers — keep motion snappy (<400ms). */
 
-import { fxCount, fxParticlesOn, fxShake, fxImpactScale, fxGlowScale } from './FxBudget.js';
+import { fxCount, fxParticlesOn, fxShake, fxImpactScale, fxGlowScale, fxParticleSize } from './FxBudget.js';
 import { displayStyle } from './Typography.js';
 
 export function popScale(scene, target, opts = {}) {
@@ -81,9 +81,9 @@ export function rippleRing(scene, x, y, opts = {}) {
   const impact = fxImpactScale(scene, 1);
   const ringScale = scale * impact;
   const ring = scene.add.image(x, y, 'ring').setDepth(depth).setTint(tint)
-    .setBlendMode('ADD').setScale(0.08).setAlpha(0.85 * impact);
+    .setBlendMode('ADD').setScale(0.1).setAlpha(0.92 * impact);
   const ring2 = scene.add.image(x, y, 'ring').setDepth(depth - 1).setTint(0xffffff)
-    .setBlendMode('ADD').setScale(0.05).setAlpha(0.35 * impact);
+    .setBlendMode('ADD').setScale(0.06).setAlpha(0.45 * impact);
   scene.tweens.add({
     targets: ring,
     scaleX: ringScale,
@@ -136,8 +136,9 @@ export function shardBurst(scene, x, y, color, count = 6) {
     const a = (i / n) * Math.PI * 2 + Math.random() * 0.5;
     const dist = 22 + Math.random() * 38;
     const tex = Math.random() > 0.45 ? 'spark-shard' : 'spark';
+    const sparkPx = fxParticleSize(scene, 7);
     const s = scene.add.image(x, y, tex).setDepth(33).setTint(color)
-      .setDisplaySize(5 + Math.random() * 7, 5 + Math.random() * 7)
+      .setDisplaySize(sparkPx + Math.random() * sparkPx, sparkPx + Math.random() * sparkPx * 0.85)
       .setAlpha(0.92).setRotation(Math.random() * Math.PI);
     scene.tweens.add({
       targets: s,
@@ -164,8 +165,9 @@ export function tileChipBurst(scene, x, y, color, count = 5) {
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + Math.random() * 0.6;
     const dist = 14 + Math.random() * 28;
+    const chipW = fxParticleSize(scene, 8);
     const chip = scene.add.image(x, y, 'tile-chip').setDepth(32).setTint(color)
-      .setDisplaySize(8 + Math.random() * 6, 6 + Math.random() * 4)
+      .setDisplaySize(chipW + Math.random() * chipW * 0.7, chipW * 0.75 + Math.random() * chipW * 0.5)
       .setAlpha(0.95).setRotation(Math.random() * Math.PI);
     scene.tweens.add({
       targets: chip,
@@ -188,9 +190,10 @@ export function dustPuff(scene, x, y, tint = 0xffffff, count = 4) {
   for (let i = 0; i < n; i++) {
     const a = Math.random() * Math.PI * 2;
     const d = 8 + Math.random() * 16;
-    const p = scene.add.image(x, y, 'soft').setDepth(31).setTint(tint)
-      .setDisplaySize(10 + Math.random() * 14, 10 + Math.random() * 14)
-      .setAlpha(0.22).setBlendMode('ADD');
+    const dustPx = fxParticleSize(scene, 9);
+    const p = scene.add.image(x, y, 'fx-glow').setDepth(31).setTint(tint)
+      .setDisplaySize(dustPx + Math.random() * dustPx * 0.6, dustPx + Math.random() * dustPx * 0.6)
+      .setAlpha(0.38).setBlendMode('ADD');
     scene.tweens.add({
       targets: p,
       x: x + Math.cos(a) * d,
@@ -235,10 +238,11 @@ export function brickBreakFx(scene, x, y, color, opts = {}) {
       tileChipBurst(scene, x, y, color, reduced ? 2 : 4);
       break;
     default:
-      rippleRing(scene, x, y, { tint: color, scale: 2.35, dur: 360 });
-      tileChipBurst(scene, x, y, color, reduced ? 3 : 6);
-      dustPuff(scene, x, y, color, reduced ? 2 : 4);
-      shardBurst(scene, x, y, color, reduced ? 3 : 6);
+      rippleRing(scene, x, y, { tint: color, scale: reduced ? 2.5 : 3.1, dur: 400 });
+      neonPulse(scene, x, y, color, { scale: reduced ? 1.6 : 2.2, dur: 340 });
+      tileChipBurst(scene, x, y, color, reduced ? 4 : 8);
+      dustPuff(scene, x, y, color, reduced ? 3 : 5);
+      shardBurst(scene, x, y, color, reduced ? 4 : 8);
   }
 }
 
@@ -350,11 +354,15 @@ export function microShake(scene, intensity = 0.004, dur = 80) {
 export function neonPulse(scene, x, y, tint = 0xffffff, opts = {}) {
   if (!fxParticlesOn(scene)) return;
   const { scale = 1.8, dur = 320, depth = 30 } = opts;
-  const glow = scene.add.image(x, y, 'soft').setDepth(depth).setTint(tint)
-    .setBlendMode('ADD').setAlpha(0.35 * fxGlowScale(scene, 1)).setScale(0.06);
+  const basePx = fxParticleSize(scene, 16);
+  const glow = scene.add.image(x, y, 'fx-glow').setDepth(depth).setTint(tint)
+    .setBlendMode('ADD').setAlpha(0.5 * fxGlowScale(scene, 1))
+    .setDisplaySize(basePx * 0.35, basePx * 0.35);
+  const endPx = basePx * scale;
   scene.tweens.add({
     targets: glow,
-    scale: scale,
+    displayWidth: endPx,
+    displayHeight: endPx,
     alpha: 0,
     duration: dur,
     ease: 'Cubic.easeOut',
@@ -439,8 +447,9 @@ export function hitSpark(scene, x, y, opts = {}) {
       : Math.random() * Math.PI * 2;
     const d = 8 + Math.random() * spread;
     const tex = Math.random() > 0.35 ? 'spark-streak' : 'spark';
+    const streakW = fxParticleSize(scene, tex === 'spark-streak' ? 10 : 6);
     const s = scene.add.image(x, y, tex).setDepth(depth).setTint(tint)
-      .setDisplaySize(tex === 'spark-streak' ? 10 : 5, tex === 'spark-streak' ? 4 : 5)
+      .setDisplaySize(streakW, tex === 'spark-streak' ? streakW * 0.4 : streakW)
       .setAlpha(0.88).setRotation(a);
     scene.tweens.add({
       targets: s,

@@ -43,8 +43,13 @@ import { scaledBallBaseSpeed, difficultyFor } from '../systems/DifficultyScaler.
 import { addCameraFx, spawnConfetti, makeButton } from '../utils/UI.js';
 import { applySceneVfx } from '../utils/SceneVfx.js';
 import { popScale, squashStretch, wobble, rippleRing, staggerDropIn, shardBurst, brickBreakFx, microShake, surgeText, hitSpark, brickNudge, launchBurst, risePop, tierPulse, dropIn, spinIn, powerAcquireBurst, powerPickupFx, explosiveImpactFx, fireImpactFx, electricImpactFx, frostImpactFx, comboFlare } from '../utils/MicroFx.js';
+import { fxParticleScale } from '../utils/FxBudget.js';
 import { initBulletTimeFx, setBulletTimeIntensity, screenPunch, impactFlash, radialBlast, resetGameplayCamera, clearBulletTimeFx } from '../utils/BulletTimeFx.js';
-import { pick, clamp, rand, mulberry32, dropChance as brickDropChanceForLevel } from '../utils/Helpers.js';
+import {
+  pick, clamp, rand, mulberry32,
+  dropChance as brickDropChanceForLevel,
+  brickPowerDropBudget,
+} from '../utils/Helpers.js';
 import { fitTextWidth, orbitronStyle, uiPx, wrapWidth } from '../utils/Typography.js';
 import { resolveSettings } from '../config/VfxQuality.js';
 import { gemsForLevelClear } from '../config/GemRewards.js';
@@ -301,12 +306,13 @@ export class GameScene extends Phaser.Scene {
     const rating = this.difficulty?.rating ?? Math.ceil(this.level / 5);
     const layout = this.layoutLabel ? `  ·  ${this.layoutLabel}` : '';
     const twist = this.twistLabel ? `  ·  ${this.twistLabel}` : '';
+    const pace = this.paceLabel && this.paceLabel !== 'standard' ? `  ·  ${this.paceLabel.toUpperCase()}` : '';
     const diffTag = `DIFF ${rating}/10`;
     this.flash(
       (this.isBoss ? `FORTRESS ${this.level}` : `LEVEL ${this.level}`)
       + `  ·  ${diffTag}`
       + (band ? `  ·  ${band}` : '')
-      + layout + twist
+      + layout + twist + pace
       + (t ? `  ·  ${t.toUpperCase()}` : ''),
       cssHex(this.isBoss ? PAL.gold : (this.theme?.bg ?? PAL.accent)), 1100,
       'high',
@@ -361,7 +367,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   spawnPowerCapsule(x, y, keyOverride) {
-    if (this.powers.length >= GAME.MAX_POWERS) return null;
+    if (this.powers.length >= GAME.MAX_POWERS) {
+      const drop = this.powers.find((p) => !p.collecting);
+      if (drop) {
+        drop.destroy();
+        this.powers = this.powers.filter((p) => p !== drop);
+      } else {
+        return null;
+      }
+    }
     const seed = this.nextPowerDropSeed();
     const blessings = MetaProgress.getBlessings();
     const variant = rollCapsuleVariant(this.level, seed);
@@ -529,29 +543,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   createEmitters() {
-    const mult = this.settings.particleMult ?? 1;
+    const shardScale = fxParticleScale(this, 'spark-shard', 11);
+    const emberScale = fxParticleScale(this, 'ember', 13);
+    const sparkScale = fxParticleScale(this, 'spark', 10);
     this.hitEmitter = this.add.particles(0, 0, 'spark-shard', {
-      speed: { min: 90, max: 340 },
-      scale: { start: 0.85 * mult, end: 0 },
-      lifespan: 480,
+      speed: { min: 120, max: 420 },
+      scale: { start: shardScale, end: 0 },
+      lifespan: 520,
       angle: { min: 0, max: 360 },
-      rotate: { min: -240, max: 240 },
+      rotate: { min: -280, max: 280 },
       blendMode: 'ADD',
       emitting: false,
     }).setDepth(30);
     this.explodeEmitter = this.add.particles(0, 0, 'ember', {
-      speed: { min: 160, max: 520 },
-      scale: { start: 1.1 * mult, end: 0 },
-      lifespan: 720,
+      speed: { min: 180, max: 560 },
+      scale: { start: emberScale, end: 0 },
+      lifespan: 780,
       blendMode: 'ADD',
       emitting: false,
       tint: 0xffb24d,
     }).setDepth(31);
-    this.dustEmitter = this.add.particles(0, 0, 'soft', {
-      speed: { min: 20, max: 80 },
-      scale: { start: 0.9 * mult, end: 0.2 },
-      alpha: { start: 0.28, end: 0 },
-      lifespan: 620,
+    this.dustEmitter = this.add.particles(0, 0, 'spark', {
+      speed: { min: 40, max: 160 },
+      scale: { start: sparkScale, end: 0 },
+      alpha: { start: 0.55, end: 0 },
+      lifespan: 540,
       blendMode: 'ADD',
       emitting: false,
     }).setDepth(29);
@@ -564,7 +580,11 @@ export class GameScene extends Phaser.Scene {
     this.hitEmitter.setParticleTint(color);
     this.hitEmitter.explode(n, x, y);
     this.dustEmitter.setParticleTint(color);
-    this.dustEmitter.explode(Math.max(2, Math.round(n * 0.35)), x, y);
+    this.dustEmitter.explode(Math.max(3, Math.round(n * 0.55)), x, y);
+    if (n >= 6) {
+      this.explodeEmitter.setParticleTint(color);
+      this.explodeEmitter.explode(Math.max(4, Math.round(n * 0.4)), x, y);
+    }
   }
 
   floatText(x, y, msg, color, size = 28) {
@@ -590,8 +610,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   _spawnLevelCore() {
-    const { bricks, isBoss, theme, levelSeed, gravityScale, mutator, mutators, goal, difficulty, layoutLabel, twistLabel } = buildLevel(this.level, this.campaignSeed);
+    const {
+      bricks, isBoss, theme, levelSeed, gravityScale, mutator, mutators, goal,
+      difficulty, layoutLabel, twistLabel, paceLabel,
+    } = buildLevel(this.level, this.campaignSeed);
     this.difficulty = difficulty;
+    this.paceLabel = paceLabel ?? null;
     this.bounceAccelMult = difficulty.bounceAccelMult;
     this.jardinainPressure = difficulty.gnomePressure;
     this.isBoss = isBoss;
@@ -614,8 +638,13 @@ export class GameScene extends Phaser.Scene {
     this.jugglePointMult = 1;
     this.scoreMultLevel = 1;
     this.gambitAtCombo = 0;
-    this.bricks = bricks.map((b) => new Brick(this, b.x, b.y, b.w, b.h, b.type, b.color, this.level, b));
+    this.bricks = bricks.map((b) => {
+      const type = b.type === 'invisible' ? 'normal' : b.type;
+      return new Brick(this, b.x, b.y, b.w, b.h, type, b.color, this.level, { ...b, type });
+    });
     this._levelDestructibles = this.destructiblesLeft();
+    this.brickPowerDropsThisLevel = 0;
+    this._brickDropBudget = brickPowerDropBudget(this.level);
     this.bricks.forEach((br, i) => {
       const spec = bricks[i];
       if (spec.portalLinkIndex != null) br.portalLink = this.bricks[spec.portalLinkIndex] ?? null;
@@ -805,10 +834,81 @@ export class GameScene extends Phaser.Scene {
     const ms = Math.round(GAME.BT_NEXUS_TIME_MS * (0.85 + ratio * 0.75));
     const intensity = GAME.BT_NEXUS_INTENSITY_MIN
       + ratio * (GAME.BT_NEXUS_INTENSITY_MAX - GAME.BT_NEXUS_INTENSITY_MIN);
+    const cleared = this.clearNexusHazards();
     this.triggerBulletTime(ms, { intensity, punch: true, player: true, nexus: true, wow: true });
-    this.flash('NEXUS SLOW-MO', '#8ec5ff', 500);
+    this.flash(cleared > 0 ? 'NEXUS UNLEASHED' : 'NEXUS SLOW-MO', '#8ec5ff', 500);
     hapticPulse(12);
     return true;
+  }
+
+  /** Spend Nexus slow-mo — wipe pots, pests, and paddle debuffs for a brief advantage. */
+  clearNexusHazards() {
+    let count = 0;
+    const cx = this.paddle?.x ?? GAME.WIDTH / 2;
+    const cy = GAME.HEIGHT * 0.38;
+
+    for (let i = this.pots.length - 1; i >= 0; i--) {
+      const p = this.pots[i];
+      if (p && !p.dead) {
+        count += 1;
+        this.purgeGnomeProjectile(p);
+      } else p?.destroy?.();
+      this.pots.splice(i, 1);
+    }
+
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i];
+      if (e && !e._d) {
+        count += 1;
+        this.purgeEnemy(e);
+      }
+      this.enemies.splice(i, 1);
+    }
+
+    if (this.paddle?.stunned) {
+      this.paddle.stunUntil = 0;
+      this.paddle.sync?.();
+    }
+    if (this.controlsInverted && !this.powerSys?.isActive('Flip')) {
+      this.controlsInverted = false;
+    }
+    if (this.uiScrambleUntil) {
+      this.uiScrambleUntil = 0;
+      this._uiScrambleTimer?.remove(false);
+      this._uiScrambleTimer = null;
+      this.bus?.emit('hud:scramble', false);
+    }
+
+    this.enemyTimer = Math.max(this.enemyTimer, this.enemySpawnMs ?? 4000);
+
+    for (const j of this.jardinains) {
+      if (j.state === JSTATE.IDLE && j.throwTimer != null) {
+        j.throwTimer = Math.max(j.throwTimer, rand(1400, 2800));
+      }
+    }
+
+    if (count > 0) {
+      this.score += count * GAME.BT_NEXUS_HAZARD_SCORE;
+      rippleRing(this, cx, cy, { tint: 0x8ec5ff, scale: 3.2, dur: 420, depth: 33 });
+      hitSpark(this, cx, cy, { tint: 0x8ec5ff, count: 8, spread: 40 });
+      surgeText(this, cx, cy - 32, 'NEXUS UNLEASHED', '#8ec5ff', 36);
+      audio.blip(920);
+    }
+    return count;
+  }
+
+  purgeGnomeProjectile(p) {
+    const tint = p.type === 'phone' ? 0x66ccff : p.type === 'anchor' ? 0xaabbcc : 0xe8a060;
+    if (this.settings.particles) this.burst(p.x, p.y, tint, 4);
+    p.dead = true;
+    p.destroy();
+  }
+
+  purgeEnemy(e) {
+    if (!e || e._d) return;
+    e.alive = false;
+    if (this.settings.particles) this.burst(e.x, e.y, e.color, 5);
+    e.destroy();
   }
 
   tryComboBank() {
@@ -1878,9 +1978,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   clearBallEchoFx(ball) {
-    if (!ball._echoSprites) return;
-    ball._echoSprites.forEach((s) => s?.destroy?.());
+    if (!ball?._echoSprites?.length) return;
+    ball._echoSprites.forEach((s) => {
+      s?.core?.destroy?.();
+      s?.halo?.destroy?.();
+    });
     ball._echoSprites = null;
+    if (ball._echoCd) ball._echoCd.clear?.();
+    ball._echoCd = null;
   }
 
   freezeMovingBricks(ms) {
@@ -2081,7 +2186,6 @@ export class GameScene extends Phaser.Scene {
     audio.cannonHit?.();
     electricImpactFx(this, br.cx, br.cy);
     this.spawnRipple(br.cx, br.cy, 0xa78bfa);
-    if (this.settings.particles) this.burst(ball.x, ball.y, 0xa78bfa, 8);
     br.frostMarked = false;
     if (br.indestructible) {
       br.alive = false;
@@ -2487,7 +2591,6 @@ export class GameScene extends Phaser.Scene {
     if (ball?.element === 'frost') audio.frostHit?.();
     if (brick.frostMarked) this.statusSys.spreadFrostFrom(brick);
 
-    if (this.settings.particles) this.burst(brick.cx, brick.cy, brick.color, 9);
     let breakStyle = 'normal';
     if (exploded || ball?.element === 'explosive') breakStyle = 'explosive';
     else if (ball?.element === 'nuke') breakStyle = 'nuke';
@@ -2498,6 +2601,12 @@ export class GameScene extends Phaser.Scene {
       particles: this.settings.particles,
       style: breakStyle,
     });
+    if (this.settings.particles && breakStyle === 'normal') {
+      const n = fromBall
+        ? (this.settings.reducedFx ? 5 : 9)
+        : 4;
+      this.burst(brick.cx, brick.cy, brick.color, n);
+    }
     if (brick.panel?.active) {
       this.tweens.add({
         targets: brick.panel,
@@ -2542,9 +2651,20 @@ export class GameScene extends Phaser.Scene {
     this.tryBrickPowerDrop(brick);
   }
 
-  /** Per-brick capsule chance — decays with level (see Helpers.dropChance). */
+  /**
+   * Per-brick roll capped by level budget and remaining destructibles (dense boards stay ~2–4 drops).
+   * @see Helpers.dropChance, Helpers.brickPowerDropBudget
+   */
   brickDropChance() {
-    return brickDropChanceForLevel(this.level);
+    const budget = this._brickDropBudget ?? brickPowerDropBudget(this.level);
+    const dropped = this.brickPowerDropsThisLevel ?? 0;
+    const dropsLeft = budget - dropped;
+    if (dropsLeft <= 0) return 0;
+
+    const base = brickDropChanceForLevel(this.level);
+    const remaining = Math.max(1, this.destructiblesLeft());
+    const scaled = (dropsLeft / remaining) * 1.05;
+    return Math.min(base, scaled);
   }
 
   tryBrickPowerDrop(brick) {
@@ -2552,9 +2672,12 @@ export class GameScene extends Phaser.Scene {
     const noDrop = ['gold', 'steel', 'boss', 'portal', 'hostage'];
     if (noDrop.includes(brick.type)) return;
 
+    const budget = this._brickDropBudget ?? brickPowerDropBudget(this.level);
+    if ((this.brickPowerDropsThisLevel ?? 0) >= budget) return;
+
     let chanceMult = 1;
-    if (['silver', 'explosive', 'reinforced'].includes(brick.type)) chanceMult = 1.2;
-    else if (['nest', 'shifting', 'moss', 'mirror'].includes(brick.type)) chanceMult = 0.9;
+    if (['silver', 'explosive', 'reinforced'].includes(brick.type)) chanceMult = 1.15;
+    else if (['nest', 'shifting', 'moss', 'mirror'].includes(brick.type)) chanceMult = 0.85;
 
     const seed = this.nextPowerDropSeed();
     const rng = mulberry32(seed);
@@ -2562,7 +2685,7 @@ export class GameScene extends Phaser.Scene {
     if (rng() >= chance) return;
     const cap = this.spawnPowerCapsule(brick.cx, brick.cy);
     if (!cap) return;
-    this.floatText(brick.cx, brick.cy - 20, 'DROP!', powerColorHex(cap.key), 18);
+    this.brickPowerDropsThisLevel = (this.brickPowerDropsThisLevel ?? 0) + 1;
   }
 
   /** Unique seed per capsule drop — reusing levelSeed alone repeats the same power every time. */
@@ -2573,6 +2696,7 @@ export class GameScene extends Phaser.Scene {
 
   ballLost(ball) {
     if (this._ballLossBeat || this.over) return;
+    this.clearBallEchoFx(ball);
     ball.destroy();
     this.balls = this.balls.filter((b) => b !== ball);
     if (this.balls.length > 0) return;
@@ -3116,7 +3240,7 @@ export class GameScene extends Phaser.Scene {
     const inPlay = this.balls.some((b) => !b.stuck);
     const levelAge = this.time.now - (this.levelStartTime ?? this.time.now);
     const canSpawnEnemies = inPlay || (levelAge > 2200 && this.enemies.length < 1);
-    if (canSpawnEnemies) {
+    if (canSpawnEnemies && !this._nexusSlowMo) {
       this.enemyTimer -= dtMs * (inPlay ? 1 : 0.5);
       if (this.enemyTimer <= 0 && this.enemies.length < (inPlay ? this.maxEnemies : 1)) {
         this.enemyTimer = rand(this.enemySpawnMs * 0.7, this.enemySpawnMs * 1.3);
@@ -3194,7 +3318,7 @@ export class GameScene extends Phaser.Scene {
       const frozen = this.isTimeFrozen();
 
       const throwResult = j.update(dtMs * throwScale, dtSec, env, frozen);
-      if (throwResult === 'throw' && this.pots.length < 8) {
+      if (throwResult === 'throw' && !this._nexusSlowMo && this.pots.length < 8) {
         const payload = j.createThrowPayload(this.paddle.x);
         this.pots.push(new GnomeProjectile(this, j.x, j.y, this.paddle.x, {
           ...payload,
@@ -3368,6 +3492,24 @@ export class GameScene extends Phaser.Scene {
     return this.bounceBallOnPaddle(ball);
   }
 
+  /** Safety-net bar — flush under the paddle, spanning ball wall insets. */
+  getShieldBarRect() {
+    const inset = ballSideInset();
+    const barH = Math.max(10, Math.round((GAME.PADDLE_HEIGHT ?? 28) * 0.45));
+    const gap = Math.max(3, Math.round(barH * 0.25));
+    const paddleBottom = this.paddle
+      ? this.paddle.y + this.paddle.h * 0.5
+      : GAME.HEIGHT - (GAME.PADDLE_Y_OFFSET ?? 78) + (GAME.PADDLE_HEIGHT ?? 28) * 0.5;
+    const top = Math.min(paddleBottom + gap, GAME.HEIGHT - barH - 4);
+    return {
+      x: inset,
+      y: top,
+      w: GAME.WIDTH - inset * 2,
+      h: barH,
+      top,
+    };
+  }
+
   updateBalls(dtSec) {
     const bx = ballSideInset();
     const lw = bx;
@@ -3406,9 +3548,20 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      const floorY = GAME.ARENA_FLOOR ?? GAME.HEIGHT;
-      if ((this.powerSys.isActive('Shield') || this.powerSys.isActive('ShieldII')) && ball.y + ball.r > floorY - 18) {
-        ball.vy = -Math.abs(ball.vy); ball.y = floorY - 18 - ball.r;
+      const shieldBar = this.getShieldBarRect();
+      if (
+        (this.powerSys.isActive('Shield') || this.powerSys.isActive('ShieldII'))
+        && ball.vy > 0
+        && ball.y + ball.r > shieldBar.top
+      ) {
+        ball.vy = -Math.abs(ball.vy);
+        ball.y = shieldBar.top - ball.r - 0.5;
+        rippleRing(this, ball.x, shieldBar.top, {
+          tint: this.powerSys.isActive('ShieldII') ? 0xffffff : powerFillColor('Shield'),
+          scale: 2.2,
+          dur: 280,
+          depth: 22,
+        });
         this.shieldHitsLeft = (this.shieldHitsLeft || 1) - 1;
         if (this.shieldHitsLeft <= 0) {
           this.powerSys.clear('Shield');
@@ -3526,7 +3679,6 @@ export class GameScene extends Phaser.Scene {
 
         this.bounceBallOffBrick(ball, br, false);
         const killed = br.hit(dmg);
-        if (this.settings.particles) this.burst(ball.x, ball.y, 0xffffff, 4);
         if (killed) this.destroyBrick(br, true, ball);
         else if (!br.indestructible) audio.brickBreak?.(br.type, 0, br.hp) ?? audio.brick(0);
         break;
@@ -3534,40 +3686,49 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  projectileHitBrick(b) {
+  /** Closest overlapping brick along shot path (upward shots prefer the lowest tile hit). */
+  projectileTargetBrick(b) {
+    const hw = b.hitW ?? 4;
+    let hit = null;
     for (const br of this.bricks) {
       if (!br.alive) continue;
-      if (b.x + (b.hitW ?? 4) <= br.x || b.x - (b.hitW ?? 4) >= br.x + br.w || b.y <= br.y || b.y >= br.y + br.h) continue;
-
-      switch (b.type) {
-        case 'laser':
-          if (br.indestructible) { br.alive = false; this.destroyBrick(br, false); }
-          else if (br.hit(1)) this.destroyBrick(br, false);
-          if (this.settings.particles) this.burst(b.x, b.y, 0xff5566, 4);
-          return true;
-        case 'fire':
-          this.fireBlastAt(b.x, b.y);
-          return true;
-        case 'napalm':
-          this.statusSys.igniteBrick(br);
-          if (this.settings.particles) this.burst(b.x, b.y, 0xff4400, 8);
-          return true;
-        case 'ice':
-          this.statusSys.freezeBrick(br, 5000);
-          audio.frostHit?.();
-          frostImpactFx(this, b.x, b.y);
-          if (this.settings.particles) this.burst(b.x, b.y, PAL.powerFrost, 5);
-          return true;
-        case 'shock':
-          if (br.indestructible) { br.alive = false; this.destroyBrick(br, false); }
-          else if (br.hit(999)) this.destroyBrick(br, false);
-          if (this.settings.particles) this.burst(b.x, b.y, 0xa78bfa, 6);
-          return b.bouncesLeft <= 0;
-        default:
-          return true;
-      }
+      if (b.x + hw <= br.x || b.x - hw >= br.x + br.w || b.y <= br.y || b.y >= br.y + br.h) continue;
+      if (!hit || br.y + br.h > hit.y + hit.h) hit = br;
     }
-    return false;
+    return hit;
+  }
+
+  projectileHitBrick(b) {
+    const br = this.projectileTargetBrick(b);
+    if (!br) return false;
+
+    switch (b.type) {
+      case 'laser':
+        if (br.indestructible) { br.alive = false; this.destroyBrick(br, false); }
+        else if (br.hit(1)) this.destroyBrick(br, false);
+        if (this.settings.particles) this.burst(b.x, b.y, 0xff5566, 4);
+        return true;
+      case 'fire':
+        this.fireBlastAt(b.x, b.y);
+        return true;
+      case 'napalm':
+        this.statusSys.igniteBrick(br);
+        if (this.settings.particles) this.burst(b.x, b.y, 0xff4400, 8);
+        return true;
+      case 'ice':
+        this.statusSys.freezeBrick(br, 5000);
+        audio.frostHit?.();
+        frostImpactFx(this, b.x, b.y);
+        if (this.settings.particles) this.burst(b.x, b.y, PAL.powerFrost, 5);
+        return true;
+      case 'shock':
+        if (br.indestructible) { br.alive = false; this.destroyBrick(br, false); }
+        else if (br.hit(999)) this.destroyBrick(br, false);
+        if (this.settings.particles) this.burst(b.x, b.y, 0xa78bfa, 6);
+        return b.bouncesLeft <= 0;
+      default:
+        return true;
+    }
   }
 
   updateBullets(dtSec, ts) {
@@ -3691,9 +3852,11 @@ export class GameScene extends Phaser.Scene {
     if (this.powerSys.isActive('Shield') || this.powerSys.isActive('ShieldII')) {
       const a = 0.3 + 0.16 * Math.sin(this.frame * 0.2);
       const tint = this.powerSys.isActive('ShieldII') ? 0xffffff : powerFillColor('Shield');
+      const bar = this.getShieldBarRect();
       this.shieldGfx.fillStyle(tint, a);
-      const floor = GAME.ARENA_FLOOR ?? GAME.HEIGHT;
-      this.shieldGfx.fillRect(GAME.WALL_X, floor - 18, GAME.WIDTH - GAME.WALL_X * 2, 16);
+      this.shieldGfx.fillRect(bar.x, bar.y, bar.w, bar.h);
+      this.shieldGfx.lineStyle(2, tint, a * 1.35);
+      this.shieldGfx.strokeRect(bar.x + 1, bar.y + 1, bar.w - 2, bar.h - 2);
     }
 
     this.fogGfx.clear();

@@ -1,4 +1,4 @@
-import { GAME, JARDINAIN } from '../config/Constants.js';
+import { GAME, JARDINAIN, playfieldLayoutScale } from '../config/Constants.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -26,16 +26,19 @@ export function difficultyFor(level) {
 
     ballSpeedMult: clamp(1 + t * 0.014, 1, 1.48),
     bounceAccelMult: clamp(1 + t * 0.004, 1, 1.12),
-    brickHpMult: clamp(1 + t * 0.018, 1, 1.55),
+    brickHpMult: clamp(1 + t * 0.018 + (level <= 5 ? 0.08 : 0), 1, 1.55),
 
-    rowBonus: Math.min(12, Math.floor(t / 1.05) + (level <= 2 ? 0 : 1)),
-    layoutRowBonus: mobile ? 3 + Math.floor(t / 1.4) : 2 + Math.floor(t / 3.5),
-    layoutMaxRows: mobile ? 22 : 20,
-    layoutDensityBoost: mobile ? 0.07 : 0.05,
+    rowBonus: Math.min(14, Math.floor(t / 0.95) + (level <= 4 ? 0 : level <= 8 ? 1 : 2)),
+    layoutRowBonus: (mobile
+      ? (level <= 4 ? 1 : 3) + Math.floor(t / 1.4)
+      : (level <= 4 ? 1 : 2) + Math.floor(t / 2.8))
+      + Math.floor((playfieldLayoutScale() - 1) * 4),
+    layoutMaxRows: mobile ? 24 : 22,
+    layoutDensityBoost: (mobile ? 0.12 : 0.09) + (playfieldLayoutScale() - 1) * 0.06,
     /** Small deterministic row wobble from level (not RNG) */
     rowJitter: (level % 3) - 1,
-    patternDensity: clamp(1.06 + t * 0.011, 1.06, 1.2),
-    sparsePatternBoost: clamp(1.0 + t * 0.005, 1.0, 1.1),
+    patternDensity: clamp(1.14 + t * 0.012, 1.14, 1.28),
+    sparsePatternBoost: clamp(1.08 + t * 0.006, 1.08, 1.18),
     /** Gnome pot cadence — slow early, ramps to full pressure (~level 22+). */
     potThrowRateMult: clamp(0.42 + t * 0.028, 0.42, 1.05),
     potSpeedMult: clamp(0.5 + t * 0.026, 0.5, 1.12),
@@ -63,6 +66,8 @@ export function difficultyFor(level) {
     lifeRewardEvery: level <= 5 ? 2 : level <= 15 ? 3 : 4,
 
     zoneCount: levelZoneCount(level, mobile),
+    /** Per-level brick HP multiplier from layout pace (siege / standard / blitz). */
+    brickHpPaceMult: 1,
     typeRolls: brickTypeRolls(level, t),
     gravityBase: levelGravityBase(level, band),
   };
@@ -70,16 +75,14 @@ export function difficultyFor(level) {
 
 /** How many vertical zones a non-boss level uses (level-only). */
 export function levelZoneCount(level, isMobile = layoutIsMobile()) {
+  /** Stacked hybrid zones — early levels use 3+ distinct patterns (no plain rows grid). */
   if (isMobile) {
-    if (level <= 2) return 2;
-    if (level <= 5) return 3;
-    if (level <= 12) return level % 4 === 0 ? 4 : 3;
+    if (level <= 8) return 3;
+    if (level <= 14) return level % 5 === 0 ? 4 : 3;
     return level % 5 === 0 ? 4 : 3;
   }
-  if (level <= 2) return 2;
-  if (level <= 5) return level % 2 === 0 ? 2 : 1;
-  if (level <= 10) return level % 3 === 0 ? 3 : 2;
-  if (level <= 18) return level % 4 === 0 ? 4 : 3;
+  if (level <= 4) return 3;
+  if (level <= 12) return level % 4 === 0 ? 4 : 3;
   return level % 5 === 0 ? 4 : 3;
 }
 
@@ -90,9 +93,9 @@ export function brickTypeRolls(level, t = Math.max(0, level - 1)) {
   const chaos = clamp(t * 0.012, 0, 0.14);
   return {
     explode: clamp(0.06 + level * 0.0032 + chaos * 0.4, 0.06, 0.18),
-    silver: clamp(0.03 + level * 0.034, 0, 0.5),
-    reinforced: level >= 3 ? clamp(0.05 + level * 0.007 + chaos * 0.3, 0, 0.3) : 0,
-    invisible: level >= 5 ? clamp(0.04 + level * 0.0055, 0, 0.28) : 0,
+    silver: clamp(0.06 + level * 0.038, 0, 0.5),
+    reinforced: level >= 2 ? clamp(0.08 + level * 0.009 + chaos * 0.3, 0, 0.32) : 0,
+    invisible: 0,
     moving: level >= 2 ? clamp(0.06 + (level - 2) * 0.016 + diff.movingBoost, 0, 0.45) : 0,
     nest: clamp(0.08 + level * 0.005, 0.08, 0.26),
     tactical,
@@ -124,7 +127,8 @@ export function scaledBallBaseSpeed(level) {
 export function levelBrickRows(level, diff, isBoss, rowCap) {
   const rowJitter = diff.rowJitter ?? 0;
   const base = isBoss
-    ? 10 + (level % 2)
-    : 7 + diff.rowBonus + diff.layoutRowBonus + rowJitter + (level % 2);
-  return clamp(base, 7, rowCap);
+    ? 8 + (level % 2)
+    : 6 + diff.rowBonus + diff.layoutRowBonus + rowJitter + (level % 2);
+  const floor = level <= 4 ? 6 : 7;
+  return clamp(base, floor, rowCap);
 }

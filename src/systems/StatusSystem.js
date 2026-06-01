@@ -8,16 +8,34 @@ export class StatusSystem {
     this.burnTiles = new Map();
   }
 
+  /** True when two bricks share an edge (4-neighbor), not merely the same column/row. */
+  bricksShareEdge(a, b, slack = 4) {
+    const gap = this.scene.brickGap ?? 0;
+    const sepX = Math.abs(a.cx - b.cx);
+    const sepY = Math.abs(a.cy - b.cy);
+    const maxTouchX = (a.w + b.w) / 2 + gap + slack;
+    const maxTouchY = (a.h + b.h) / 2 + gap + slack;
+    const sideBySide = sepY <= maxTouchY
+      && sepX >= Math.min(a.w, b.w) * 0.2
+      && sepX <= maxTouchX;
+    const stacked = sepX <= maxTouchX
+      && sepY >= Math.min(a.h, b.h) * 0.15
+      && sepY <= maxTouchY;
+    return sideBySide || stacked;
+  }
+
   adjacentBricks(brick) {
-    const gap = 4;
-    return this.scene.bricks.filter((b) => {
-      if (!b.alive || b === brick) return false;
-      const touchX = Math.abs(b.cx - brick.cx) < (brick.w + b.w) / 2 + gap;
-      const touchY = Math.abs(b.cy - brick.cy) < (brick.h + b.h) / 2 + gap;
-      const alignX = Math.abs(b.cy - brick.cy) < Math.min(brick.h, b.h) * 0.6;
-      const alignY = Math.abs(b.cx - brick.cx) < Math.min(brick.w, b.w) * 0.6;
-      return (touchX && alignY) || (touchY && alignX);
-    });
+    const out = [];
+    for (const b of this.scene.bricks) {
+      if (!b.alive || b === brick) continue;
+      if (brick.zoneRow != null && brick.col != null && b.zoneRow != null && b.col != null) {
+        const dr = Math.abs(b.zoneRow - brick.zoneRow);
+        const dc = Math.abs(b.col - brick.col);
+        if (dr + dc !== 1) continue;
+      }
+      if (this.bricksShareEdge(brick, b)) out.push(b);
+    }
+    return out;
   }
 
   gridDistance(a, b) {
