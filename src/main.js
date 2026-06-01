@@ -26,6 +26,8 @@ import {
 } from './systems/LayoutManager.js';
 import { attachFullscreenListener, lockMobileViewport } from './systems/Fullscreen.js';
 import { initNativeBridge } from './systems/NativeBridge.js';
+import { runMigrations } from './systems/SaveMigration.js';
+import { attachEscapeListener, attachNavigation, attachPopstateListener, goBack } from './systems/Navigation.js';
 import { audio } from './systems/AudioManager.js';
 import { syncPendingEntitlements } from './systems/WebUnlock.js';
 import { initInstallPrompt } from './systems/InstallPrompt.js';
@@ -158,12 +160,16 @@ function warnProductionConfig() {
   if (adMode === 'demo') {
     console.warn('[Neon Nexus] VITE_AD_PROVIDER=demo in production — set to google for ad-supported release.');
   }
-  if (Capacitor.isNativePlatform() && !import.meta.env.VITE_REVENUECAT_ANDROID_KEY && Capacitor.getPlatform() === 'android') {
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android' && !import.meta.env.VITE_REVENUECAT_ANDROID_KEY) {
     console.warn('[Neon Nexus] VITE_REVENUECAT_ANDROID_KEY missing — IAP will use demo store on Android.');
+  }
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios' && !import.meta.env.VITE_REVENUECAT_IOS_KEY) {
+    console.warn('[Neon Nexus] VITE_REVENUECAT_IOS_KEY missing — IAP will use demo store on iOS.');
   }
 }
 
 function bootGame() {
+  runMigrations();
   lockMobileViewport();
   warnProductionConfig();
   audio.preloadMusicCatalog();
@@ -176,6 +182,12 @@ function bootGame() {
     scheduleViewportChange();
 
     InputRouter.attach(game);
+    attachNavigation(game);
+    attachPopstateListener(game);
+    attachEscapeListener(game);
+    if (typeof window !== 'undefined') {
+      window.__neonGoBack = () => goBack(game);
+    }
     RunPersistence.attachAutoSave(game);
     const adProvider = createAdProvider(game);
     Monetization.register({

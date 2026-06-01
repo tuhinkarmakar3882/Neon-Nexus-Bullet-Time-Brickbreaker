@@ -63,4 +63,9 @@ export class PauseScene extends Phaser.Scene {
     this.scene.resume(SCENES.GAME);
     this.scene.stop();
   }
+
+  handleBack() {
+    this.resume();
+    return true;
+  }
 }

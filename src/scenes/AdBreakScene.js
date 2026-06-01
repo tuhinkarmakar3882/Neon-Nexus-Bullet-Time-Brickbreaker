@@ -54,8 +54,15 @@ export class AdBreakScene extends Phaser.Scene {
   }
 
   finish() {
+    if (this._finished) return;
+    this._finished = true;
     InputRouter.onOverlayClose(SCENES.AD_BREAK);
     this.scene.stop();
     this.game.events.emit('ad:break:done');
+  }
+
+  handleBack() {
+    this.finish();
+    return true;
   }
 }

@@ -172,10 +172,20 @@ export class LevelCompleteScene extends Phaser.Scene {
       this.scene.stop();
       game.startNextLevel();
     };
+    this._advance = advance;
     this.time.delayedCall(4200, advance);
     this.time.delayedCall(1400, () => {
       this.input.once('pointerdown', advance);
       this.input.keyboard.once('keydown-SPACE', advance);
+      this.input.keyboard.once('keydown-ESC', () => this.handleBack());
     });
+  }
+
+  handleBack() {
+    if (this._advance) {
+      this._advance();
+      return true;
+    }
+    return false;
   }
 }

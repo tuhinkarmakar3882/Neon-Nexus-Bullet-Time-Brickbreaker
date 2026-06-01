@@ -3,6 +3,7 @@ import { SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { Capacitor } from '@capacitor/core';
 import { Monetization } from '../systems/Monetization.js';
+import { InputRouter } from '../systems/InputRouter.js';
 import { makeButton, makeResponsiveOverlayPanel, overlayFrame } from '../utils/UI.js';
 import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 
@@ -18,6 +19,7 @@ export class PurchaseScene extends Phaser.Scene {
   }
 
   create() {
+    InputRouter.onOverlayOpen(SCENES.PURCHASE);
     this.input.setTopOnly(true);
     const UI_DEPTH = 1200;
 
@@ -89,7 +91,14 @@ export class PurchaseScene extends Phaser.Scene {
     const from = this._from;
     const sm = this.game.scene;
     this.game.events.emit('purchase:done', result);
+    InputRouter.onOverlayClose(SCENES.PURCHASE);
     this.scene.stop();
     if (from && sm.isPaused(from)) sm.resume(from);
+  }
+
+  handleBack() {
+    if (!this.scene.isActive() || this._purchasing) return false;
+    this.closePurchase({ success: false, cancelled: true, productId: this.productId });
+    return true;
   }
 }

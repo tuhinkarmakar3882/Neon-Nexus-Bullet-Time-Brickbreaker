@@ -1,12 +1,26 @@
 import { SaveManager } from './SaveManager.js';
 import { SCENES } from '../config/Constants.js';
+import { RUN_FORMAT_VERSION, upgradeRunSnapshot } from './SaveMigration.js';
 
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const RunPersistence = {
   loadRun() {
-    const snap = SaveManager.loadRun();
-    if (!snap || snap.version !== 1) return null;
+    let snap = SaveManager.loadRun();
+    if (!snap) return null;
+    if (snap.version !== RUN_FORMAT_VERSION) {
+      const upgraded = upgradeRunSnapshot(snap);
+      if (upgraded) {
+        snap = upgraded;
+        SaveManager.saveRun(snap);
+      } else {
+        SaveManager.clearRun();
+        if (typeof window !== 'undefined') {
+          window.__neonRunResetReason = 'incompatible_run_version';
+        }
+        return null;
+      }
+    }
     if (!snap.savedAt || Date.now() - snap.savedAt > MAX_AGE_MS) {
       SaveManager.clearRun();
       return null;
@@ -27,7 +41,7 @@ export const RunPersistence = {
     })) ?? [];
 
     const snapshot = {
-      version: 1,
+      version: RUN_FORMAT_VERSION,
       savedAt: Date.now(),
       campaignSeed: gameScene.campaignSeed ?? ((Date.now() ^ 0x5f3759df) >>> 0),
       level: gameScene.level,

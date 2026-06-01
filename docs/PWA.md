@@ -92,26 +92,13 @@ For Stripe webhooks on Netlify, use `netlify/functions/stripe-webhook.js`.
 
 ## Service worker strategy
 
-`vite-plugin-pwa` generates `dist/sw.js` + Workbox precache at build time.
+`vite-plugin-pwa` generates `dist/sw.js` with **stale-while-revalidate** for HTML/JS/CSS (deploys propagate quickly). [`src/main.js`](../src/main.js) registers `./sw.js` in production (web only).
 
-**Consolidation task:** [`src/main.js`](../src/main.js) also registers `./sw.js` manually in production. Prefer a single registration:
+Precache is limited to static media; app shell uses runtime SWR. See [`vite.config.js`](../vite.config.js).
 
-- Keep **vite-plugin-pwa** (recommended) — remove manual `navigator.serviceWorker.register('./sw.js')` from `main.js`
-- Or use `injectManifest` mode with the existing `public/sw.js` — pick one, not both
+## Browser back (PWA)
 
-Current plugin config in [`vite.config.js`](../vite.config.js):
-
-```js
-VitePWA({
-  registerType: 'autoUpdate',
-  manifest: false,  // uses public/manifest.json
-  workbox: {
-    globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2}'],
-    navigateFallback: 'index.html',
-    maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-  },
-})
-```
+Overlay scenes push history entries; browser **Back** maps to [`Navigation.goBack()`](../src/systems/Navigation.js) (same as Android hardware back). **Escape** closes the top overlay on desktop.
 
 ## Install prompt (planned)
 

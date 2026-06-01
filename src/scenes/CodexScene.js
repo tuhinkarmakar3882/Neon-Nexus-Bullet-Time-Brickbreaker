@@ -414,4 +414,9 @@ export class CodexScene extends Phaser.Scene {
     if (this.scene.isSleeping(this.from)) this.scene.wake(this.from);
     else if (this.scene.isPaused(this.from)) this.scene.resume(this.from);
   }
+
+  handleBack() {
+    this.close();
+    return true;
+  }
 }

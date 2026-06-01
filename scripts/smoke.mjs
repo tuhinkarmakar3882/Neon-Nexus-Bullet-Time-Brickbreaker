@@ -61,6 +61,9 @@ async function runFlow(page, label) {
   await page.waitForFunction(() => !!window.__NEON?.scene, { timeout: 20000 });
   await sleep(2000);
 
+  const saveSchema = await page.evaluate(() => Number(localStorage.getItem('nn_save_schema') || 0));
+  if (saveSchema < 2) errors.push(`${label}: save schema not migrated (got ${saveSchema})`);
+
   // Start game (bypass loadout picker in headless smoke)
   await page.evaluate(() => {
     const g = window.__NEON;
@@ -99,6 +102,33 @@ async function runFlow(page, label) {
   });
   await sleep(400);
 
+  // Navigation.goBack — Settings from Menu (reset overlays first; clickAt may have opened Shop)
+  await page.evaluate(() => {
+    const g = window.__NEON;
+    for (const k of ['Shop', 'Settings', 'Codex', 'Purchase', 'Pause']) {
+      if (g.scene.isActive(k)) g.scene.stop(k);
+    }
+    if (g.scene.isPaused('Menu')) g.scene.resume('Menu');
+    if (!g.scene.isActive('Menu')) g.scene.start('Menu');
+    const menu = g.scene.getScene('Menu');
+    menu.scene.launch('Settings', { from: 'Menu' });
+    menu.scene.pause();
+  });
+  await sleep(300);
+  await page.evaluate(() => {
+    if (typeof window.__neonGoBack !== 'function') throw new Error('__neonGoBack missing');
+    window.__neonGoBack();
+  });
+  await sleep(400);
+  st = await waitFor(
+    page,
+    (s) => s.active.includes('Menu') && !s.active.includes('Settings') && !s.active.includes('Shop'),
+    4000,
+  );
+  if (!st.active.includes('Menu') || st.active.includes('Settings')) {
+    errors.push(`${label}: Navigation goBack from Settings failed — active=${st.active.join(',')}`);
+  }
+
   // Shop + Purchase via Monetization (full demo checkout flow)
   await page.evaluate(() => {
     const g = window.__NEON;
@@ -134,8 +164,10 @@ async function runFlow(page, label) {
   if (!purchaseOk.ok) errors.push(`${label}: demo purchase flow failed — ${purchaseOk.err ?? 'unknown'}`);
 
   await page.evaluate(() => {
-    window.__NEON.scene.stop('Shop');
-    window.__NEON.scene.wake('Menu');
+    const g = window.__NEON;
+    g.scene.stop('Shop');
+    g.scene.stop('Purchase');
+    if (g.scene.isPaused('Menu')) g.scene.resume('Menu');
   });
   await sleep(300);
 
@@ -175,6 +207,32 @@ async function runFlow(page, label) {
     }
   });
   await sleep(200);
+
+  // Navigation.goBack during active gameplay → Pause overlay
+  await page.evaluate(() => {
+    const g = window.__NEON;
+    if (g.scene.isActive('Pause')) {
+      g.scene.stop('Pause');
+      if (g.scene.isPaused('Game')) g.scene.resume('Game');
+      if (g.scene.isPaused('HUD')) g.scene.resume('HUD');
+    }
+  });
+  await sleep(200);
+  await page.evaluate(() => {
+    const g = window.__NEON;
+    for (const k of ['Shop', 'Settings', 'Codex', 'Purchase', 'Pause']) {
+      if (g.scene.isActive(k)) g.scene.stop(k);
+    }
+    if (g.scene.isPaused('Game')) g.scene.resume('Game');
+    if (g.scene.isPaused('HUD')) g.scene.resume('HUD');
+  });
+  await sleep(200);
+  await page.evaluate(() => {
+    if (typeof window.__neonGoBack !== 'function') throw new Error('__neonGoBack missing');
+    window.__neonGoBack();
+  });
+  st = await waitFor(page, (s) => s.active.includes('Pause'), 3000);
+  if (!st.active.includes('Pause')) errors.push(`${label}: goBack during Game should open Pause`);
 
   // Pause + save snapshot
   await page.evaluate(() => window.__NEON.scene.getScene('Game').requestPause());

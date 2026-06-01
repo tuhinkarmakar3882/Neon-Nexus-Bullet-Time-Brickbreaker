@@ -1,0 +1,4 @@
+<!-- Paste into ios/App/App/Info.plist (inside root <dict>) before App Store release. -->
+<!-- Replace with your AdMob iOS app ID from https://apps.admob.com/ -->
+<key>GADApplicationIdentifier</key>
+<string>ca-app-pub-3940256099942544~1458002511</string>

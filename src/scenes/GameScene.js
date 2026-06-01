@@ -468,20 +468,21 @@ export class GameScene extends Phaser.Scene {
 
     if (this.over || this.transitioning) return;
 
-    const sm = this.scene;
-    if (!sm.isActive()) return;
+    const sm = this.game.scene;
+    if (!sm.isActive(SCENES.GAME)) return;
     if (sm.isActive(SCENES.PAUSE)) return;
     if (InputRouter.isOverlayActive()) return;
 
     // Recover from a stuck paused state (game frozen without a menu overlay).
-    if (sm.isPaused() && !this._completingLevel) {
-      sm.resume();
+    if (sm.isPaused(SCENES.GAME) && !this._completingLevel) {
+      sm.resume(SCENES.GAME);
+      if (sm.isPaused(SCENES.HUD)) sm.resume(SCENES.HUD);
     }
-    if (sm.isPaused()) return;
+    if (sm.isPaused(SCENES.GAME)) return;
 
     RunPersistence.saveRun(this);
-    sm.pause();
-    sm.launch(SCENES.PAUSE);
+    this.scene.pause();
+    this.scene.launch(SCENES.PAUSE);
     InputRouter.onOverlayOpen(SCENES.PAUSE);
   }
 

@@ -3,6 +3,8 @@ import { Capacitor } from '@capacitor/core';
 import { SCENES } from '../config/Constants.js';
 import { initPlayBilling } from './PlayBilling.js';
 import { audio } from './AudioManager.js';
+import { goBack, requestExitApp } from './Navigation.js';
+import { RunPersistence } from './RunPersistence.js';
 
 export async function initNativeBridge(game) {
   if (!Capacitor.isNativePlatform()) return;
@@ -11,21 +13,18 @@ export async function initNativeBridge(game) {
 
   try {
     const { App } = await import('@capacitor/app');
-    App.addListener('backButton', () => {
-      const sm = game?.scene;
-      if (!sm) return;
-      if (sm.isActive(SCENES.PAUSE)) {
-        sm.getScene(SCENES.PAUSE)?.resume?.();
-        return;
-      }
-      if (sm.isActive(SCENES.GAME) && !sm.isPaused(SCENES.GAME)) {
-        sm.getScene(SCENES.GAME)?.requestPause?.();
-        return;
-      }
-      App.exitApp();
-    });
+    App.addListener(
+      'backButton',
+      () => {
+        const result = goBack(game);
+        if (!result.handled) requestExitApp();
+      },
+      { priority: 10 },
+    );
 
     App.addListener('pause', () => {
+      const gs = game?.scene?.getScene(SCENES.GAME);
+      if (gs?.sys?.isActive?.() && !gs.over) RunPersistence.saveRun(gs);
       audio.stopMusic?.();
     });
     App.addListener('resume', () => {

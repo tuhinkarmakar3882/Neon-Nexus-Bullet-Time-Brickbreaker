@@ -128,5 +128,16 @@ export class GameOverScene extends Phaser.Scene {
     this.statusText = this.add.text(frame.cx, statusY, '', {
       ...orbitronStyle(12, cssHex(PAL.accent3), { align: 'center', wordWrap: { width: frame.wrap } }),
     }).setOrigin(0.5, 0).setDepth(1001);
+
+    this.input.keyboard.on('keydown-ESC', () => this.handleBack());
+  }
+
+  handleBack() {
+    InputRouter.onOverlayClose(SCENES.GAMEOVER, false);
+    this.scene.stop(SCENES.HUD);
+    this.scene.stop(SCENES.GAME);
+    this.scene.stop();
+    this.scene.start(SCENES.MENU);
+    return true;
   }
 }

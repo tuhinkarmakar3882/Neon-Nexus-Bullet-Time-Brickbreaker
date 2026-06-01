@@ -33,7 +33,9 @@ When docs disagree with code, trust `src/` and update these plans after implemen
 | Prod boot guards | Done |
 | Smoke tests expanded | Done |
 | Codex / Shop scroll direction | Done |
-| Capacitor `android/` folder | Run locally: `pnpm run cap:add:android` (gitignored) |
+| Capacitor android/ios | `pnpm run cap:add:android` / `cap:add:ios` (gitignored); see [NATIVE.md](./NATIVE.md) |
+| Back navigation | Done — `Navigation.goBack` + native + PWA popstate |
+| Save migrations | Done — `SaveMigration.js` + `pnpm run test:migration` |
 | Store keys / live deploy | Configure env + Play Console / Vercel dashboard |
 
 ## Verify commands

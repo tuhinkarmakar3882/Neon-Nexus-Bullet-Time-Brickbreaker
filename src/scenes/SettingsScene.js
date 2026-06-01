@@ -316,6 +316,11 @@ export class SettingsScene extends Phaser.Scene {
     this.scene.restart({ from: this.from });
   }
 
+  handleBack() {
+    this.close();
+    return true;
+  }
+
   close() {
     SaveManager.saveSettings(this.settings);
     audio.setSoundEnabled(this.settings.sound);

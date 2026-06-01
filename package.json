@@ -1,6 +1,6 @@
 {
   "name": "neon-nexus-bullet-time-brickbreaker",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "Neon Nexus: Bullet-Time Brick Breaker — a visually-stunning, cross-platform neon brick breaker built on Phaser 4.",
   "type": "module",
   "author": "Tuhin Karmakar",
@@ -14,9 +14,12 @@
     "prebuild": "node scripts/stamp-version.mjs && node scripts/gen-icons.mjs",
     "predev": "node scripts/stamp-version.mjs",
     "cap:sync": "cap sync",
-    "cap:android": "pnpm run build && cap sync android && cap open android",
-    "cap:ios": "pnpm run build && cap sync ios && cap open ios",
-    "cap:add:android": "pnpm run build && cap add android && cap sync android"
+    "cap:sync:all": "pnpm run build && node scripts/sync-capacitor-admob.mjs && cap sync",
+    "cap:android": "pnpm run build && node scripts/sync-capacitor-admob.mjs && cap sync android && cap open android",
+    "cap:ios": "pnpm run build && node scripts/sync-capacitor-admob.mjs && node scripts/patch-ios-admob-plist.mjs && cap sync ios && cap open ios",
+    "cap:add:android": "pnpm run build && cap add android && cap sync android",
+    "cap:add:ios": "pnpm run build && cap add ios && node scripts/patch-ios-admob-plist.mjs && cap sync ios",
+    "test:migration": "node scripts/validate-save-migration.mjs"
   },
   "dependencies": {
     "@capacitor-community/admob": "^8.0.0",

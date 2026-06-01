@@ -1,7 +1,9 @@
 import { STORAGE } from '../config/Constants.js';
 import { SaveManager } from './SaveManager.js';
+import { META_SCHEMA_VERSION } from './SaveMigration.js';
 
 const DEFAULT_META = {
+  schemaVersion: META_SCHEMA_VERSION,
   treasury: 0,
   gems: 0,
   stars: {},
@@ -21,7 +23,7 @@ const DEFAULT_META = {
 
 function loadMeta() {
   const raw = SaveManager.getJson(STORAGE.META, {});
-  const m = { ...DEFAULT_META, ...raw };
+  const m = { ...DEFAULT_META, ...raw, schemaVersion: raw.schemaVersion ?? META_SCHEMA_VERSION };
   if (!m.cosmetics) m.cosmetics = { ...DEFAULT_META.cosmetics };
   if (!m.cosmetics.owned) m.cosmetics.owned = { ...DEFAULT_META.cosmetics.owned };
   if (!m.cosmetics.equipped) m.cosmetics.equipped = { ...DEFAULT_META.cosmetics.equipped };

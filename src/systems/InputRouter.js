@@ -1,6 +1,16 @@
 import { SCENES } from '../config/Constants.js';
+import { popOverlayHistory, pushOverlayHistory } from './Navigation.js';
 
-const OVERLAY_SCENES = [SCENES.PAUSE, SCENES.GAMEOVER, SCENES.SETTINGS, SCENES.LEVEL_COMPLETE, SCENES.CODEX, SCENES.SHOP, SCENES.AD_BREAK];
+const OVERLAY_SCENES = [
+  SCENES.PAUSE,
+  SCENES.GAMEOVER,
+  SCENES.SETTINGS,
+  SCENES.LEVEL_COMPLETE,
+  SCENES.CODEX,
+  SCENES.SHOP,
+  SCENES.AD_BREAK,
+  SCENES.PURCHASE,
+];
 
 class InputRouterService {
   constructor() {
@@ -20,6 +30,7 @@ class InputRouterService {
   onOverlayOpen(overlayKey) {
     if (!this.game) return;
     this._overlayActive = true;
+    pushOverlayHistory();
     const sm = this.game.scene;
     // Clear any stuck flash/toast when an overlay takes focus.
     this.game.events.emit('hud:flash', { text: '', ms: 0 });
@@ -46,6 +57,7 @@ class InputRouterService {
     const stillOverlayed = OVERLAY_SCENES.some((k) => k !== closingKey && sm.isActive(k));
     this._overlayActive = stillOverlayed;
     if (stillOverlayed) return;
+    popOverlayHistory();
 
     const gameActive = sm.isActive(SCENES.GAME);
     if (gameActive && sm.isPaused(SCENES.HUD)) sm.resume(SCENES.HUD);

@@ -271,6 +271,7 @@ export const STORAGE = {
   STRIPE_REDEEMED: 'nn_stripeRedeemed',
   RUN: 'nn_run_v1',
   META: 'nn_meta_v1',
+  SAVE_SCHEMA: 'nn_save_schema',
 };
 
 /** Default audio mix — SFX loud, music faint background bed. */

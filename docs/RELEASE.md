@@ -14,16 +14,7 @@ Guide for shipping **Neon Nexus** as a Capacitor Android app on Google Play.
 
 ## Dependencies (already in `package.json`)
 
-```json
-"@capacitor/android": "^7.0.0",
-"@capacitor/app": "^7.1.2",
-"@capacitor/splash-screen": "^7.0.5",
-"@capacitor/status-bar": "^7.0.6",
-"@capacitor-community/admob": "^8.0.0",
-"@revenuecat/purchases-capacitor": "^11.3.2"
-```
-
-> **Compatibility note:** `@revenuecat/purchases-capacitor@11.x` supports Capacitor 7. v13+ requires Capacitor 8. `@capacitor-community/admob@8` may expect Capacitor 8 — if `cap sync` or Gradle fails, either upgrade all Capacitor packages to 8 or pin AdMob to a Cap 7–compatible release.
+Capacitor **8** + RevenueCat **13** + AdMob community plugin **8**. See [NATIVE.md](./NATIVE.md) for the full cross-platform workflow.
 
 ## First-time Android setup
 
@@ -59,7 +50,7 @@ pnpm run build && npx cap sync android
 
 [`src/systems/NativeBridge.js`](../src/systems/NativeBridge.js) runs on native boot:
 
-- **Back button** — Pause → resume; Game → pause; else exit app
+- **Back button** — [`Navigation.goBack()`](../src/systems/Navigation.js): closes overlays (Shop, Settings, Codex, …), Pause → resume, Game → pause, Menu → double-tap to exit
 - **App pause/resume** — stops/starts music via `AudioManager`
 - **Status bar** — dark style, `#08050c` background
 - **Splash screen** — hidden after Phaser ready

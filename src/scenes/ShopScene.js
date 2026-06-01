@@ -339,6 +339,11 @@ export class ShopScene extends Phaser.Scene {
     if (this.scene.isPaused(this.from)) this.scene.resume(this.from);
   }
 
+  handleBack() {
+    this.close();
+    return true;
+  }
+
   shutdown() {
     if (this._bannerWasVisible) Monetization.showBanner();
   }

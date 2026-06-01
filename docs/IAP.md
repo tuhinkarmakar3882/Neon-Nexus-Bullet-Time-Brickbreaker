@@ -5,7 +5,7 @@ Full IAP at launch: **Remove Ads**, **Gem Pack (+50)**, **Premium Pass**.
 | Platform | Provider | Implementation |
 |----------|----------|----------------|
 | Android (Capacitor) | RevenueCat → Google Play Billing | [`PlayBilling.js`](../src/systems/PlayBilling.js) |
-| iOS (future) | RevenueCat → App Store | Same module, `VITE_REVENUECAT_IOS_KEY` |
+| iOS (Capacitor) | RevenueCat → App Store | Same module, `VITE_REVENUECAT_IOS_KEY` |
 | Web PWA | Stripe Checkout + webhook | Payment Link + serverless API |
 | Dev / no keys | Demo provider | [`DemoAdProvider.js`](../src/systems/DemoAdProvider.js) simulated store |
 
