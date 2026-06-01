@@ -7,7 +7,10 @@ const TRAIL_PROFILES = {
   comet: { tex: 'trail-plasma', frequency: 14, lifespan: 320, scale: 0.38, speedMin: 4, speedMax: 18 },
   gold: { tex: 'ember', frequency: 10, lifespan: 400, scale: 0.36, speedMin: 6, speedMax: 22 },
   rose: { tex: 'spark-shard', frequency: 16, lifespan: 300, scale: 0.18, speedMin: 4, speedMax: 16 },
+  ember: { tex: 'ember', frequency: 9, lifespan: 380, scale: 0.4, speedMin: 8, speedMax: 24 },
+  frost: { tex: 'spark-shard', frequency: 12, lifespan: 340, scale: 0.22, speedMin: 3, speedMax: 14 },
   nexus: { tex: 'trail-plasma', frequency: 8, lifespan: 420, scale: 0.44, speedMin: 8, speedMax: 28 },
+  void: { tex: 'trail-plasma', frequency: 7, lifespan: 450, scale: 0.42, speedMin: 6, speedMax: 20 },
 };
 
 /** Per-ball hue when several balls are on screen — ring/trail only until a mod is active. */

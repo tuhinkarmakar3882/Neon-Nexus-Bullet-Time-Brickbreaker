@@ -178,10 +178,10 @@ export class HUDScene extends Phaser.Scene {
     this._leftColW = leftColW;
     this._centerColW = centerColW;
 
-    this.onTreasury = (t) => this.refreshCurrency(t.value);
-    this.refreshCurrency = (treasury) => {
+    this.onTreasury = () => this.refreshCurrency();
+    this.refreshCurrency = () => {
       const gems = MetaProgress.getGems();
-      const leaf = treasury ?? MetaProgress.getTreasury();
+      const leaf = MetaProgress.getTreasury();
       this.currencyText.setFontSize(uiPx(11, { min: 8, max: 13 }));
       this.currencyText.setText(`💎${gems.toLocaleString()}  🌿${leaf.toLocaleString()}`);
       this._fitCurrency();
@@ -263,7 +263,7 @@ export class HUDScene extends Phaser.Scene {
       }
       this._livesCount = s.lives ?? 0;
       this.drawLives(s.lives);
-      this._fitCurrency();
+      this.refreshCurrency();
     };
     this.onFlash = (f) => this.showFlash(f);
     this.onLife = () => this.tweens.add({ targets: this.livesC, scaleX: 1.25, scaleY: 1.25, yoyo: true, duration: 200 });
@@ -313,9 +313,9 @@ export class HUDScene extends Phaser.Scene {
 
     this._immersive = true;
     this._immersivePeek = false;
-    // Top bar chrome hidden in immersive — lives, currency & side meters stay visible.
+    // Immersive hides secondary chrome — score, gems & lives stay visible during play.
     this._immersiveHide = [
-      bar, this.scoreText, this.scoreLabel, this.comboText, this.levelText, this.diffText, this.bricksText,
+      bar, this.comboText, this.levelText, this.diffText, this.bricksText,
       this.goalText, this.mutatorText,
     ];
     this.onImmersive = ({ on }) => {

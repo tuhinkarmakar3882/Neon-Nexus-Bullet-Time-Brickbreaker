@@ -8,6 +8,7 @@ import { goalProgressText } from '../config/LevelGoals.js';
 import { rollContract } from '../config/GnomeContracts.js';
 import { fusionTarget } from '../config/PowerFusion.js';
 import { cosmeticById, PADDLE_HULLS, BALL_TRAILS, GARDEN_THEMES } from '../config/Cosmetics.js';
+import { applyEquippedCosmeticsToGame } from '../systems/CosmeticsBridge.js';
 import { seasonalMutatorForDate } from '../config/SeasonalMutators.js';
 import { MetaProgress } from '../systems/MetaProgress.js';
 import { GAME_OVER_MESSAGES, LEVEL_CLEARED_MESSAGES } from '../config/Messages.js';
@@ -186,10 +187,13 @@ export class GameScene extends Phaser.Scene {
     this.game.events.on('req:gambit', () => this.cashComboGambit());
     this.game.events.on('req:nexus', () => this.trySpendNexus());
     this.game.events.on('req:gnome', () => this.trySpendGnome());
+    this._onCosmeticsChanged = () => this.applyEquippedCosmetics();
+    this.game.events.on('meta:cosmetics', this._onCosmeticsChanged);
     this.events.once('shutdown', () => {
       this.game.events.off('req:gambit');
       this.game.events.off('req:nexus');
       this.game.events.off('req:gnome');
+      this.game.events.off('meta:cosmetics', this._onCosmeticsChanged);
     });
 
     this.time.delayedCall(80, () => this.levelFlash());
@@ -299,13 +303,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   applyEquippedCosmetics() {
-    const eq = MetaProgress.getEquipped();
-    const hull = cosmeticById(PADDLE_HULLS, eq.hull);
-    const trail = cosmeticById(BALL_TRAILS, eq.trail);
-    const theme = cosmeticById(GARDEN_THEMES, eq.theme);
-    this.paddle.applyCosmetic(hull.tint);
-    this.balls.forEach((b) => b.applyCosmetic(trail.tint, trail.id));
-    if (theme?.accent) this.bg?.setAccent?.(theme.accent);
+    applyEquippedCosmeticsToGame(this.game);
   }
 
   drawGhostPath(path) {
@@ -2440,6 +2438,7 @@ export class GameScene extends Phaser.Scene {
     MetaProgress.addTreasury(stars * 50);
     const gemsEarned = gemsForLevelClear(this.level, stars);
     MetaProgress.addGems(gemsEarned);
+    this.bus?.emit('hud:treasury', { value: MetaProgress.getTreasury() });
     MetaProgress.bumpStat('levelsCleared');
     if (this.contract?.id === 'noPotHit' && !this.potHitLevel) {
       this.contractDone = true;
@@ -3166,9 +3165,15 @@ export class GameScene extends Phaser.Scene {
       gm.update(dtSec, ts, this.paddle);
       if (gm.overlapsPaddle(this.paddle)) {
         this.score += gm.value;
-        this.floatText(gm.x, this.paddle.top, `+${gm.value}`, '#9ff0ff', 26);
-        this.burst(gm.x, gm.y, 0x9ff0ff, 8); audio.gemPickup?.();
-        gm.destroy(); this.gems.splice(i, 1); continue;
+        const walletGain = Math.max(1, Math.round(gm.value / 80));
+        MetaProgress.addGems(walletGain);
+        this.floatText(gm.x, this.paddle.top, `+${gm.value}  +${walletGain}💎`, '#9ff0ff', 26);
+        this.burst(gm.x, gm.y, 0x9ff0ff, 8);
+        audio.gemPickup?.();
+        this.bus?.emit('hud:treasury', { value: MetaProgress.getTreasury() });
+        gm.destroy();
+        this.gems.splice(i, 1);
+        continue;
       }
       if (gm.y > GAME.HEIGHT) { gm.destroy(); this.gems.splice(i, 1); }
     }
