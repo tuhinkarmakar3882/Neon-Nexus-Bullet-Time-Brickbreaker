@@ -38,4 +38,4 @@ Start with [**PRODUCTION_PLAN.md**](./docs/PRODUCTION_PLAN.md) for the full ship
 
 - [`README.md`](../README.md) — install & quick start (may lag feature count)
 - [`src/config/HowToPlay.js`](../src/config/HowToPlay.js) — in-game Codex copy
-- [`legacy/`](../legacy/) — original canvas prototype (not built by Vite)
+- [`_archive/legacy/`](../_archive/legacy/) — original canvas prototype (archived; not built)

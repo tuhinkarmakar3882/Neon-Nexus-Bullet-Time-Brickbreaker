@@ -2,7 +2,7 @@ import {
   Zap, Maximize2, Hand, Snail, Copy, Shield, Shrink, FlipVertical2, Flame, Snowflake,
   Bomb, Heart, FastForward, Gauge, Activity, Bolt, Droplets, Crosshair, Magnet, Ghost,
   Rocket, Orbit, Radar, Repeat, CircleDot, Minimize2, Shuffle, Sparkles, CircleGauge,
-  ThermometerSnowflake, Disc, CloudFog, Settings, Pause,
+  ThermometerSnowflake, Disc, CloudFog,   Settings, Pause, Gem, Sprout,
 } from 'lucide';
 import { POWER_KEYS, POWERS } from '../config/PowerUps.js';
 
@@ -165,5 +165,7 @@ export function generateUiIcons(scene) {
 
   mk('pause-icon', 48, Pause, 'II');
   mk('heart-icon', 32, Heart, '♥');
+  mk('gem-icon', 24, Gem, '◆');
+  mk('leaf-icon', 24, Sprout, '🌿');
   mk('settings-icon', 48, Settings, '⚙');
 }

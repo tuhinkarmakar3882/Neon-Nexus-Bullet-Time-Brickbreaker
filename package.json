@@ -1,14 +1,15 @@
 {
   "name": "neon-nexus-bullet-time-brickbreaker",
-  "version": "2.2.4",
+  "version": "2.2.5",
   "description": "Neon Nexus: Bullet-Time Brick Breaker — a visually-stunning, cross-platform neon brick breaker built on Phaser 4.",
   "type": "module",
   "author": "Tuhin Karmakar",
   "license": "MIT",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview --host",
+    "dev": "next dev",
+    "build": "next build",
+    "preview": "npx serve out -l 4173",
+    "typecheck": "tsc --noEmit",
     "test:smoke": "node scripts/smoke.mjs",
     "gen:icons": "node scripts/gen-icons.mjs",
     "gen:app-ads": "node scripts/gen-app-ads.mjs",
@@ -17,7 +18,7 @@
     "ship:check": "node scripts/validate-ship-env.mjs --all",
     "ship:check:web": "node scripts/validate-ship-env.mjs --web",
     "ship:check:android": "node scripts/validate-ship-env.mjs --android",
-    "ship:web": "node scripts/validate-ship-env.mjs --web && vite build",
+    "ship:web": "node scripts/validate-ship-env.mjs --web && next build",
     "ship:android": "node scripts/validate-ship-env.mjs --android && pnpm run build && node scripts/sync-capacitor-admob.mjs && node scripts/patch-android-admob-manifest.mjs && node scripts/sync-android-version.mjs && node scripts/copy-android-keystore-example.mjs && cap sync",
     "ship:android:bundle": "node scripts/sync-android-version.mjs && cd android && ./gradlew bundleRelease",
     "cap:sync": "cap sync",
@@ -27,6 +28,7 @@
     "cap:add:android": "pnpm run build && cap add android && node scripts/patch-android-admob-manifest.mjs && node scripts/sync-android-version.mjs && node scripts/copy-android-keystore-example.mjs && cap sync android",
     "cap:add:ios": "pnpm run build && cap add ios && node scripts/patch-ios-admob-plist.mjs && cap sync ios",
     "test:migration": "node scripts/validate-save-migration.mjs",
+    "validate:drops": "node scripts/validate-drops.mjs",
     "check:secrets": "node scripts/check-no-secrets.mjs"
   },
   "dependencies": {
@@ -40,12 +42,17 @@
     "@capacitor/status-bar": "^8.0.2",
     "@revenuecat/purchases-capacitor": "^13.1.4",
     "lucide": "^1.17.0",
+    "next": "^15.5.18",
     "phaser": "4.1.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "stripe": "^22.2.0"
   },
   "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
     "puppeteer-core": "^25.1.0",
-    "vite": "^8.0.14",
-    "vite-plugin-pwa": "^1.3.0"
+    "typescript": "^5.8.3"
   }
 }

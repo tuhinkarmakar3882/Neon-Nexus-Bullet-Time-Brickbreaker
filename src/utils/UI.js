@@ -309,11 +309,6 @@ export function attachOverlayScroll(scene, opts = {}) {
     return x >= b.left && x <= b.left + b.width && y >= b.top && y <= b.top + b.height;
   };
 
-  const hasInteractiveTarget = (pointer) => {
-    const hits = scene.input.hitTestPointer?.(pointer) ?? [];
-    return hits.some((go) => go?.input?.enabled);
-  };
-
   const applyScroll = (next) => {
     setScroll(clampOverlayScroll(next, getMaxScroll()));
   };
@@ -321,7 +316,7 @@ export function attachOverlayScroll(scene, opts = {}) {
   const onDown = (pointer) => {
     if (!inBounds(pointer.x, pointer.y)) return;
     if (getMaxScroll() <= 0) return;
-    if (hasInteractiveTarget(pointer)) return;
+    // Always track drags in the scroll pane — row taps must check isDragGesture() on release.
     tracking = true;
     gestureDragged = false;
     startY = pointer.y;

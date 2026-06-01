@@ -38,7 +38,7 @@ pnpm run cap:android
 |---------|-------|
 | App ID | `com.tuhinkarmakar.neonnexus` (`capacitor.config.json`) |
 | App name | Neon Nexus |
-| Web assets | `dist/` (built by Vite) |
+| Web assets | `out/` (`pnpm run build`, Next.js static export) |
 
 After every web change:
 

@@ -1,4 +1,4 @@
-import { GAME } from '../config/Constants.js';
+import { GAME, paddleSideInset } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
 import { powerFillColor } from '../config/PowerUps.js';
 import { VAUS_SLICE } from '../utils/Textures.js';
@@ -64,8 +64,13 @@ export class Paddle {
     return PAL.accent;
   }
 
+  _sideInset() {
+    return paddleSideInset();
+  }
+
   setCenter(x) {
-    this.x = clamp(x, GAME.WALL_X + this.w / 2, GAME.WIDTH - GAME.WALL_X - this.w / 2);
+    const inset = this._sideInset();
+    this.x = clamp(x, inset + this.w / 2, GAME.WIDTH - inset - this.w / 2);
   }
 
   moveByKeyboard(dir, dtSec, timeScale) {
@@ -75,7 +80,8 @@ export class Paddle {
 
   setPointer(worldX) {
     if (this.stunned) return;
-    this._targetX = clamp(worldX, GAME.WALL_X + this.w / 2, GAME.WIDTH - GAME.WALL_X - this.w / 2);
+    const inset = this._sideInset();
+    this._targetX = clamp(worldX, inset + this.w / 2, GAME.WIDTH - inset - this.w / 2);
     const smooth = clamp(this._smooth * this.speedMult, 0.2, 0.55);
     this.x += (this._targetX - this.x) * smooth;
   }
@@ -83,10 +89,8 @@ export class Paddle {
   relayout() {
     this.baseW = GAME.PADDLE_BASE_WIDTH;
     this.y = GAME.HEIGHT - GAME.PADDLE_Y_OFFSET;
-    if (window.innerWidth / window.innerHeight < 0.6) {
-      this.y -= GAME.HEIGHT * 0.04;
-    }
-    this._targetX = clamp(this.x, GAME.WALL_X + this.w / 2, GAME.WIDTH - GAME.WALL_X - this.w / 2);
+    const inset = this._sideInset();
+    this._targetX = clamp(this.x, inset + this.w / 2, GAME.WIDTH - inset - this.w / 2);
   }
 
   applyAnchorShrink() {

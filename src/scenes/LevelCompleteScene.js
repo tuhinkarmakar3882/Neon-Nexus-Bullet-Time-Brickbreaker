@@ -1,14 +1,15 @@
 import Phaser from 'phaser';
-import { SCENES } from '../config/Constants.js';
+import { GAME, SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { makeResponsiveOverlayPanel, spawnConfetti, makeButton, overlayFrame } from '../utils/UI.js';
 import { InputRouter } from '../systems/InputRouter.js';
 import { Monetization } from '../systems/Monetization.js';
+import { MetaProgress } from '../systems/MetaProgress.js';
 import { isAdSurfaceEnabled } from '../config/AdsConfig.js';
 import { shareProgressScreenshot } from '../systems/ShareProgress.js';
 import { audio } from '../systems/AudioManager.js';
 import { fitTextWidth, orbitronStyle, uiPx, displayStyle } from '../utils/Typography.js';
-import { GAME } from '../config/Constants.js';
+import { AdBreakPolicy } from '../systems/AdBreakPolicy.js';
 
 export class LevelCompleteScene extends Phaser.Scene {
   constructor() { super(SCENES.LEVEL_COMPLETE); }
@@ -112,7 +113,7 @@ export class LevelCompleteScene extends Phaser.Scene {
     if (showAdBtn) {
       makeButton(this, leftX, actionsY, '2× BONUS', async () => {
         if (doubled) return;
-        this.doubleStatus.setText('Loading ad…');
+        this.doubleStatus.setText('Loading video…');
         const granted = await Monetization.offerRewardedDoubleBonus();
         if (granted && game.applyLevelBonusDouble()) {
           doubled = true;
@@ -134,21 +135,31 @@ export class LevelCompleteScene extends Phaser.Scene {
         shareData: {
           level: d.level ?? 1,
           score: d.score ?? 0,
+          lives: game.lives,
           stars,
           gemsEarned: d.gemsEarned,
         },
-        badge: `LEVEL ${d.level ?? 1} CLEARED`,
+        uiScore: d.score ?? 0,
+        level: d.level ?? 1,
+        lives: game.lives,
+        gems: MetaProgress.getGems(),
+        treasury: d.treasury ?? MetaProgress.getTreasury(),
+        badge: `🌿 LEVEL ${d.level ?? 1} CLEARED`,
         badgeColor: '#7eb87a',
-        heroStat: `${(d.score ?? 0).toLocaleString()} PTS`,
-        line2: `${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}  CLEAR BONUS +${d.bonus ?? 0}`,
-        line3: d.gemsEarned != null ? `+${d.gemsEarned} 💎 gems · ${d.gems ?? 0} total` : 'On to the next garden!',
+        heroStat: (d.score ?? 0).toLocaleString(),
+        heroLabel: 'SCORE',
+        line2: `${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`,
+        line2Label: `BONUS +${d.bonus ?? 0}`,
+        line3: d.gemsEarned != null ? `+${d.gemsEarned}` : 'NEXT',
+        line3Label: d.gemsEarned != null ? 'GEMS EARNED' : 'LEVEL',
+        hook: 'Garden secured — the siege rolls on',
       });
       this.shareStatus.setText(res.ok
         ? (res.method === 'download+clipboard' ? 'Saved! Message copied.' : res.method === 'download' ? 'Screenshot saved!' : 'Shared!')
         : 'Share cancelled');
     }, { width: btnW, height: btnH, fontSize: '13px', primary: false, color: PAL.accent3 });
 
-    const hint = this.add.text(frame.cx, frame.cardBot - uiPx(14, { min: 10, max: 16 }), 'tap to continue', {
+    const hint = this.add.text(frame.cx, frame.cardBot - uiPx(14, { min: 10, max: 16 }), 'Tap to continue', {
       ...orbitronStyle(14, PAL.textMuted, { align: 'center' }),
     }).setOrigin(0.5, 1).setAlpha(0).setDepth(1002);
 
@@ -165,11 +176,16 @@ export class LevelCompleteScene extends Phaser.Scene {
     });
 
     let advanced = false;
-    const advance = () => {
+    const advance = async () => {
       if (advanced) return;
       advanced = true;
       InputRouter.onOverlayClose(SCENES.LEVEL_COMPLETE);
       this.scene.stop();
+      try {
+        await AdBreakPolicy.onContinueAfterLevelClear(this.game);
+      } catch (e) {
+        console.warn('[LevelComplete] ad break skipped', e);
+      }
       game.startNextLevel();
     };
     this._advance = advance;

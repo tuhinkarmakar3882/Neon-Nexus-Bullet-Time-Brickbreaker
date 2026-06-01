@@ -3,7 +3,7 @@
 Player-facing rules and systems for the **Twilight Garden** Phaser build under `src/`.  
 For architecture and file maps, see [`ARCHITECTURE.md`](./ARCHITECTURE.md). For the product roadmap, see [`REDESIGN.md`](./REDESIGN.md). Index: [`README.md`](./README.md).
 
-> **Note:** The original canvas prototype is documented only as historical context in `legacy/`. This file describes the **current** game.
+> **Note:** The original canvas prototype is documented only as historical context in `_archive/legacy/`. This file describes the **current** game.
 
 ---
 
@@ -255,4 +255,4 @@ Full catalog: [`ARCHITECTURE.md` §18](./ARCHITECTURE.md#18-audio-vfx--animation
 - Procedural fortress layouts, level goals, mutators
 - Meta progression, shop/cosmetics
 
-See [`legacy/`](../legacy/) for the old implementation only.
+See [`_archive/legacy/`](../_archive/legacy/) for the old implementation only.

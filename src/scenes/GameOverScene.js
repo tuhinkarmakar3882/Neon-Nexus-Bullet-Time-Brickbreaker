@@ -9,6 +9,7 @@ import { shareProgressScreenshot } from '../systems/ShareProgress.js';
 import { MetaProgress } from '../systems/MetaProgress.js';
 import { audio } from '../systems/AudioManager.js';
 import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
+import { exitToHome } from '../shell/routes.js';
 
 export class GameOverScene extends Phaser.Scene {
   constructor() {
@@ -42,13 +43,13 @@ export class GameOverScene extends Phaser.Scene {
         fontSize: '14px',
         color: PAL.accent2,
         onClick: async () => {
-          this.statusText.setText(adsReady ? 'Loading ad…' : '');
+          this.statusText.setText(adsReady ? 'Loading video…' : '');
           const { granted, bypassed } = await Monetization.offerRewardedContinueWithBypass();
           if (granted) {
-            if (bypassed && adsReady) this.statusText.setText('Ad unavailable — continuing…');
+            if (bypassed && adsReady) this.statusText.setText('Video unavailable — continuing your run…');
             resume();
           } else {
-            this.statusText.setText('Could not continue — try again');
+            this.statusText.setText('Could not continue — please try again');
             audio.blip(220);
           }
         },
@@ -65,27 +66,36 @@ export class GameOverScene extends Phaser.Scene {
         label: 'MAIN MENU', primary: false, fontSize: '14px', color: 0x8b9bb4,
         onClick: () => {
           InputRouter.onOverlayClose(SCENES.GAMEOVER, false);
-          this.scene.stop(SCENES.HUD);
+          this.scene.stop(SCENES.UI);
           this.scene.stop(SCENES.GAME);
           this.scene.stop();
-          this.scene.start(SCENES.MENU);
+          exitToHome();
         },
       },
       {
         label: 'SHARE PROGRESS', primary: false, fontSize: '13px', color: PAL.accent3,
         onClick: async () => {
-          this.statusText.setText('Preparing screenshot…');
+          this.statusText.setText('Preparing share card…');
           const res = await shareProgressScreenshot(this.game, {
             kind: 'gameover',
-            shareData: { score, highScore, isNewBest },
-            badge: isNewBest ? 'NEW HIGH SCORE!' : 'GAME OVER',
+            shareData: { score, highScore, isNewBest, level: game.level, lives: game.lives },
+            uiScore: score,
+            level: game.level,
+            lives: game.lives,
+            gems: MetaProgress.getGems(),
+            treasury: MetaProgress.getTreasury(),
+            badge: isNewBest ? '🏆 NEW PERSONAL BEST' : '💥 RUN ENDED',
             badgeColor: isNewBest ? cssHex(PAL.gold) : '#ff6b7a',
-            heroStat: `${score.toLocaleString()} PTS`,
-            line2: `Best · ${highScore.toLocaleString()}`,
-            line3: `💎 ${MetaProgress.getGems()} gems · Think you can beat me?`,
+            heroStat: score.toLocaleString(),
+            heroLabel: 'FINAL SCORE',
+            line2: highScore.toLocaleString(),
+            line2Label: 'PERSONAL BEST',
+            line3: MetaProgress.getGems().toLocaleString(),
+            line3Label: 'GEMS',
+            hook: 'Jardinain chaos · Nexus slow-mo · Beat my siege',
           });
           this.statusText.setText(res.ok
-            ? (res.method === 'download+clipboard' ? 'Saved! Message copied.' : res.method === 'download' ? 'Screenshot saved!' : 'Shared!')
+            ? (res.method === 'download+clipboard' ? 'Saved — share text copied.' : res.method === 'download' ? 'Share card saved.' : 'Shared successfully.')
             : 'Share cancelled');
         },
       },
@@ -106,19 +116,19 @@ export class GameOverScene extends Phaser.Scene {
       y += msg.height + uiPx(8, { min: 6, max: 10 });
     }
 
-    const scoreText = this.add.text(frame.cx, y, `Score  ${score.toLocaleString()}`, {
+    const scoreText = this.add.text(frame.cx, y, `SCORE  ${score.toLocaleString()}`, {
       ...orbitronStyle(26, cssHex(PAL.accent), { fontStyle: 'bold', align: 'center' }),
     }).setOrigin(0.5, 0).setDepth(1001);
     fitTextWidth(scoreText, frame.wrap, uiPx(18, { min: 16, max: 22 }));
     y += uiPx(28, { min: 24, max: 32 });
 
-    this.add.text(frame.cx, y, `Best  ${highScore.toLocaleString()}`, {
+    this.add.text(frame.cx, y, `PERSONAL BEST  ${highScore.toLocaleString()}`, {
       ...orbitronStyle(16, PAL.textMuted, { align: 'center' }),
     }).setOrigin(0.5, 0).setDepth(1001);
     y += uiPx(22, { min: 18, max: 26 });
 
     if (isNewBest) {
-      this.add.text(frame.cx, y, 'NEW HIGH SCORE', {
+      this.add.text(frame.cx, y, 'NEW PERSONAL BEST', {
         ...orbitronStyle(14, cssHex(PAL.accent3), { fontStyle: '900', align: 'center' }),
       }).setOrigin(0.5, 0).setDepth(1001);
       y += uiPx(20, { min: 16, max: 24 });
@@ -134,10 +144,10 @@ export class GameOverScene extends Phaser.Scene {
 
   handleBack() {
     InputRouter.onOverlayClose(SCENES.GAMEOVER, false);
-    this.scene.stop(SCENES.HUD);
+    this.scene.stop(SCENES.UI);
     this.scene.stop(SCENES.GAME);
     this.scene.stop();
-    this.scene.start(SCENES.MENU);
+    exitToHome();
     return true;
   }
 }

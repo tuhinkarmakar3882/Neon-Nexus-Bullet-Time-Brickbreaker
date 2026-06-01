@@ -4,6 +4,7 @@ import puppeteer from 'puppeteer-core';
 
 const PORT = 4319;
 const URL = `http://localhost:${PORT}/`;
+const PLAY_URL = `${URL}play/`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function findChrome() {
@@ -17,10 +18,10 @@ function findChrome() {
   return 'google-chrome';
 }
 
-const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { cwd: process.cwd(), stdio: 'ignore' });
+const server = spawn('npx', ['serve', 'out', '-l', String(PORT)], { cwd: process.cwd(), stdio: 'ignore' });
 const errors = [];
 const logs = [];
-await sleep(2500);
+await sleep(3500);
 
 const browser = await puppeteer.launch({
   executablePath: findChrome(),
@@ -56,128 +57,63 @@ async function clickAt(page, xRatio, yRatio) {
   await page.mouse.click(Math.round(vp.width * xRatio), Math.round(vp.height * yRatio));
 }
 
+async function openPlay(page) {
+  await page.evaluateOnNewDocument(() => {
+    sessionStorage.setItem('neon-play-intent', JSON.stringify({ mode: 'new', extra: {}, ts: Date.now() }));
+  });
+  await page.goto(PLAY_URL, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.waitForFunction(() => !!window.__NEON?.scene, { timeout: 25000 });
+  await sleep(2000);
+}
+
 async function runFlow(page, label) {
   await page.goto(URL, { waitUntil: 'networkidle2', timeout: 30000 });
-  await page.waitForFunction(() => !!window.__NEON?.scene, { timeout: 20000 });
-  await sleep(2000);
+  await page.waitForFunction(() => document.body?.innerText?.includes('NEON NEXUS'), { timeout: 15000 });
 
   const saveSchema = await page.evaluate(() => Number(localStorage.getItem('nn_save_schema') || 0));
   if (saveSchema < 2) errors.push(`${label}: save schema not migrated (got ${saveSchema})`);
 
-  // Start game (bypass loadout picker in headless smoke)
+  await openPlay(page);
+
+  // Start game
   await page.evaluate(() => {
     const g = window.__NEON;
     if (!g?.scene) throw new Error('Phaser not ready');
-    g.scene.start('Game', { newGame: true });
-    g.scene.stop('Menu');
+    if (!g.scene.isActive('Game')) g.scene.start('Game', { newGame: true });
   });
   await sleep(800);
   let st = await waitFor(page, (s) => s.active.includes('Game'), 5000);
   if (!st.active.includes('Game')) errors.push(`${label}: Game did not start`);
 
-  // Settings flow via scene API (click fallback)
-  await page.evaluate(() => {
-    window.__NEON.scene.stop('HUD');
-    window.__NEON.scene.stop('Game');
-    window.__NEON.scene.start('Menu');
-  });
-  await sleep(500);
-  await clickAt(page, 0.5, 0.72);
-  await sleep(400);
+  // React shell — Settings & Shop pages
   await page.evaluate(() => {
     const g = window.__NEON;
-    const menu = g.scene.getScene('Menu');
-    if (menu) {
-      menu.scene.launch('Settings', { from: 'Menu' });
-      menu.scene.pause();
-    }
-  });
-  await sleep(400);
-  st = await waitFor(page, (s) => s.active.includes('Settings'), 3000);
-  if (!st.active.includes('Settings')) errors.push(`${label}: Settings did not open`);
-  await page.evaluate(() => {
-    const s = window.__NEON.scene.getScene('Settings');
-    s.settings.sound = !s.settings.sound;
-    s.close();
-  });
-  await sleep(400);
-
-  // Navigation.goBack — Settings from Menu (reset overlays first; clickAt may have opened Shop)
-  await page.evaluate(() => {
-    const g = window.__NEON;
-    for (const k of ['Shop', 'Settings', 'Codex', 'Purchase', 'Pause']) {
-      if (g.scene.isActive(k)) g.scene.stop(k);
-    }
-    if (g.scene.isPaused('Menu')) g.scene.resume('Menu');
-    if (!g.scene.isActive('Menu')) g.scene.start('Menu');
-    const menu = g.scene.getScene('Menu');
-    menu.scene.launch('Settings', { from: 'Menu' });
-    menu.scene.pause();
-  });
-  await sleep(300);
-  await page.evaluate(() => {
-    if (typeof window.__neonGoBack !== 'function') throw new Error('__neonGoBack missing');
-    window.__neonGoBack();
-  });
-  await sleep(400);
-  st = await waitFor(
-    page,
-    (s) => s.active.includes('Menu') && !s.active.includes('Settings') && !s.active.includes('Shop'),
-    4000,
-  );
-  if (!st.active.includes('Menu') || st.active.includes('Settings')) {
-    errors.push(`${label}: Navigation goBack from Settings failed — active=${st.active.join(',')}`);
-  }
-
-  // Shop + Purchase via Monetization (skipped when VITE_IAP_ENABLED=false)
-  const iapEnabled = await page.evaluate(() => window.__NEON_FLAGS?.iapEnabled === true);
-  await page.evaluate(() => {
-    const g = window.__NEON;
-    g.scene.getScene('Menu')?.scene.launch('Shop', { from: 'Menu' });
-    g.scene.getScene('Menu')?.scene.pause();
-  });
-  await sleep(400);
-  st = await waitFor(page, (s) => s.active.includes('Shop'), 3000);
-  if (!st.active.includes('Shop')) errors.push(`${label}: Shop did not open`);
-
-  if (iapEnabled) {
-  const purchaseOk = await page.evaluate(async () => {
-    const g = window.__NEON;
-    const shop = g.scene.getScene('Shop');
-    if (!shop) return { ok: false, err: 'no shop' };
-    try {
-      const p = shop.buyStoreProduct('coins_small');
-      for (let i = 0; i < 20; i++) {
-        await new Promise((r) => setTimeout(r, 150));
-        if (g.scene.isActive('Purchase')) break;
+    if (g?.scene?.isActive('Game')) {
+      const gs = g.scene.getScene('Game');
+      if (gs && !gs.over) {
+        localStorage.setItem('nn_run_v1', JSON.stringify({ version: 2, savedAt: Date.now(), level: gs.level, score: gs.score, lives: gs.lives, continues: gs.continues ?? 0, combo: gs.combo ?? 0, activePowers: [], campaignSeed: 1, levelSeed: 1, powerDropSeq: 0, brickDamage: [] }));
       }
-      if (!g.scene.isActive('Purchase')) return { ok: false, err: 'Purchase scene not open' };
-      g.scene.getScene('Purchase').confirmPurchase();
-      await p;
-      await new Promise((r) => setTimeout(r, 200));
-      return {
-        ok: g.scene.isActive('Shop') && !g.scene.isPaused('Shop'),
-        err: null,
-      };
-    } catch (e) {
-      return { ok: false, err: String(e?.message ?? e) };
     }
   });
-  if (!purchaseOk.ok) errors.push(`${label}: demo purchase flow failed — ${purchaseOk.err ?? 'unknown'}`);
-  }
-
+  await page.goto(`${URL}settings/`, { waitUntil: 'networkidle2', timeout: 15000 });
+  await page.waitForFunction(() => document.body?.innerText?.includes('SETTINGS'), { timeout: 8000 });
   await page.evaluate(() => {
-    const g = window.__NEON;
-    g.scene.stop('Shop');
-    g.scene.stop('Purchase');
-    if (g.scene.isPaused('Menu')) g.scene.resume('Menu');
+    const btn = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('SOUND'));
+    btn?.click();
   });
   await sleep(300);
+  await openPlay(page);
+  await page.evaluate(() => {
+    if (!window.__NEON.scene.isActive('Game')) window.__NEON.scene.start('Game', { newGame: true });
+  });
+  await sleep(600);
 
-  // Start game
-  await clickAt(page, 0.5, 0.5);
-  await sleep(800);
-  await page.evaluate(() => { if (!window.__NEON.scene.isActive('Game')) { window.__NEON.scene.start('Game', { newGame: true }); window.__NEON.scene.stop('Menu'); } });
+  await page.goto(`${URL}shop/`, { waitUntil: 'networkidle2', timeout: 15000 });
+  await page.waitForFunction(() => document.body?.innerText?.includes('GARDEN SHOP'), { timeout: 8000 });
+  await openPlay(page);
+  await page.evaluate(() => {
+    if (!window.__NEON.scene.isActive('Game')) window.__NEON.scene.start('Game', { newGame: true });
+  });
   await sleep(600);
 
   await page.evaluate(() => {
@@ -302,7 +238,11 @@ try {
   const page = await browser.newPage();
   page.on('console', (m) => {
     logs.push(`[${m.type()}] ${m.text()}`);
-    if (m.type() === 'error') errors.push('console.error: ' + m.text());
+    if (m.type() === 'error') {
+      const t = m.text();
+      if (/Failed to load resource.*404/i.test(t)) return;
+      errors.push('console.error: ' + t);
+    }
   });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 

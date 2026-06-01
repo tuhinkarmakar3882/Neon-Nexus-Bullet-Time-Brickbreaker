@@ -5,7 +5,7 @@ Single web build powers **PWA**, **Android**, and **iOS** via [Capacitor 8](http
 ## Architecture
 
 ```text
-pnpm run build  →  dist/
+pnpm run build  →  out/
                       ├── Deploy to Vercel/Netlify (PWA)
                       └── cap sync  →  android/ + ios/ WebViews
 ```

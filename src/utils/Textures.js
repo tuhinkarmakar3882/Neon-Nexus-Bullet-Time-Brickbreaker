@@ -1,8 +1,10 @@
-import { GAME } from '../config/Constants.js';
+import Phaser from 'phaser';
+import { BRICK, GAME } from '../config/Constants.js';
 
 // Runtime canvas textures — Neon Nexus art direction:
 // glass bricks, carbon paddle, plasma ball, soft particle trails.
 
+/** @deprecated Use brickPanelInsets() for display-sized bricks. */
 export const PANEL_SLICE = 22;
 export const VAUS_SLICE = { l: 32, r: 32, t: 16, b: 16 };
 export const PILL_SLICE = 20;
@@ -17,6 +19,53 @@ function ts(n) {
   return Math.max(4, Math.round(n * texDpr()));
 }
 
+/** Safe nine-slice insets for on-screen brick size (avoids corner overlap on short tiles). */
+export function brickPanelInsets(displayW, displayH) {
+  const w = Math.max(8, Math.round(displayW));
+  const h = Math.max(8, Math.round(displayH));
+  const left = Math.min(Math.max(4, Math.round(w * 0.14)), Math.floor((w - 6) / 2));
+  const top = Math.min(Math.max(3, Math.round(h * 0.24)), Math.floor((h - 6) / 2));
+  return { left, right: left, top, bottom: top };
+}
+
+function ctxOf(scene, key, w, h) {
+  const canvas = scene.textures.createCanvas(key, w, h);
+  return { canvas, ctx: canvas.getContext() };
+}
+
+function finishCanvas(scene, key, canvas) {
+  canvas.refresh();
+  const tex = scene.textures.get(key);
+  if (!tex?.setFilter) return;
+  const linear = Phaser.Textures?.FilterMode?.LINEAR ?? 1;
+  try {
+    tex.setFilter(linear);
+  } catch {
+    /* older Phaser builds */
+  }
+}
+
+function bakeBrickPanelTextures(scene) {
+  const pw = ts(Math.max(120, Math.round(BRICK.WIDTH * 3)));
+  const ph = ts(Math.max(44, Math.round(BRICK.HEIGHT * 3)));
+  makePanelBrick(scene, 'panel', pw, ph, 'normal');
+  makePanelBrick(scene, 'panel-gold', pw, ph, 'gold');
+  makePanelBrick(scene, 'panel-steel', pw, ph, 'steel');
+  makePanelBrick(scene, 'panel-hostage', pw, ph, 'hostage');
+  makeCrack(scene, 'crack-1', pw, ph, 1);
+  makeCrack(scene, 'crack-2', pw, ph, 2);
+  makeCrack(scene, 'crack-3', pw, ph, 3);
+}
+
+/** Re-bake brick panels after viewport resize changes BRICK.WIDTH/HEIGHT. */
+export function regenerateBrickPanelTextures(scene) {
+  if (!scene?.textures) return;
+  for (const key of ['panel', 'panel-gold', 'panel-steel', 'panel-hostage', 'crack-1', 'crack-2', 'crack-3']) {
+    if (scene.textures.exists(key)) scene.textures.remove(key);
+  }
+  bakeBrickPanelTextures(scene);
+}
+
 export function generateTextures(scene) {
   makeSoftCircle(scene, 'soft', ts(64));
   makeSoftCircle(scene, 'spark', ts(20));
@@ -28,10 +77,7 @@ export function generateTextures(scene) {
   makeRing(scene, 'ring', ts(128), ts(5));
   makePixel(scene, 'pixel');
   makeBgGradient(scene, 'bg-grad', ts(256), ts(256));
-  makePanel(scene, 'panel', ts(128));
-  makePanelGold(scene, 'panel-gold', ts(128));
-  makePanelSteel(scene, 'panel-steel', ts(128));
-  makePanelHostage(scene, 'panel-hostage', ts(128));
+  bakeBrickPanelTextures(scene);
   makeVaus(scene, 'vaus', ts(280), ts(68));
   makeOrb(scene, 'orb', ts(96));
   makeBallCore(scene, 'ball-core', ts(44));
@@ -40,14 +86,6 @@ export function generateTextures(scene) {
   makePill(scene, 'pill', ts(140), ts(52));
   makeGemCrystal(scene, 'gem', ts(64));
   makeBulletBolt(scene, 'bullet-bolt', ts(12), ts(40));
-  makeCrack(scene, 'crack-1', ts(96), ts(38), 1);
-  makeCrack(scene, 'crack-2', ts(96), ts(38), 2);
-  makeCrack(scene, 'crack-3', ts(96), ts(38), 3);
-}
-
-function ctxOf(scene, key, w, h) {
-  const canvas = scene.textures.createCanvas(key, w, h);
-  return { canvas, ctx: canvas.getContext() };
 }
 
 function roundRectPath(ctx, x, y, w, h, r) {
@@ -111,177 +149,95 @@ function makePixel(scene, key) {
   canvas.refresh();
 }
 
-/** Glossy glass brick — light base for tint, luminous beveled edges. */
-function makePanel(scene, key, s) {
+/**
+ * Wide brick panel (matches on-screen aspect) — light ceramic base for clean tinting.
+ * @param {'normal'|'gold'|'steel'|'hostage'} variant
+ */
+function makePanelBrick(scene, key, w, h, variant = 'normal') {
   if (scene.textures.exists(key)) return;
-  const { canvas, ctx } = ctxOf(scene, key, s, s);
-  const r = 10;
-  const pad = 3;
-  roundRectPath(ctx, pad, pad, s - pad * 2, s - pad * 2, r);
-  ctx.save();
-  ctx.clip();
-  const base = ctx.createLinearGradient(0, 0, s * 0.2, s);
-  base.addColorStop(0, '#f8fcff');
-  base.addColorStop(0.4, '#dce8f4');
-  base.addColorStop(0.75, '#b8c8dc');
-  base.addColorStop(1, '#8898b0');
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, s, s);
-  const shine = ctx.createLinearGradient(0, 0, s, s);
-  shine.addColorStop(0, 'rgba(255,255,255,0.55)');
-  shine.addColorStop(0.35, 'rgba(255,255,255,0.08)');
-  shine.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = shine;
-  ctx.fillRect(0, 0, s, s);
-  const depth = ctx.createLinearGradient(0, s * 0.5, 0, s);
-  depth.addColorStop(0, 'rgba(8,12,24,0)');
-  depth.addColorStop(1, 'rgba(8,12,24,0.28)');
-  ctx.fillStyle = depth;
-  ctx.fillRect(0, s * 0.45, s, s * 0.55);
-  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(pad + 8, pad + 10);
-  ctx.lineTo(s - pad - 10, s - pad - 12);
-  ctx.stroke();
-  ctx.restore();
-  roundRectPath(ctx, pad, pad, s - pad * 2, s - pad * 2, r);
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = 'rgba(255,255,255,0.82)';
-  ctx.stroke();
-  roundRectPath(ctx, pad + 3, pad + 3, s - pad * 2 - 6, s - pad * 2 - 6, r - 2);
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-  ctx.stroke();
-  canvas.refresh();
-}
+  const { canvas, ctx } = ctxOf(scene, key, w, h);
+  const pad = Math.max(2, Math.round(h * 0.1));
+  const r = Math.min(h * 0.34, w * 0.1, 12);
+  const innerW = w - pad * 2;
+  const innerH = h - pad * 2;
 
-/** Indestructible gold block — radiant alloy plate. */
-function makePanelGold(scene, key, s) {
-  if (scene.textures.exists(key)) return;
-  const { canvas, ctx } = ctxOf(scene, key, s, s);
-  const r = 10;
-  const pad = 3;
-  roundRectPath(ctx, pad, pad, s - pad * 2, s - pad * 2, r);
+  roundRectPath(ctx, pad, pad, innerW, innerH, r);
   ctx.save();
   ctx.clip();
-  const base = ctx.createLinearGradient(0, 0, s, s);
-  base.addColorStop(0, '#fff8d8');
-  base.addColorStop(0.3, '#ffd860');
-  base.addColorStop(0.65, '#d0a028');
-  base.addColorStop(1, '#806018');
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, s, s);
-  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-  ctx.lineWidth = 1;
-  for (let i = -s; i < s * 2; i += 10) {
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i + s, s);
-    ctx.stroke();
-  }
-  const shine = ctx.createLinearGradient(0, 0, 0, s * 0.5);
-  shine.addColorStop(0, 'rgba(255,255,255,0.65)');
-  shine.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = shine;
-  ctx.fillRect(0, 0, s, s * 0.5);
-  ctx.restore();
-  roundRectPath(ctx, pad, pad, s - pad * 2, s - pad * 2, r);
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = '#fff4c0';
-  ctx.stroke();
-  const cx = s / 2;
-  const cy = s / 2;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - 12);
-  ctx.lineTo(cx + 10, cy);
-  ctx.lineTo(cx, cy + 12);
-  ctx.lineTo(cx - 10, cy);
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(255,255,220,0.95)';
-  ctx.fill();
-  ctx.strokeStyle = '#fffef8';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  canvas.refresh();
-}
 
-/** Indestructible steel block — dark chrome with cyan edge light. */
-function makePanelSteel(scene, key, s) {
-  if (scene.textures.exists(key)) return;
-  const { canvas, ctx } = ctxOf(scene, key, s, s);
-  const r = 8;
-  const pad = 3;
-  roundRectPath(ctx, pad, pad, s - pad * 2, s - pad * 2, r);
-  ctx.save();
-  ctx.clip();
-  const base = ctx.createLinearGradient(0, 0, 0, s);
-  base.addColorStop(0, '#c8d4e4');
-  base.addColorStop(0.35, '#788898');
-  base.addColorStop(0.72, '#404858');
-  base.addColorStop(1, '#282c38');
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, s, s);
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-  ctx.lineWidth = 1.5;
-  for (let y = 20; y < s; y += 16) {
-    ctx.beginPath();
-    ctx.moveTo(pad + 6, y);
-    ctx.lineTo(s - pad - 6, y);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = 'rgba(120,200,255,0.25)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(pad + 8, pad + 8);
-  ctx.lineTo(s - pad - 8, pad + 8);
-  ctx.stroke();
-  ctx.restore();
-  roundRectPath(ctx, pad, pad, s - pad * 2, s - pad * 2, r);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = '#a8c8e8';
-  ctx.stroke();
-  [[pad + 8, pad + 8], [s - pad - 8, pad + 8], [pad + 8, s - pad - 8], [s - pad - 8, s - pad - 8]].forEach(([rx, ry]) => {
-    ctx.beginPath();
-    ctx.arc(rx, ry, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = '#303848';
-    ctx.fill();
-    ctx.strokeStyle = '#d0e8ff';
+  if (variant === 'gold') {
+    const base = ctx.createLinearGradient(0, 0, w, h);
+    base.addColorStop(0, '#fff6d8');
+    base.addColorStop(0.45, '#ffd050');
+    base.addColorStop(1, '#a07018');
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, w, h);
+    const shine = ctx.createLinearGradient(0, 0, 0, h * 0.55);
+    shine.addColorStop(0, 'rgba(255,255,255,0.5)');
+    shine.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = shine;
+    ctx.fillRect(0, 0, w, h * 0.55);
+  } else if (variant === 'steel') {
+    const base = ctx.createLinearGradient(0, 0, 0, h);
+    base.addColorStop(0, '#d0dce8');
+    base.addColorStop(0.5, '#788898');
+    base.addColorStop(1, '#303848');
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(0,0,0,0.22)';
     ctx.lineWidth = 1;
-    ctx.stroke();
-  });
-  canvas.refresh();
-}
-
-/** Hostage brick — alarm-red containment cell. */
-function makePanelHostage(scene, key, s) {
-  if (scene.textures.exists(key)) return;
-  const { canvas, ctx } = ctxOf(scene, key, s, s);
-  const r = 9;
-  const pad = 3;
-  roundRectPath(ctx, pad, pad, s - pad * 2, s - pad * 2, r);
-  ctx.save();
-  ctx.clip();
-  const base = ctx.createLinearGradient(0, 0, s, s);
-  base.addColorStop(0, '#5a2830');
-  base.addColorStop(0.5, '#381820');
-  base.addColorStop(1, '#200810');
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, s, s);
-  ctx.strokeStyle = 'rgba(255,90,110,0.55)';
-  ctx.lineWidth = 2;
-  for (let x = 14; x < s - 10; x += 12) {
-    ctx.beginPath();
-    ctx.moveTo(x, pad + 4);
-    ctx.lineTo(x, s - pad - 4);
-    ctx.stroke();
+    for (let y = pad + 10; y < h - pad; y += Math.max(10, Math.round(h * 0.22))) {
+      ctx.beginPath();
+      ctx.moveTo(pad + 6, y);
+      ctx.lineTo(w - pad - 6, y);
+      ctx.stroke();
+    }
+  } else if (variant === 'hostage') {
+    const base = ctx.createLinearGradient(0, 0, w, h);
+    base.addColorStop(0, '#6a3040');
+    base.addColorStop(0.55, '#401820');
+    base.addColorStop(1, '#240810');
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(255,90,110,0.45)';
+    ctx.lineWidth = Math.max(1, Math.round(h * 0.08));
+    for (let x = pad + 10; x < w - pad - 6; x += Math.max(10, Math.round(w * 0.08))) {
+      ctx.beginPath();
+      ctx.moveTo(x, pad + 3);
+      ctx.lineTo(x, h - pad - 3);
+      ctx.stroke();
+    }
+  } else {
+    const base = ctx.createLinearGradient(0, 0, w * 0.15, h);
+    base.addColorStop(0, '#f6faff');
+    base.addColorStop(0.42, '#e2ecf8');
+    base.addColorStop(0.78, '#c8d4e8');
+    base.addColorStop(1, '#a8b8d0');
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, w, h);
+    const shine = ctx.createLinearGradient(0, 0, 0, h * 0.42);
+    shine.addColorStop(0, 'rgba(255,255,255,0.42)');
+    shine.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = shine;
+    ctx.fillRect(0, 0, w, h * 0.42);
+    const depth = ctx.createLinearGradient(0, h * 0.62, 0, h);
+    depth.addColorStop(0, 'rgba(12,18,32,0)');
+    depth.addColorStop(1, 'rgba(12,18,32,0.14)');
+    ctx.fillStyle = depth;
+    ctx.fillRect(0, h * 0.62, w, h * 0.38);
   }
+
   ctx.restore();
-  roundRectPath(ctx, pad, pad, s - pad * 2, s - pad * 2, r);
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = '#ff5a6e';
+
+  roundRectPath(ctx, pad, pad, innerW, innerH, r);
+  ctx.lineWidth = Math.max(1.5, h * 0.06);
+  if (variant === 'gold') ctx.strokeStyle = 'rgba(255,244,180,0.95)';
+  else if (variant === 'steel') ctx.strokeStyle = 'rgba(168,200,232,0.9)';
+  else if (variant === 'hostage') ctx.strokeStyle = 'rgba(255,90,110,0.9)';
+  else ctx.strokeStyle = 'rgba(255,255,255,0.78)';
   ctx.stroke();
-  canvas.refresh();
+
+  finishCanvas(scene, key, canvas);
 }
 
 /** Seed capsule — organic pill for power-ups (category-tintable). */
@@ -608,5 +564,5 @@ function makeCrack(scene, key, w, h, stage) {
     ctx.arc(w * 0.45, h * 0.4, 2, 0, Math.PI * 2);
     ctx.fill();
   }
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }

@@ -26,7 +26,6 @@ class MonetizationService {
     this.removeAds = false;
     this.interstitialEvery = AdsConfig.interstitial.everyLevels;
     this.interstitialMinMs = AdsConfig.interstitial.minIntervalMs;
-    this._levelCounter = 0;
     this._lastInterstitialAt = 0;
     this.products = { ...AdsConfig.products };
   }
@@ -51,22 +50,33 @@ class MonetizationService {
     return this.provider.init?.();
   }
 
+  /** @deprecated — use AdBreakPolicy.onContinueAfterLevelClear after level-complete Continue */
   async maybeShowLevelInterstitial() {
-    if (this.removeAds) return { shown: false };
-    this._levelCounter++;
-    if (this._levelCounter % this.interstitialEvery !== 0) return { shown: false };
+    return { shown: false };
+  }
+
+  /** Shown after level-complete Continue when AdBreakPolicy allows (every N wins). */
+  async showInterstitialAfterContinue(game = this.game) {
+    if (this.removeAds || !game) return { shown: false };
     const now = Date.now();
     if (now - this._lastInterstitialAt < this.interstitialMinMs) return { shown: false };
     try {
-      const res = await this.provider.showInterstitial();
-      if (!res?.shown) return { shown: false };
-      this._lastInterstitialAt = now;
-      const showOverlay = !res.native
-        || AdsConfig.interstitial.overlayAfterNative;
-      if (showOverlay && this.provider.showInterstitialOverlay && this.game) {
-        await this.provider.showInterstitialOverlay(this.game);
+      let nativeShown = false;
+      const res = await this.provider.showInterstitial?.();
+      if (res?.shown && res.native) {
+        nativeShown = true;
+        this._lastInterstitialAt = now;
+        if (AdsConfig.interstitial.overlayAfterNative && this.provider.showInterstitialOverlay) {
+          await this.provider.showInterstitialOverlay(game);
+        }
+        return { shown: true, native: true };
       }
-      return { shown: true };
+      if (this.provider.showInterstitialOverlay) {
+        await this.provider.showInterstitialOverlay(game);
+        this._lastInterstitialAt = now;
+        return { shown: true, native: nativeShown };
+      }
+      return { shown: false };
     } catch {
       return { shown: false };
     }

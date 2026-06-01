@@ -17,10 +17,6 @@ export function applyEquippedCosmeticsToGame(game) {
     if (theme?.accent) gs.bg?.setAccent?.(theme.accent);
   }
 
-  const menu = game.scene.getScene(SCENES.MENU);
-  if (menu?.sys?.isActive?.() && theme?.accent) {
-    menu.bg?.setAccent?.(theme.accent);
-  }
 }
 
 export function emitCosmeticsChanged(game) {

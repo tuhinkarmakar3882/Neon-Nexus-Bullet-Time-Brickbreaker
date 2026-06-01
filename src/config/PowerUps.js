@@ -23,7 +23,7 @@ export const CATEGORY_ORDER = ['paddle', 'ball', 'env', 'wild'];
 export const CANNON_TYPES = ['Laser', 'FireCannon', 'IceCannon', 'ShockCannon', 'NapalmCannon'];
 export const BALL_MODS = [
   'ExplosiveBall', 'FrozenBall', 'ElectricBall', 'NukeBall', 'MegaBall', 'HeavyBall',
-  'Teleport', 'Missile', 'Gravity', 'Echo', 'ChargeShot', 'Wrap',
+  'Missile', 'Gravity', 'Echo', 'ChargeShot', 'Wrap',
 ];
 
 /** Legacy save / code aliases → canonical keys */
@@ -43,7 +43,9 @@ export const POWER_ALIASES = {
   Reverse: 'Flip',
   Glue: 'Catch',
   Mega: 'MegaBall',
-  Through: 'Teleport',
+  Through: 'ChargeShot',
+  Teleport: 'ChargeShot',
+  Phase: 'ChargeShot',
   Shield: 'Shield',
   Freeze: 'BrickFreeze',
 };
@@ -78,12 +80,11 @@ export const POWERS = {
   ElectricBall:  { pill: 'ZAP',     short: 'EL', category: 'ball', color: 0xe0e0ff, dur: 10000, kind: 'timed', weight: 7, polarity: 'pos', icon: 'zap',       ballMod: 'electric',  desc: 'One-hit any brick — zaps gnomes' },
   MegaBall:      { pill: 'MEGA',    short: 'GB', category: 'ball', color: 0xffcc44, dur: 12000, kind: 'timed', weight: 7, polarity: 'pos', icon: 'disc',      ballMod: 'mega',      desc: 'Giant ball — 2× size, double brick damage' },
   HeavyBall:     { pill: 'HEAVY',   short: 'HV', category: 'ball', color: 0x888899, dur: 9000,  kind: 'timed', weight: 5, polarity: 'neg', icon: 'snail',     ballMod: 'heavy',     desc: 'Sluggish ball — 45% slower movement' },
-  Teleport:      { pill: 'PHASE',   short: 'TP', category: 'ball', color: 0x72f2eb, dur: 8000,  kind: 'timed', weight: 6, polarity: 'pos', icon: 'ghost',     ballMod: 'teleport',  desc: 'Phases through bricks while breaking them' },
-  Missile:       { pill: 'HOMING',  short: 'MS', category: 'ball', color: 0x00ff8b, dur: 7000,  kind: 'timed', weight: 6, polarity: 'pos', icon: 'rocket',    ballMod: 'missile',   desc: 'Ball curves back toward paddle' },
-  Gravity:       { pill: 'GRAVITY', short: 'GR', category: 'ball', color: 0xd88bff, dur: 5000,  kind: 'timed', weight: 5, polarity: 'pos', icon: 'orbit',     ballMod: 'gravity',   desc: 'Ball arcs toward the paddle' },
-  Echo:          { pill: 'ECHO',    short: 'EC', category: 'ball', color: 0xe0e0e0, dur: 8000,  kind: 'timed', weight: 5, polarity: 'pos', icon: 'radar',     ballMod: 'echo',      desc: 'Orbiting echo nodes break nearby bricks' },
+  Missile:       { pill: 'HOMING',  short: 'HM', category: 'ball', color: 0x00ff8b, dur: 9000,  kind: 'timed', weight: 7, polarity: 'pos', icon: 'rocket',    ballMod: 'missile',   desc: 'Homing missile — seeks bricks with a hot exhaust trail' },
+  Gravity:       { pill: 'GRAVITY', short: 'GR', category: 'ball', color: 0xd88bff, dur: 6000,  kind: 'timed', weight: 6, polarity: 'pos', icon: 'orbit',     ballMod: 'gravity',   desc: 'Heavy arc — ball bends hard toward your paddle' },
+  Echo:          { pill: 'ECHO',    short: 'EC', category: 'ball', color: 0xe0e0e0, dur: 9000,  kind: 'timed', weight: 6, polarity: 'pos', icon: 'radar',     ballMod: 'echo',      desc: 'Wide orbiting echo ring shatters nearby bricks' },
   ChargeShot:    { pill: 'CHARGE',  short: 'CH', category: 'ball', color: 0xffac33, dur: 15000, kind: 'timed', weight: 6, polarity: 'pos', icon: 'crosshair', ballMod: 'charge',    desc: 'Next brick hit is an instant kill' },
-  Wrap:          { pill: 'WRAP',    short: 'WR', category: 'ball', color: 0xffe156, dur: 15000, kind: 'timed', weight: 5, polarity: 'pos', icon: 'repeat',    ballMod: 'wrap',      desc: 'Ball wraps around side walls' },
+  Wrap:          { pill: 'WRAP',    short: 'WR', category: 'ball', color: 0xffe156, dur: 15000, kind: 'timed', weight: 5, polarity: 'pos', icon: 'repeat',    ballMod: 'wrap',      desc: 'Ball re-enters on the left/right edges only' },
   BallSplitter:  { pill: 'SPLIT',   short: '2X', category: 'ball', color: 0xff4ecd, dur: 0,     kind: 'instant', weight: 10, polarity: 'pos', icon: 'copy',    bulletTime: true,       desc: 'Doubles all active balls' },
 
   // —— Environment (Jardinains + legacy field effects) ——

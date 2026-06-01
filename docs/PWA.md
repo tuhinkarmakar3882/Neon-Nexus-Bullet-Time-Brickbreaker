@@ -1,167 +1,161 @@
-# PWA Deployment (Vercel & Netlify)
+# Web deployment (Vercel & Netlify)
 
-Guide for shipping **Neon Nexus** as an installable Progressive Web App on **Vercel** or **Netlify**.
+Guide for shipping **Neon Nexus** as a static site on **Vercel** or **Netlify**. The shell is **Next.js 15** (App Router) with `output: 'export'`; production assets land in **`out/`** (also Capacitor `webDir`).
 
 ## Stack
 
-| Piece | File / package |
-|-------|----------------|
-| Build | Vite 7 → `dist/` |
-| PWA plugin | `vite-plugin-pwa` (Workbox, auto-update) |
-| Manifest | `public/manifest.json` |
-| SEO / OG | `index.html` meta + `scripts/gen-icons.mjs` |
-| Vercel config | `vercel.json` |
-| Netlify config | `netlify.toml` |
+| Piece | Location |
+|-------|----------|
+| Build | `pnpm run build` → `out/` |
+| Config | [`next.config.mjs`](../next.config.mjs) (`trailingSlash: true`, `images.unoptimized`) |
+| Vercel | [`vercel.json`](../vercel.json) + dashboard env |
+| Netlify | [`netlify.toml`](../netlify.toml) + dashboard env |
+| Manifest / icons | `public/manifest.json`, `scripts/gen-icons.mjs` (`prebuild`) |
+| Stripe (web IAP) | Vercel: `api/*.js` · Netlify: `netlify/functions/*.js` |
 
-## Build
+## Build locally
 
 ```bash
 pnpm install
-cp .env.production.example .env.production   # edit values
+cp .env.production.example .env.production   # edit values (gitignored)
+pnpm run ship:check:web                      # optional env validation
 pnpm run build
-pnpm run preview                             # local smoke at :4173
+pnpm run preview                             # http://localhost:4173 → serves out/
 ```
 
-`prebuild` runs `gen-icons.mjs` which generates:
-
-- PWA icons in `public/icons/android/`
-- `public/og-image.png` (1200×630)
-- `public/robots.txt` and `public/sitemap.xml`
+`prebuild` runs version stamp, icon generation, and `app-ads.txt` sync.
 
 ## Environment variables
 
-Set in the host dashboard or `.env.production`:
+Set in the host dashboard (Production + Preview) or in `.env.production` for local builds. `next.config.mjs` forwards any `VITE_*` keys into the client bundle.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `VITE_GAME_URL` | **Yes** for SEO | Canonical URL, OG image, sitemap (no trailing slash) |
+| `VITE_GAME_URL` | **Yes** for SEO | Canonical URL, sitemap, OG (no trailing slash) |
 | `VITE_AD_PROVIDER` | Yes | `google` for production freemium |
 | `VITE_AD_TEST_MODE` | Yes | `false` in production |
-| `VITE_STRIPE_CHECKOUT_URL` | For web IAP | Stripe Payment Link base URL |
-| `VITE_REVENUECAT_*` | Native only | Not needed for pure PWA |
+| `VITE_STRIPE_CHECKOUT_URL` | Web IAP | Stripe Payment Link base URL |
+| `STRIPE_SECRET_KEY` | Web IAP | Server only — **not** `VITE_` |
+| `STRIPE_WEBHOOK_SECRET` | Web IAP | Server only |
+| `NEXT_PUBLIC_SHELL_ADS` | Optional | `1` to show shell ad slots |
 
 See [`.env.production.example`](../.env.production.example) for the full list.
 
-## Deploy — Vercel (default)
+---
 
-### Option A: CLI
+## Deploy — Vercel
+
+### Option A: Git integration (recommended)
+
+1. Import the GitHub repo in [Vercel](https://vercel.com).
+2. **Framework preset:** Next.js (detected automatically).
+3. **Install command:** `pnpm install`
+4. **Build command:** `pnpm run build`
+5. **Output directory:** `out` (set automatically when `output: 'export'` is in `next.config.mjs`; [`vercel.json`](../vercel.json) documents the same).
+6. Add environment variables from `.env.production.example` (Production + Preview as needed).
+
+### Option B: CLI
 
 ```bash
-npm i -g vercel
+pnpm i -g vercel
+vercel link          # once per machine
 vercel --prod
 ```
 
-Set environment variables in the Vercel dashboard → Project → Settings → Environment Variables.
+Paste env vars in the dashboard → **Project → Settings → Environment Variables**.
 
-### Option B: Git integration
+### Stripe webhooks (Vercel)
 
-1. Connect repo to Vercel
-2. **Framework preset:** Vite
-3. **Build command:** `pnpm run build`
-4. **Output directory:** `dist`
-5. Add env vars from `.env.production.example`
+Serverless routes live in [`api/`](../api/):
 
-[`vercel.json`](../vercel.json) adds:
+| Route | File |
+|-------|------|
+| `POST /api/stripe-webhook` | `api/stripe-webhook.js` |
+| `POST /api/fulfill-session` | `api/fulfill-session.js` |
+| `POST /api/redeem-unlock` | `api/redeem-unlock.js` |
 
-- Security headers (`X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`)
-- Long-cache headers for `/assets/*`
+In Stripe Dashboard → Webhooks, set endpoint URL to:
 
-### Stripe webhook (optional)
+`https://YOUR-DOMAIN/api/stripe-webhook`
 
-Add serverless route at `api/stripe-webhook.js` for web IAP fulfillment. See [IAP.md](./IAP.md).
+Payment Link **success URL** (still a static page in `public/`):
+
+`https://YOUR-DOMAIN/checkout-success.html?session_id={CHECKOUT_SESSION_ID}`
+
+Details: [IAP.md](./IAP.md).
+
+[`vercel.json`](../vercel.json) adds security headers and long-cache for `/_next/static/*`.
+
+---
 
 ## Deploy — Netlify
 
-### Option A: CLI
+### Option A: Git integration (recommended)
+
+1. Connect the repo in [Netlify](https://app.netlify.com).
+2. Netlify reads [`netlify.toml`](../netlify.toml):
+   - **Build:** `pnpm install && pnpm run build`
+   - **Publish directory:** `out`
+   - **Node:** 20
+3. Add the same env vars as Vercel under **Site configuration → Environment variables**.
+
+### Option B: CLI
 
 ```bash
-npm i -g netlify-cli
-netlify deploy --prod --dir=dist
+pnpm i -g netlify-cli
+pnpm run build
+netlify deploy --prod --dir=out
 ```
 
-### Option B: Git integration
+### Stripe webhooks (Netlify)
 
-[`netlify.toml`](../netlify.toml) configures:
+[`netlify.toml`](../netlify.toml) proxies `/api/*` to `netlify/functions/*` (shared crypto helpers in [`server/unlock-crypto.js`](../server/unlock-crypto.js)). Use the same Stripe webhook URL path as on Vercel: `https://YOUR-SITE/api/stripe-webhook`.
 
-- **Build:** `pnpm run build`
-- **Publish:** `dist`
-- **SPA fallback:** `/* → /index.html` (status 200)
-- Same security + cache headers as Vercel
+### Routing notes
 
-For Stripe webhooks on Netlify, use `netlify/functions/stripe-webhook.js`.
+- Do **not** use a catch-all `/* → /index.html` redirect; Next static export ships real HTML per route (`/play/`, `/codex/`, …).
+- `trailingSlash: true` — app links use trailing slashes; `netlify.toml` 301s bare paths like `/play` → `/play/`.
+- Unknown paths fall through to `404.html` in `out/`.
 
-## Service worker strategy
+---
 
-`vite-plugin-pwa` generates `dist/sw.js` with **stale-while-revalidate** for HTML/JS/CSS (deploys propagate quickly). [`src/main.js`](../src/main.js) registers `./sw.js` in production (web only).
+## Routes after deploy
 
-Precache is limited to static media; app shell uses runtime SWR. See [`vite.config.js`](../vite.config.js).
+| URL | Purpose |
+|-----|---------|
+| `/` | Home hub |
+| `/play/` | Phaser game |
+| `/codex/`, `/shop/`, `/settings/`, `/share/`, `/connect/`, `/install/` | Shell pages |
+| `/privacy.html`, `/terms.html` | Legal (Play Store + web) |
+| `/checkout-success.html` | Stripe return + fulfill |
+| `/app-ads.txt` | AdMob verification |
+| `/manifest.json` | PWA manifest |
 
-## Browser back (PWA)
+## PWA / install
 
-Overlay scenes push history entries; browser **Back** maps to [`Navigation.goBack()`](../src/systems/Navigation.js) (same as Android hardware back). **Escape** closes the top overlay on desktop.
-
-## Install prompt (planned)
-
-Add to [`MenuScene.js`](../src/scenes/MenuScene.js):
-
-1. Listen for `beforeinstallprompt` → store `deferredPrompt`
-2. Show "Install App" button when event fires
-3. On click: `deferredPrompt.prompt()`; hide after `appinstalled` or dismiss
-
-Criteria for installability:
-
-- HTTPS (provided by Vercel/Netlify)
-- Valid `manifest.json` with icons
-- Registered service worker
-- User engagement heuristics (browser-dependent)
+- **HTTPS** — provided by Vercel/Netlify.
+- **Manifest** — `public/manifest.json` (icons from `pnpm run gen:icons`).
+- **Service worker** — not shipped in the Next shell yet; installability may depend on browser heuristics without offline caching.
+- Install prompt hook: `beforeinstallprompt` in [`app/layout.tsx`](../app/layout.tsx).
 
 ## SEO & link previews
 
-With `VITE_GAME_URL=https://your-domain.com` set at build time:
+Set `VITE_GAME_URL` at build time so `scripts/gen-icons.mjs` can write `robots.txt` / `sitemap.xml` with the production host. Root metadata lives in [`app/layout.tsx`](../app/layout.tsx). OG image: `/og-image.png` (generated in `public/` during `prebuild`).
 
-- Canonical link injected via `vite.config.js` `html-seo-inject` plugin
-- `og:image` → `{VITE_GAME_URL}/og-image.png`
-- JSON-LD in `index.html` points to game URL
-- `robots.txt` + `sitemap.xml` reference production domain
-
-Verify after deploy:
-
-- [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/)
-- [Twitter Card Validator](https://cards-dev.twitter.com/validator)
-- View page source — confirm `%OG_IMAGE%` replaced
-
-## Static legal pages
-
-Host on the same domain as the game (required for Play Store privacy URL):
-
-- `public/privacy.html` — privacy policy
-- `public/terms.html` — terms of service (optional)
-
-URLs: `https://your-domain.com/privacy.html`
+After deploy, verify with [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) and view-source on `/`.
 
 ## Post-deploy checklist
 
-- [ ] Game loads over HTTPS
-- [ ] Install prompt appears (Chrome desktop / Android)
-- [ ] Offline: cached shell loads after first visit
-- [ ] OG preview shows title, description, og-image
-- [ ] Ads show with `VITE_AD_PROVIDER=google` (or demo in staging)
-- [ ] Remove Ads purchase flow opens Stripe tab (web) or succeeds (native)
-- [ ] `pnpm run test:smoke` passes against preview URL (optional CI step)
-
-## Local PWA testing
-
-```bash
-pnpm run build && pnpm run preview
-# Chrome DevTools → Application → Service Workers
-# Lighthouse → PWA audit
-```
-
-Note: `vite-plugin-pwa` dev mode is disabled (`devOptions: { enabled: false }`). Test PWA features against preview/production builds only.
+- [ ] `https://YOUR-DOMAIN/` and `/play/` load over HTTPS
+- [ ] `https://YOUR-DOMAIN/app-ads.txt` returns plain text
+- [ ] `/privacy.html` reachable (Play Store privacy URL)
+- [ ] Env: `VITE_AD_PROVIDER=google`, `VITE_AD_TEST_MODE=false` (production)
+- [ ] Stripe test purchase + webhook (if IAP enabled)
+- [ ] Optional: `pnpm run test:smoke` against preview URL
 
 ## Related
 
-- [PRODUCTION_PLAN.md](./PRODUCTION_PLAN.md) — Phase 2 checklist
-- [ADS.md](./ADS.md) — web AdSense / Ad Manager
-- [IAP.md](./IAP.md) — Stripe web checkout
-- [RELEASE.md](./RELEASE.md) — Android (privacy URL shared with Play Store)
+- [SHIP.md](./SHIP.md) — click-ops checklist
+- [IAP.md](./IAP.md) — Stripe + unlock codes
+- [RELEASE.md](./RELEASE.md) — Android (shared privacy URL)
+- [NATIVE.md](./NATIVE.md) — Capacitor (`webDir: out`)

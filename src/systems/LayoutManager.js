@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
-import { GAME, SCENES, computeLayout } from '../config/Constants.js';
+import { BRICK, GAME, SCENES, computeLayout } from '../config/Constants.js';
+import { regenerateBrickPanelTextures } from '../utils/Textures.js';
 
 let lastAspect = null;
 let lastW = 0;
 let lastH = 0;
+let lastBrickW = 0;
+let lastBrickH = 0;
 
 /** True when a live match is running (layout must stay locked). */
 export function isGameplayLocked(game) {
@@ -17,9 +20,11 @@ export function getViewportSize() {
   const vv = window.visualViewport;
   const rw = root?.clientWidth ?? 0;
   const rh = root?.clientHeight ?? 0;
-  const w = rw > 32 ? rw : (vv?.width || window.innerWidth || 390);
-  const h = rh > 32 ? rh : (vv?.height || window.innerHeight || 844);
-  return { w: Math.max(320, Math.round(w)), h: Math.max(480, Math.round(h)) };
+  const vw = vv?.width ?? window.innerWidth ?? 390;
+  const vh = vv?.height ?? window.innerHeight ?? 844;
+  const w = rw > 32 ? rw : vw;
+  const h = rh > 32 ? rh : vh;
+  return { w: Math.max(320, Math.round(w)), h: Math.max(400, Math.round(h)) };
 }
 
 /** Resolve env(safe-area-inset-*) to pixel values. */
@@ -73,9 +78,29 @@ export function syncViewportLayout() {
   const prevH = GAME.HEIGHT;
   computeLayout(w, h, readSafeAreaInsets());
   const changed = GAME.WIDTH !== prevW || GAME.HEIGHT !== prevH;
+  const brickResized = BRICK.WIDTH !== lastBrickW || BRICK.HEIGHT !== lastBrickH;
+  lastBrickW = BRICK.WIDTH;
+  lastBrickH = BRICK.HEIGHT;
   lastAspect = aspect;
   lastW = GAME.WIDTH;
   lastH = GAME.HEIGHT;
+  return changed || brickResized;
+}
+
+function maybeRefreshBrickTextures(game) {
+  if (!game?.scene || game.scene.isActive(SCENES.GAME)) return;
+  const boot = game.scene.getScene(SCENES.BOOT);
+  const preload = game.scene.getScene(SCENES.PRELOAD);
+  const scene = boot?.scene?.isActive() ? boot : preload;
+  if (scene) regenerateBrickPanelTextures(scene);
+}
+
+/** After CSS play-frame layout, re-measure and resize Phaser if needed. */
+export function syncPlayFrameLayout(game) {
+  const changed = syncViewportLayout();
+  if (changed) maybeRefreshBrickTextures(game);
+  if (game?.scale && changed) applyLogicalResize(game);
+  else refreshDisplayScale(game);
   return changed;
 }
 

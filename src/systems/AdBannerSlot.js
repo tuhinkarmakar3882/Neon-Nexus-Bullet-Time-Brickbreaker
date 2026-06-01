@@ -12,11 +12,15 @@ export function applyBannerPlaceholder(el = document.getElementById('ad-banner')
 export function showWebBannerBar() {
   const el = document.getElementById('ad-banner');
   if (!el) return null;
-  el.classList.add('visible');
+  el.classList.add('visible', 'ad-banner-slot--visible');
+  el.setAttribute('aria-hidden', 'false');
   return el;
 }
 
 export function hideWebBannerBar() {
   const el = document.getElementById('ad-banner');
-  if (el) el.classList.remove('visible');
+  if (el) {
+    el.classList.remove('visible', 'ad-banner-slot--visible');
+    el.setAttribute('aria-hidden', 'true');
+  }
 }

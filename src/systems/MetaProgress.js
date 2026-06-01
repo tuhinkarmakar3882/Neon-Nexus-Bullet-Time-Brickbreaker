@@ -183,12 +183,12 @@ export const MetaProgress = {
     const stats = m.stats ?? DEFAULT_META.stats;
     const codex = m.codex ?? DEFAULT_META.codex;
     return [
-      { id: 'first_ko', label: 'First Knockout', done: (stats.knockouts ?? 0) >= 1 },
-      { id: 'gambit', label: 'Combo Gambit', done: (stats.combosCashed ?? 0) >= 1 },
-      { id: 'cleared_10', label: 'Ten Gardens', done: (stats.levelsCleared ?? 0) >= 10 },
-      { id: 'gem_collector', label: 'Gem Collector', done: (m.gems ?? 0) >= 50 },
-      { id: 'gnome_scholar', label: 'Gnome Scholar', done: (codex.gnomes?.length ?? 0) >= 3 },
-      { id: 'power_collector', label: 'Power Collector', done: (codex.powers?.length ?? 0) >= 12 },
+      { id: 'first_ko', label: 'First Jardinain knocked loose', done: (stats.knockouts ?? 0) >= 1 },
+      { id: 'gambit', label: 'Cashed a combo gambit', done: (stats.combosCashed ?? 0) >= 1 },
+      { id: 'cleared_10', label: 'Cleared ten garden levels', done: (stats.levelsCleared ?? 0) >= 10 },
+      { id: 'gem_collector', label: 'Fifty gems secured', done: (m.gems ?? 0) >= 50 },
+      { id: 'gnome_scholar', label: 'Three gnome tiers catalogued', done: (codex.gnomes?.length ?? 0) >= 3 },
+      { id: 'power_collector', label: 'Twelve powers discovered', done: (codex.powers?.length ?? 0) >= 12 },
     ];
   },
   countTotalStars() {

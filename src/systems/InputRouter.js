@@ -4,10 +4,7 @@ import { popOverlayHistory, pushOverlayHistory, pushPauseHistory } from './Navig
 const OVERLAY_SCENES = [
   SCENES.PAUSE,
   SCENES.GAMEOVER,
-  SCENES.SETTINGS,
   SCENES.LEVEL_COMPLETE,
-  SCENES.CODEX,
-  SCENES.SHOP,
   SCENES.AD_BREAK,
   SCENES.PURCHASE,
 ];
@@ -61,7 +58,7 @@ class InputRouterService {
     if (syncHistory) popOverlayHistory();
 
     const gameActive = sm.isActive(SCENES.GAME);
-    if (gameActive && sm.isPaused(SCENES.HUD)) sm.resume(SCENES.HUD);
+    if (gameActive && sm.isPaused(SCENES.UI)) sm.resume(SCENES.UI);
     if (resumeGame && gameActive && sm.isPaused(SCENES.GAME)) sm.resume(SCENES.GAME);
   }
 

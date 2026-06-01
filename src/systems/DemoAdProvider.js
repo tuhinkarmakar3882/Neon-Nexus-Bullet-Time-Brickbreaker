@@ -6,7 +6,7 @@ import { launchParallelScene } from './SceneLaunch.js';
 
 const AD_SIM_MS = 1400;
 
-const PURCHASE_HOST_ORDER = [SCENES.SHOP, SCENES.SETTINGS, SCENES.PAUSE, SCENES.MENU];
+const PURCHASE_HOST_ORDER = [SCENES.PAUSE, SCENES.PURCHASE];
 
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -24,10 +24,8 @@ export function createDemoAdProvider(game) {
   return {
     name: 'demo-web',
     init: async () => {},
-    showInterstitial: async () => {
-      await delay(AD_SIM_MS);
-      return { shown: true, simulated: true };
-    },
+    /** Native-style fill happens in AdBreakScene overlay on Continue — no pre-overlay delay. */
+    showInterstitial: async () => ({ shown: false, simulated: true }),
     showRewarded: async ({ placement } = {}) => {
       await delay(AD_SIM_MS);
       return { rewarded: true, placement, simulated: true };

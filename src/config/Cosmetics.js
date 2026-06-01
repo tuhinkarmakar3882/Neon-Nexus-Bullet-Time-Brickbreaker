@@ -72,19 +72,19 @@ export const COSMETIC_SECTIONS = [
   {
     kind: 'hull',
     title: 'PADDLE HULLS',
-    blurb: 'Changes your paddle color in-game — equip to see it live.',
+    blurb: 'Hull finishes change paddle color in the arena.',
     items: PADDLE_HULLS,
   },
   {
     kind: 'trail',
     title: 'BALL TRAILS',
-    blurb: 'Particle wake behind every ball — unique motion FX per style.',
+    blurb: 'Motion trails behind each ball — distinct particle styles.',
     items: BALL_TRAILS,
   },
   {
     kind: 'theme',
     title: 'GARDEN THEMES',
-    blurb: 'Backdrop accent & arena mood — applies to menu and active run.',
+    blurb: 'Arena accent color and backdrop mood for your run.',
     items: GARDEN_THEMES,
   },
 ];

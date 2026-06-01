@@ -1,4 +1,4 @@
-/** Best-effort immersive display — Fullscreen API + mobile viewport lock. */
+/** Fullscreen API helpers (opt-in only — play route stays windowed). */
 
 function fullscreenElement() {
   return document.fullscreenElement
@@ -48,14 +48,9 @@ export async function exitGameFullscreen() {
   }
 }
 
-/** Nudge mobile browsers to collapse the URL bar — do not pin html/body height (breaks Phaser). */
+/** No-op: we keep the game in a padded frame instead of forcing immersive chrome. */
 export function lockMobileViewport() {
-  if (typeof window === 'undefined') return;
-  try {
-    window.scrollTo(0, 1);
-  } catch {
-    /* ignore */
-  }
+  /* intentionally empty */
 }
 
 export function attachFullscreenListener(onChange) {

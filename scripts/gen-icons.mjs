@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Generate PWA launcher icons + Open Graph preview image + SEO files + manifest. */
+/** Generate PWA launcher icons + Open Graph preview + Next/Capacitor app icons + manifest. */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { join, dirname } from 'node:path';
@@ -7,19 +7,35 @@ import { fileURLToPath } from 'node:url';
 import { buildPwaManifest } from './pwa-manifest.mjs';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
-const publicDir = join(__dir, '../public');
-const outDir = join(publicDir, 'icons/android');
-mkdirSync(outDir, { recursive: true });
+const rootDir = join(__dir, '..');
+const publicDir = join(rootDir, 'public');
+const androidDir = join(publicDir, 'icons/android');
+const iosDir = join(publicDir, 'icons/ios');
+const appDir = join(rootDir, 'app');
+const resourcesDir = join(rootDir, 'resources');
+
+for (const d of [androidDir, iosDir, appDir, resourcesDir]) {
+  mkdirSync(d, { recursive: true });
+}
 
 const SITE_URL = (process.env.VITE_GAME_URL || '').replace(/\/$/, '');
 
+const BG = [8, 5, 12];
+const TEAL = [47, 230, 199];
+const PINK = [255, 79, 163];
+const GOLD = [255, 192, 77];
+
 const BRICK_PALETTE = [
-  [138, 123, 255],
   [255, 111, 156],
-  [47, 217, 199],
-  [255, 192, 77],
+  TEAL,
+  GOLD,
+  [138, 123, 255],
   [90, 160, 255],
 ];
+
+const ANDROID_SIZES = [48, 72, 96, 144, 192, 512];
+const MASKABLE_SIZES = [192, 512];
+const IOS_SIZES = [20, 29, 40, 57, 58, 60, 76, 80, 87, 120, 152, 167, 180, 1024];
 
 function crc32(buf) {
   let c = ~0;
@@ -45,9 +61,6 @@ function encodePng(width, height, getRgb) {
   ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8;
   ihdr[9] = 2;
-  ihdr[10] = 0;
-  ihdr[11] = 0;
-  ihdr[12] = 0;
 
   const rows = [];
   for (let y = 0; y < height; y++) {
@@ -80,22 +93,6 @@ function clamp8(v) {
   return Math.max(0, Math.min(255, Math.round(v)));
 }
 
-function distToSegment(px, py, x1, y1, x2, y2) {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const len2 = dx * dx + dy * dy;
-  if (len2 === 0) return Math.hypot(px - x1, py - y1);
-  let t = ((px - x1) * dx + (py - y1) * dy) / len2;
-  t = Math.max(0, Math.min(1, t));
-  const qx = x1 + t * dx;
-  const qy = y1 + t * dy;
-  return Math.hypot(px - qx, py - qy);
-}
-
-function strokeDist(px, py, x1, y1, x2, y2, halfWidth) {
-  return Math.max(0, distToSegment(px, py, x1, y1, x2, y2) - halfWidth);
-}
-
 function mixRgb(base, overlay, alpha) {
   return [
     clamp8(lerp(base[0], overlay[0], alpha)),
@@ -104,15 +101,85 @@ function mixRgb(base, overlay, alpha) {
   ];
 }
 
-/** Branded square launcher icon — neon N, brick row, paddle & ball. */
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+function strokeDist(px, py, x1, y1, x2, y2, halfWidth) {
+  return Math.max(0, distToSegment(px, py, x1, y1, x2, y2) - halfWidth);
+}
+
+/** Signed distance to rounded rect (negative = inside). */
+function roundedRectSdf(px, py, x, y, w, h, r) {
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const qx = Math.abs(px - cx) - w / 2 + r;
+  const qy = Math.abs(py - cy) - h / 2 + r;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+}
+
+function inRoundedRect(px, py, x, y, w, h, r) {
+  return roundedRectSdf(px, py, x, y, w, h, r) <= 0;
+}
+
+/** Paint the hub emblem — teal nexus orb + four-point star (matches title screen). */
+function paintNexusEmblem(px, py, cx, cy, size, rgb) {
+  const orbR = size * 0.26;
+  const dist = Math.hypot(px - cx, py - cy);
+
+  if (dist < orbR * 0.42) {
+    return mixRgb(rgb, [255, 255, 255], 0.94);
+  }
+  if (dist < orbR) {
+    const t = 1 - dist / orbR;
+    return mixRgb(rgb, TEAL, 0.35 + t * 0.58);
+  }
+  if (dist < orbR * 2.15) {
+    const t = 1 - (dist - orbR) / (orbR * 1.15);
+    return mixRgb(rgb, TEAL, t * 0.42);
+  }
+
+  const armW = size * 0.016;
+  const armLen = orbR * 0.78;
+  const starD = Math.min(
+    strokeDist(px, py, cx, cy - armLen, cx, cy + armLen, armW),
+    strokeDist(px, py, cx - armLen, cy, cx + armLen, cy, armW),
+  );
+  if (starD < armW * 2.8) {
+    const edge = Math.max(0, 1 - starD / (armW * 2.8));
+    return mixRgb(rgb, [255, 255, 255], 0.7 + edge * 0.28);
+  }
+
+  const dotR = size * 0.014;
+  for (const [dx, dy] of [[0.22, -0.22], [0.22, 0.22], [-0.2, 0.2]]) {
+    const dd = Math.hypot(px - (cx + size * dx), py - (cy + size * dy));
+    if (dd < dotR) return mixRgb(rgb, [255, 255, 255], 0.85);
+  }
+
+  const ringR = orbR * 1.35;
+  const ringDist = Math.abs(dist - ringR);
+  if (ringDist < size * 0.012) {
+    return mixRgb(rgb, PINK, 0.55);
+  }
+
+  return rgb;
+}
+
+/** Branded launcher — nexus orb, brick row, paddle & ball on #08050c. */
 function launcherIconRgb(x, y, size, { maskable = false } = {}) {
   const cx = size * 0.5;
-  const cy = size * 0.5;
+  const cy = size * 0.46;
   let px = x;
   let py = y;
 
   if (maskable) {
-    const safe = 0.72;
+    const safe = 0.76;
     px = (x - cx) / safe + cx;
     py = (y - cy) / safe + cy;
   }
@@ -121,76 +188,67 @@ function launcherIconRgb(x, y, size, { maskable = false } = {}) {
   const ny = (py - cy) / size;
   const dist = Math.hypot(nx, ny);
 
-  let rgb = [5, 6, 12];
-  const nyNorm = py / size;
-  rgb = mixRgb(rgb, [10, 13, 28], 1 - nyNorm * 0.55);
-  rgb = mixRgb(rgb, [18, 8, 24], Math.min(1, dist * 1.35) * 0.35);
+  let rgb = [...BG];
+  const vignette = Math.min(1, dist * 1.2);
+  rgb = mixRgb(rgb, [16, 10, 28], vignette * 0.45);
 
-  const glow = Math.max(0, 1 - dist * 2.1);
-  rgb = mixRgb(rgb, [47, 230, 199], glow * 0.22);
+  const glow = Math.max(0, 1 - dist * 2.2);
+  rgb = mixRgb(rgb, TEAL, glow * 0.2);
+  rgb = mixRgb(rgb, PINK, glow * 0.1);
 
   if (maskable) {
-    rgb = mixRgb([18, 8, 24], rgb, Math.max(0, 1 - dist * 1.15));
+    rgb = mixRgb([12, 8, 22], rgb, Math.max(0, 1 - dist * 1.05));
+  }
+
+  const iconPad = size * 0.06;
+  const iconR = size * 0.2;
+  const iconSize = size - iconPad * 2;
+  if (!maskable && !inRoundedRect(px, py, iconPad, iconPad, iconSize, iconSize, iconR)) {
+    return BG;
   }
 
   const brickW = size * 0.17;
-  const brickH = size * 0.075;
+  const brickH = size * 0.074;
   const gridTop = size * 0.14;
-  const gridLeft = cx - brickW * 1.55;
-  for (let row = 0; row < 2; row++) {
-    for (let col = 0; col < 3; col++) {
-      const bx = gridLeft + col * (brickW + size * 0.018) + (row % 2 ? brickW * 0.28 : 0);
-      const by = gridTop + row * (brickH + size * 0.014);
-      if (px >= bx && px <= bx + brickW && py >= by && py <= by + brickH) {
-        const inset = size * 0.008;
-        if (px > bx + inset && px < bx + brickW - inset && py > by + inset && py < by + brickH - inset) {
-          const palette = BRICK_PALETTE[(row * 3 + col) % BRICK_PALETTE.length];
-          rgb = mixRgb(rgb, palette, 0.88);
-        }
+  const gridLeft = cx - brickW * 2.1;
+  for (let col = 0; col < 4; col++) {
+    if ((col + 1) % 4 === 0) continue;
+    const bx = gridLeft + col * (brickW + size * 0.018);
+    const by = gridTop;
+    const inset = size * 0.01;
+    if (px >= bx && px <= bx + brickW && py >= by && py <= by + brickH) {
+      if (px > bx + inset && px < bx + brickW - inset && py > by + inset && py < by + brickH - inset) {
+        rgb = mixRgb(rgb, BRICK_PALETTE[col % BRICK_PALETTE.length], 0.9);
+        rgb = mixRgb(rgb, [255, 255, 255], 0.1);
+      } else {
+        rgb = mixRgb(rgb, TEAL, 0.3);
       }
     }
   }
 
-  const stroke = size * 0.065;
-  const nLeft = cx - size * 0.16;
-  const nRight = cx + size * 0.16;
-  const nTop = cy - size * 0.14;
-  const nMid = cy + size * 0.02;
-  const nBot = cy + size * 0.2;
+  rgb = paintNexusEmblem(px, py, cx, cy - size * 0.02, size, rgb);
 
-  const nDist = Math.min(
-    strokeDist(px, py, nLeft, nTop, nLeft, nBot, stroke * 0.5),
-    strokeDist(px, py, nLeft, nTop, nRight, nBot, stroke * 0.5),
-    strokeDist(px, py, nRight, nTop, nRight, nBot, stroke * 0.5),
-  );
-
-  if (nDist < stroke * 1.8) {
-    const edge = Math.max(0, 1 - nDist / (stroke * 1.8));
-    rgb = mixRgb(rgb, [47, 230, 199], 0.55 + edge * 0.4);
-    rgb = mixRgb(rgb, [255, 79, 163], edge * 0.25);
+  const paddleY = size * 0.82;
+  const paddleH = size * 0.058;
+  const paddleW = size * 0.4;
+  const paddleDist = roundedRectSdf(px, py, cx - paddleW / 2, paddleY - paddleH / 2, paddleW, paddleH, paddleH / 2);
+  if (paddleDist <= 0) {
+    rgb = mixRgb(rgb, GOLD, 0.88);
+    rgb = mixRgb(rgb, TEAL, 0.35);
+    rgb = mixRgb(rgb, [255, 255, 255], 0.18);
+  } else if (paddleDist < size * 0.02) {
+    rgb = mixRgb(rgb, TEAL, (1 - paddleDist / (size * 0.02)) * 0.38);
   }
 
-  const paddleY = size * 0.78;
-  const paddleH = size * 0.055;
-  const paddleW = size * 0.34;
-  if (Math.abs(py - paddleY) < paddleH && Math.abs(px - cx) < paddleW * 0.5) {
-    rgb = mixRgb(rgb, [47, 230, 199], 0.92);
-  }
-
-  const ballR = size * 0.055;
-  const ballX = cx + size * 0.08;
-  const ballY = size * 0.62;
+  const ballR = size * 0.058;
+  const ballX = cx;
+  const ballY = size * 0.66;
   const ballDist = Math.hypot(px - ballX, py - ballY);
   if (ballDist < ballR) {
-    rgb = mixRgb(rgb, [255, 255, 255], 0.95);
-    rgb = mixRgb(rgb, [47, 230, 199], Math.max(0, 1 - ballDist / ballR) * 0.35);
-  } else if (ballDist < ballR * 2.2) {
-    rgb = mixRgb(rgb, [47, 230, 199], (1 - ballDist / (ballR * 2.2)) * 0.35);
-  }
-
-  const corner = Math.min(px / (size * 0.08), py / (size * 0.08), (size - px) / (size * 0.08), (size - py) / (size * 0.08), 1);
-  if (corner < 1 && !maskable) {
-    rgb = mixRgb([5, 6, 12], rgb, corner);
+    rgb = mixRgb(rgb, [255, 255, 255], 0.96);
+    rgb = mixRgb(rgb, TEAL, Math.max(0, 1 - ballDist / ballR) * 0.45);
+  } else if (ballDist < ballR * 2.6) {
+    rgb = mixRgb(rgb, TEAL, (1 - ballDist / (ballR * 2.6)) * 0.4);
   }
 
   return rgb;
@@ -200,68 +258,76 @@ function launcherIconPng(size, options) {
   return encodePng(size, size, (x, y) => launcherIconRgb(x, y, size, options));
 }
 
-/** 1200×630 social preview — neon garden siege art without external fonts. */
+/** 1200×630 social preview — dense bricks, nexus orb, paddle strip. */
 function ogImagePng() {
   const W = 1200;
   const H = 630;
   const cx = W * 0.5;
-  const cy = H * 0.46;
+  const emblemCy = H * 0.2;
 
   return encodePng(W, H, (x, y) => {
     const ny = y / H;
     const nx = (x - cx) / W;
-    const ny2 = (y - cy) / H;
-    const dist = Math.hypot(nx * 0.9, ny2 * 0.75);
+    const ny2 = (y - H * 0.42) / H;
+    const dist = Math.hypot(nx * 0.85, ny2 * 0.7);
 
-    let r = lerp(18, 8, ny);
-    let g = lerp(24, 5, ny);
-    let b = lerp(40, 12, ny);
+    let rgb = mixRgb([8, 5, 12], [18, 12, 32], ny * 0.55);
+    const glow = Math.max(0, 1 - dist * 1.25);
+    rgb = mixRgb(rgb, TEAL, glow * 0.32);
+    rgb = mixRgb(rgb, PINK, glow * 0.14);
 
-    const glow = Math.max(0, 1 - dist * 1.35);
-    r = lerp(r, 232, glow * 0.55);
-    g = lerp(g, 184, glow * 0.42);
-    b = lerp(b, 109, glow * 0.18);
-
-    const scan = ((y + x * 0.15) % 18) < 2;
-    if (scan) {
-      r = lerp(r, 100, 0.35);
-      g = lerp(g, 180, 0.35);
-      b = lerp(b, 255, 0.35);
-    }
-
-    const edge = Math.min(x / 80, y / 80, (W - x) / 80, (H - y) / 80, 1);
-    r = lerp(4, r, edge);
-    g = lerp(5, g, edge);
-    b = lerp(12, b, edge);
-
-    const brickRow = Math.floor((y - H * 0.22) / 34);
-    const brickCol = Math.floor((x - W * 0.18) / 52);
-    if (y > H * 0.22 && y < H * 0.58 && x > W * 0.18 && x < W * 0.82) {
-      const inBrick = x % 52 > 3 && y % 34 > 3;
-      if (inBrick && (brickRow + brickCol) % 2 === 0) {
-        const hue = (brickRow * 3 + brickCol) % 5;
-        const palette = [
-          [196, 120, 90],
-          [212, 93, 140],
-          [232, 184, 109],
-          [155, 140, 255],
-          [126, 184, 122],
-        ];
-        const [br, bg, bb] = palette[hue];
-        r = lerp(r, br, 0.72);
-        g = lerp(g, bg, 0.72);
-        b = lerp(b, bb, 0.72);
+    const brickW = 52;
+    const brickH = 24;
+    const gap = 4;
+    const fieldTop = H * 0.2;
+    const fieldBottom = H * 0.72;
+    const fieldLeft = W * 0.1;
+    const fieldRight = W * 0.9;
+    if (y > fieldTop && y < fieldBottom && x > fieldLeft && x < fieldRight) {
+      const col = Math.floor((x - fieldLeft) / (brickW + gap));
+      const row = Math.floor((y - fieldTop) / (brickH + gap));
+      const stagger = row % 2 === 0 ? 0 : brickW * 0.35;
+      const bx = fieldLeft + stagger + col * (brickW + gap);
+      const by = fieldTop + row * (brickH + gap);
+      if (x >= bx + 2 && x <= bx + brickW - 2 && y >= by + 2 && y <= by + brickH - 2) {
+        if ((row * 7 + col * 3) % 19 !== 0) {
+          const palette = [
+            [255, 111, 156],
+            TEAL,
+            GOLD,
+            [155, 140, 255],
+            [90, 160, 255],
+            [126, 184, 122],
+          ];
+          const c = palette[(row + col) % palette.length];
+          rgb = mixRgb(rgb, c, 0.82);
+          if (y < by + 6) rgb = mixRgb(rgb, [255, 255, 255], 0.12);
+        }
       }
     }
 
-    const barY = H * 0.78;
-    if (y > barY && y < barY + 22 && x > W * 0.28 && x < W * 0.72) {
-      r = lerp(r, 68, 0.85);
-      g = lerp(g, 136, 0.85);
-      b = lerp(b, 255, 0.85);
+    rgb = paintNexusEmblem(x, y, cx, emblemCy, W * 0.14, rgb);
+
+    const paddleY = H * 0.8;
+    const paddleH = 20;
+    const paddleW = W * 0.28;
+    const paddleDist = roundedRectSdf(x, y, cx - paddleW / 2, paddleY, paddleW, paddleH, paddleH / 2);
+    if (paddleDist <= 0) {
+      rgb = mixRgb(rgb, GOLD, 0.9);
+      rgb = mixRgb(rgb, TEAL, 0.35);
+    } else if (paddleDist < 8) {
+      rgb = mixRgb(rgb, TEAL, (1 - paddleDist / 8) * 0.35);
     }
 
-    return [clamp8(r), clamp8(g), clamp8(b)];
+    const ballR = 14;
+    const ballDist = Math.hypot(x - cx, y - (paddleY - 22));
+    if (ballDist < ballR) {
+      rgb = mixRgb(rgb, [255, 255, 255], 0.95);
+    } else if (ballDist < ballR * 3) {
+      rgb = mixRgb(rgb, TEAL, (1 - ballDist / (ballR * 3)) * 0.38);
+    }
+
+    return rgb;
   });
 }
 
@@ -284,23 +350,32 @@ function writeSeoFiles() {
   writeFileSync(join(publicDir, 'sitemap.xml'), sitemap);
 }
 
-const sizes = [48, 72, 96, 144, 192, 512];
-for (const s of sizes) {
-  writeFileSync(join(outDir, `android-launchericon-${s}-${s}.png`), launcherIconPng(s));
+for (const s of ANDROID_SIZES) {
+  writeFileSync(join(androidDir, `android-launchericon-${s}-${s}.png`), launcherIconPng(s));
 }
 
-for (const s of [192, 512]) {
+for (const s of MASKABLE_SIZES) {
   writeFileSync(
-    join(outDir, `android-launchericon-${s}-${s}-maskable.png`),
+    join(androidDir, `android-launchericon-${s}-${s}-maskable.png`),
     launcherIconPng(s, { maskable: true }),
   );
 }
+
+for (const s of IOS_SIZES) {
+  writeFileSync(join(iosDir, `${s}.png`), launcherIconPng(s));
+}
+
+writeFileSync(join(appDir, 'icon.png'), launcherIconPng(512));
+writeFileSync(join(appDir, 'apple-icon.png'), launcherIconPng(180));
+writeFileSync(join(publicDir, 'apple-touch-icon.png'), launcherIconPng(180));
+writeFileSync(join(resourcesDir, 'icon.png'), launcherIconPng(1024));
 
 writeFileSync(join(publicDir, 'og-image.png'), ogImagePng());
 writeFileSync(join(publicDir, 'manifest.json'), `${JSON.stringify(buildPwaManifest(), null, 2)}\n`);
 writeSeoFiles();
 
 console.log('Generated PWA icons in public/icons/android/');
-console.log('Generated public/manifest.json');
-console.log('Generated public/og-image.png (1200×630)');
-console.log('Generated public/robots.txt and public/sitemap.xml');
+console.log('Generated iOS icons in public/icons/ios/');
+console.log('Generated app/icon.png and app/apple-icon.png (Next.js)');
+console.log('Generated resources/icon.png (Capacitor: npx @capacitor/assets generate)');
+console.log('Generated public/manifest.json, og-image.png, robots.txt, sitemap.xml');

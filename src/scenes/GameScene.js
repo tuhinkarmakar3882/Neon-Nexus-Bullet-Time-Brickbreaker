@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
-import { GAME, SCENES, JARDINAIN, BRICK, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '../config/Constants.js';
+import {
+  GAME, SCENES, JARDINAIN, BRICK, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME,
+  playfieldSideInset, paddleSideInset, ballSideInset,
+} from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { POWERS, powerFillColor, powerColorHex, resolvePowerKey, CANNON_TYPES, BALL_MODS, POWER_KEYS, powerDisplayName, powerPillLabel, powerHasBallMod, powerHasCannon, findActiveBallModKey, findActiveCannonKey } from '../config/PowerUps.js';
-import { rollPower, rollPowerDraft, rollPositivePowerDraft, rollCapsuleVariant, rollBlessedPower } from '../config/DropTables.js';
+import { rollPower, rollPowerDraft, rollPositivePower, rollPositivePowerDraft, rollCapsuleVariant, rollBlessedPower, DROPPABLE_KEYS } from '../config/DropTables.js';
 import { mutatorDisplay } from '../config/Mutators.js';
 import { goalProgressText } from '../config/LevelGoals.js';
 import { rollContract } from '../config/GnomeContracts.js';
@@ -29,9 +32,11 @@ import { StatusSystem } from '../systems/StatusSystem.js';
 import { ChallengeSystem } from '../systems/ChallengeSystem.js';
 import { audio } from '../systems/AudioManager.js';
 import { Monetization } from '../systems/Monetization.js';
+import { AdBreakPolicy } from '../systems/AdBreakPolicy.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { RunPersistence } from '../systems/RunPersistence.js';
 import { InputRouter } from '../systems/InputRouter.js';
+import { isArrowHeld } from '../systems/GameKeyboard.js';
 import { pushGameplayHistory } from '../systems/Navigation.js';
 import { hapticPulse } from '../systems/Haptics.js';
 import { scaledBallBaseSpeed, difficultyFor } from '../systems/DifficultyScaler.js';
@@ -43,6 +48,7 @@ import { pick, clamp, rand, mulberry32 } from '../utils/Helpers.js';
 import { fitTextWidth, orbitronStyle, uiPx, wrapWidth } from '../utils/Typography.js';
 import { resolveSettings } from '../config/VfxQuality.js';
 import { gemsForLevelClear } from '../config/GemRewards.js';
+import { dismissBootSplash, setBootSplash } from '../shell/BootSplash.js';
 
 const SCORE_ENEMY = 220;
 const GEM_VALUE = 150;
@@ -56,6 +62,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
+    setBootSplash({ progress: 82, label: 'Growing the twilight garden…' });
     this.settings = resolveSettings(SaveManager.loadSettings());
     const musicSettings = SaveManager.loadSettings();
     audio.setSoundEnabled(musicSettings.sound);
@@ -177,7 +184,14 @@ export class GameScene extends Phaser.Scene {
     this._layoutH = GAME.HEIGHT;
     this.setupInput();
 
-    this.scene.launch(SCENES.HUD);
+    setBootSplash({ progress: 90, label: 'Calibrating HUD…' });
+    if (!this.scene.isActive(SCENES.UI)) {
+      this.scene.launch(SCENES.UI);
+    }
+    this.time.delayedCall(400, () => {
+      if (!this.scene.isActive(SCENES.UI)) this.scene.launch(SCENES.UI);
+      dismissBootSplash('Garden ready — launch when you are');
+    });
     this.bus = this.game.events;
     this.emitStats();
     this.emitGnomeStreak();
@@ -214,10 +228,12 @@ export class GameScene extends Phaser.Scene {
     const sx = GAME.WIDTH / (this._layoutW || GAME.WIDTH);
     const sy = GAME.HEIGHT / (this._layoutH || GAME.HEIGHT);
 
-    this.paddle.x = clamp(this.paddle.x * sx, GAME.WALL_X + this.paddle.w / 2, GAME.WIDTH - GAME.WALL_X - this.paddle.w / 2);
+    const pin = paddleSideInset();
+    this.paddle.x = clamp(this.paddle.x * sx, pin + this.paddle.w / 2, GAME.WIDTH - pin - this.paddle.w / 2);
 
     this.balls.forEach((ball) => {
-      ball.x = clamp(ball.x * sx, GAME.WALL_X + ball.r, GAME.WIDTH - GAME.WALL_X - ball.r);
+      const bx = ballSideInset();
+      ball.x = clamp(ball.x * sx, bx + ball.r, GAME.WIDTH - bx - ball.r);
       if (ball.stuck) {
         ball.y = this.paddle.top - ball.r;
       } else {
@@ -249,7 +265,7 @@ export class GameScene extends Phaser.Scene {
     this.enemies.forEach((e) => { e.x *= sx; e.y *= sy; });
     this.gems.forEach((g) => { g.x *= sx; g.y *= sy; });
 
-    this.drawArena(this.theme?.wall ?? PAL.accent);
+    this.drawArena();
     this.bg?.relayout?.();
     resetGameplayCamera(this);
     this._layoutW = GAME.WIDTH;
@@ -275,11 +291,16 @@ export class GameScene extends Phaser.Scene {
   levelFlash() {
     const t = this.theme?.name || '';
     const band = this.difficulty?.label ?? '';
-    const rating = this.difficulty?.rating ?? 1;
+    const rating = this.difficulty?.rating ?? Math.ceil(this.level / 5);
     const layout = this.layoutLabel ? `  ·  ${this.layoutLabel}` : '';
     const twist = this.twistLabel ? `  ·  ${this.twistLabel}` : '';
+    const diffTag = `DIFF ${rating}/10`;
     this.flash(
-      (this.isBoss ? 'FORTRESS' : 'LEVEL ' + this.level) + (band ? `  ·  ${band}` : '') + layout + twist + (t ? `  ·  ${t.toUpperCase()}` : ''),
+      (this.isBoss ? `FORTRESS ${this.level}` : `LEVEL ${this.level}`)
+      + `  ·  ${diffTag}`
+      + (band ? `  ·  ${band}` : '')
+      + layout + twist
+      + (t ? `  ·  ${t.toUpperCase()}` : ''),
       cssHex(this.isBoss ? PAL.gold : (this.theme?.bg ?? PAL.accent)), 1100,
       'high',
     );
@@ -331,10 +352,12 @@ export class GameScene extends Phaser.Scene {
   spawnPowerCapsule(x, y, keyOverride) {
     if (this.powers.length >= GAME.MAX_POWERS) return null;
     const seed = this.nextPowerDropSeed();
+    const blessings = MetaProgress.getBlessings?.() ?? [];
     const variant = rollCapsuleVariant(this.level, seed);
-    let key = keyOverride ?? rollPower(this.level, seed);
-    if (variant === 'blessed') key = rollBlessedPower(this.level, seed ^ 0xb1e55);
-    if (variant === 'mystery') key = rollPower(this.level, seed ^ 0xbeef);
+    let key = resolvePowerKey(keyOverride ?? rollPower(this.level, seed, blessings));
+    if (variant === 'blessed') key = resolvePowerKey(rollBlessedPower(this.level, seed ^ 0xb1e55, blessings));
+    if (variant === 'mystery') key = resolvePowerKey(rollPower(this.level, seed ^ 0xbeef, blessings));
+    if (!POWERS[key]) key = rollPositivePower(this.level, seed ^ 0xdead);
     const pwW = Math.max(68, GAME.WIDTH * 0.064);
     const ph = pwW * 0.4;
     const capsule = new PowerUp(this, x - pwW / 2, y - ph / 2, key, { variant });
@@ -404,20 +427,9 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  drawArena(accent) {
-    const W = GAME.WIDTH, H = GAME.HEIGHT, wx = GAME.WALL_X, wt = GAME.WALL_TOP;
-    const g = this.arenaGfx;
-    g.clear();
-    const slab = (x, y, w, h) => { g.fillStyle(0x121830, 1); g.fillRect(x, y, w, h); g.fillStyle(0x222c4a, 1); g.fillRect(x + 2, y + 2, w - 4, h - 4); };
-    slab(0, wt, wx, H - wt);
-    slab(W - wx, wt, wx, H - wt);
-    slab(0, wt - 14, W, 16);
-    g.lineStyle(2, accent, 0.55);
-    g.lineBetween(wx, wt, wx, H);
-    g.lineBetween(W - wx, wt, W - wx, H);
-    g.lineBetween(wx, wt, W - wx, wt);
-    g.fillStyle(accent, 0.9);
-    g.fillCircle(wx, wt, 5); g.fillCircle(W - wx, wt, 5);
+  /** Collision bounds use WALL_X / WALL_TOP — no side slab overlays (avoids black edge strips). */
+  drawArena() {
+    this.arenaGfx?.clear();
   }
 
   setupInput() {
@@ -443,22 +455,21 @@ export class GameScene extends Phaser.Scene {
       this.handleTap(p.worldX);
     });
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.input.keyboard.on('keydown-SPACE', () => {
-      if (InputRouter.shouldBlockGameplay() || this.draftOpen) return;
-      const now = this.time.now;
-      if (now - (this._lastSpaceMs ?? 0) < 320 && this.trySpendNexus()) {
-        this._lastSpaceMs = now;
-        return;
-      }
-      this._lastSpaceMs = now;
-      this.handleTap(this.paddle.x);
-    });
-    this.input.keyboard.on('keydown-ENTER', () => { if (!InputRouter.shouldBlockGameplay() && !this.draftOpen) this.handleTap(this.paddle.x); });
-    this.input.keyboard.on('keydown-P', () => this.requestPause());
-    this.input.keyboard.on('keydown-ESC', () => this.requestPause());
     this._onPauseReq = () => this.requestPause();
     this.game.events.on('req:pause', this._onPauseReq);
     this.events.once('shutdown', () => this.game.events.off('req:pause', this._onPauseReq));
+  }
+
+  /** Window-level keyboard (GameKeyboard.js) — launch / Nexus double-tap. */
+  onKeyboardLaunch() {
+    if (InputRouter.shouldBlockGameplay() || this.draftOpen) return;
+    const now = this.time.now;
+    if (now - (this._lastSpaceMs ?? 0) < 320 && this.trySpendNexus()) {
+      this._lastSpaceMs = now;
+      return;
+    }
+    this._lastSpaceMs = now;
+    this.handleTap(this.paddle.x);
   }
 
   requestPause() {
@@ -476,13 +487,19 @@ export class GameScene extends Phaser.Scene {
     // Recover from a stuck paused state (game frozen without a menu overlay).
     if (sm.isPaused(SCENES.GAME) && !this._completingLevel) {
       sm.resume(SCENES.GAME);
-      if (sm.isPaused(SCENES.HUD)) sm.resume(SCENES.HUD);
+      if (sm.isPaused(SCENES.UI)) sm.resume(SCENES.UI);
     }
     if (sm.isPaused(SCENES.GAME)) return;
 
     RunPersistence.saveRun(this);
     this.scene.pause();
-    this.scene.launch(SCENES.PAUSE);
+    if (sm.isActive(SCENES.UI)) this.scene.pause(SCENES.UI);
+    this.scene.launch(SCENES.PAUSE, {
+      level: this.level,
+      score: this.score,
+      lives: this.lives,
+      combo: this.combo ?? 0,
+    });
     InputRouter.onOverlayOpen(SCENES.PAUSE);
   }
 
@@ -571,6 +588,7 @@ export class GameScene extends Phaser.Scene {
     this.scoreMultLevel = 1;
     this.gambitAtCombo = 0;
     this.bricks = bricks.map((b) => new Brick(this, b.x, b.y, b.w, b.h, b.type, b.color, this.level, b));
+    this._levelDestructibles = this.destructiblesLeft();
     this.bricks.forEach((br, i) => {
       const spec = bricks[i];
       if (spec.portalLinkIndex != null) br.portalLink = this.bricks[spec.portalLinkIndex] ?? null;
@@ -578,10 +596,11 @@ export class GameScene extends Phaser.Scene {
     });
     staggerDropIn(this, this.bricks, { delay: 22, drop: 28, dur: 300 });
     this.initGnomeSpawner();
+    this.scheduleIntroGnomes();
     this.bricks.forEach((b) => this.telegraphBrick(b));
 
     this.bg.setAccent(theme.bg);
-    this.drawArena(theme.wall);
+    this.drawArena();
     let activeMutators = mutators ?? (mutator ? [mutator] : []);
     if (this.level >= 3 && this.level % 7 === 0) {
       const seasonal = seasonalMutatorForDate();
@@ -618,6 +637,18 @@ export class GameScene extends Phaser.Scene {
     ) / pressure;
   }
 
+  /** Pop garden gnomes during the level intro (even before the ball is launched). */
+  scheduleIntroGnomes() {
+    const delays = [1200, 2600];
+    for (const ms of delays) {
+      this.time.delayedCall(ms, () => {
+        if (this.over || this.transitioning || this._completingLevel) return;
+        const alive = this.jardinains.filter((j) => !j._destroyed).length;
+        if (alive < JARDINAIN.MAX_ALIVE) this.tryPopupJardinain();
+      });
+    }
+  }
+
   brickOccupiedByGnome(brick) {
     return this.jardinains.some((j) =>
       !j._destroyed && j.brick === brick &&
@@ -652,9 +683,10 @@ export class GameScene extends Phaser.Scene {
 
   updateGnomeSpawner(dtMs) {
     if (this.over || this.transitioning || this._completingLevel) return;
-    if (!this.balls.some((b) => !b.stuck)) return;
 
-    this.gnomeSpawnTimer -= dtMs;
+    const inPlay = this.balls.some((b) => !b.stuck);
+    const spawnRate = inPlay ? 1 : 0.45;
+    this.gnomeSpawnTimer -= dtMs * spawnRate;
     if (this.gnomeSpawnTimer > 0) return;
 
     const diff = this.difficulty ?? { gnomeMaxAlive: JARDINAIN.MAX_ALIVE };
@@ -1099,7 +1131,7 @@ export class GameScene extends Phaser.Scene {
 
   fixBlockedColumns() {
     const cellW = (this.bricks[0]?.w ?? BRICK.WIDTH) + BRICK.GAP;
-    const left = GAME.WALL_X + BRICK.GAP;
+    const left = playfieldSideInset();
     const byCol = new Map();
     for (const b of this.bricks) {
       if (!b.alive) continue;
@@ -1271,6 +1303,7 @@ export class GameScene extends Phaser.Scene {
     ball.gravityMode = false;
     ball.echoMode = false;
     ball.heavyMode = false;
+    this.clearBallEchoFx(ball);
 
     const modKey = this.activeBallMod && this.powerSys.isActive(this.activeBallMod) && powerHasBallMod(this.activeBallMod)
       ? this.activeBallMod
@@ -1288,8 +1321,7 @@ export class GameScene extends Phaser.Scene {
       this.activeBallMod = modKey;
       ball.bomb = false;
       const mod = POWERS[modKey].ballMod;
-      if (mod === 'teleport') ball.through = true;
-      else if (mod === 'mega') ball.setMega(true);
+      if (mod === 'mega') ball.setMega(true);
       else if (mod === 'heavy') {
         ball.heavyMode = true;
         if (!ball.stuck) ball.setSpeed(Math.max(GAME.BALL_MIN_SPEED, ball.speed * 0.55));
@@ -1353,7 +1385,6 @@ export class GameScene extends Phaser.Scene {
       case 'ElectricBallII':
       case 'MegaBall':
       case 'HeavyBall':
-      case 'Teleport':
       case 'Missile':
       case 'Gravity':
       case 'Echo':
@@ -1391,13 +1422,19 @@ export class GameScene extends Phaser.Scene {
     const sp = ball.speed || ball.baseSpeed;
     const ang = Math.atan2(ball.vy, ball.vx);
     switch (key) {
-      case 'Missile':
-        ball.vx += Math.cos(ang + Math.PI * 0.42) * sp * 0.28;
-        ball.vy += Math.sin(ang + Math.PI * 0.42) * sp * 0.28;
+      case 'Missile': {
+        const tgt = this.nearestDestructible(ball.x, ball.y);
+        const tx = tgt?.cx ?? this.paddle.x;
+        const ty = tgt?.cy ?? this.paddle.top - ball.r * 2;
+        const aim = Math.atan2(ty - ball.y, tx - ball.x);
+        ball.vx = Math.cos(aim) * sp * 0.92;
+        ball.vy = Math.sin(aim) * sp * 0.92;
+        ball._steerPhase = Math.random() * Math.PI * 2;
         break;
+      }
       case 'Gravity':
-        ball.vy += sp * 0.22;
-        ball.vx += (Math.random() - 0.5) * sp * 0.18;
+        ball.vy += sp * 0.35;
+        ball.vx += (this.paddle.x - ball.x) * 0.08;
         break;
       case 'Wrap':
         ball.vx *= 1.12;
@@ -1575,7 +1612,6 @@ export class GameScene extends Phaser.Scene {
       case 'ElectricBallII':
       case 'MegaBall':
       case 'HeavyBall':
-      case 'Teleport':
       case 'Missile':
       case 'Gravity':
       case 'Echo':
@@ -1613,7 +1649,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   doJoker() {
-    const pool = POWER_KEYS.filter((k) => k !== 'Joker' && !POWERS[k].joker);
+    const pool = DROPPABLE_KEYS.filter((k) => k !== 'Joker' && !POWERS[k].joker);
     if (!pool.length) return;
     const pickKey = pool[(Math.random() * pool.length) | 0];
     this.flash(`JOKER → ${pickKey.replace(/([A-Z])/g, ' $1').trim()}`, powerColorHex('Joker'), 900);
@@ -1645,46 +1681,109 @@ export class GameScene extends Phaser.Scene {
   }
 
   startBlackHole() {
+    this.stopBlackHole();
     const alive = this.bricks.filter((b) => b.alive && !b.indestructible);
     if (!alive.length) return;
     const center = pick(alive);
-    this.blackHole = { x: center.cx, y: center.cy, pulse: 0 };
-    this._bhRing?.destroy();
-    this._bhRing = this.add.image(center.cx, center.cy, 'ring')
-      .setDepth(9).setTint(0x331122).setAlpha(0.22).setScale(0.65).setBlendMode('ADD');
+    const x = center.cx;
+    const y = center.cy;
+    this.blackHole = { x, y, pulse: 0, angle: 0 };
+    const R = Math.min(GAME.WIDTH, GAME.HEIGHT) * GAME.BLACK_HOLE_RADIUS;
+
+    this._bhDisk = this.add.graphics().setDepth(7);
+    this._bhCore = this.add.image(x, y, 'orb')
+      .setDepth(9).setTint(0x1a0008).setAlpha(0.95).setScale(R / 90);
+    this._bhRing = this.add.image(x, y, 'ring')
+      .setDepth(10).setTint(0xff3355).setAlpha(0.62).setBlendMode('ADD')
+      .setDisplaySize(R * 1.05, R * 1.05);
+    this._bhRingOuter = this.add.image(x, y, 'ring')
+      .setDepth(9).setTint(0xaa1144).setAlpha(0.28).setBlendMode('ADD')
+      .setDisplaySize(R * 1.65, R * 1.65);
     this.tweens.add({
       targets: this._bhRing,
-      scale: 0.85,
-      alpha: 0.12,
-      duration: 1400,
-      yoyo: true,
+      angle: 360,
+      duration: 2800,
       repeat: -1,
-      ease: 'Sine.easeInOut',
+      ease: 'Linear',
     });
+    this.tweens.add({
+      targets: this._bhRingOuter,
+      angle: -360,
+      duration: 5200,
+      repeat: -1,
+      ease: 'Linear',
+    });
+    microShake(this, 0.008, 320);
+    this.flash('VOID VORTEX', '#ff5577', 750);
+    this.drawBlackHoleDisk();
   }
 
-  pullBlackHole() {
+  drawBlackHoleDisk() {
+    if (!this.blackHole || !this._bhDisk) return;
+    const { x, y, pulse } = this.blackHole;
+    const R = Math.min(GAME.WIDTH, GAME.HEIGHT) * GAME.BLACK_HOLE_RADIUS;
+    const g = this._bhDisk;
+    g.clear();
+    for (let i = 4; i >= 0; i--) {
+      const wobble = Math.sin(pulse * 0.12 + i * 1.1) * 8;
+      const r = R * (0.22 + i * 0.17) + wobble;
+      g.fillStyle(0x220008, 0.06 + i * 0.05);
+      g.fillCircle(x, y, r);
+    }
+    g.lineStyle(2, 0xff4466, 0.35);
+    g.strokeCircle(x, y, R * 0.55 + Math.sin(pulse * 0.15) * 4);
+  }
+
+  pullBlackHole(dtSec = 1 / 60) {
     if (!this.blackHole || !this.powerSys.isActive('BlackHole')) return;
     const { x, y } = this.blackHole;
-    const R = 120;
+    const R = Math.min(GAME.WIDTH, GAME.HEIGHT) * GAME.BLACK_HOLE_RADIUS;
+    const pull = 0.14 + dtSec * 4.5;
+
     for (const b of this.bricks) {
       if (!b.alive || b.indestructible) continue;
       const d = Math.hypot(b.cx - x, b.cy - y);
-      if (d < R) {
-        b.x += (x - b.cx) * 0.05;
-        b.y += (y - b.cy) * 0.05;
-        b.baseX = b.x;
-        if (d < 30 && b.hit(99)) this.destroyBrick(b, false);
-      }
+      if (d > R) continue;
+      const t = 1 - d / R;
+      const f = pull * t * t;
+      b.x += (x - b.cx) * f;
+      b.y += (y - b.cy) * f;
+      b.baseX = b.x;
+      if (d < R * 0.14 && b.hit(99)) this.destroyBrick(b, false);
+      b.sync();
     }
-    if (this._bhRing?.active) this._bhRing.setPosition(x, y);
+
     this.blackHole.pulse++;
+    this.blackHole.angle += dtSec * 2.5;
+    const pulse = this.blackHole.pulse;
+    const wobble = Math.sin(pulse * 0.1) * 0.06;
+    this._bhCore?.setPosition(x, y).setScale((R / 85) * (0.92 + wobble));
+    this._bhRing?.setPosition(x, y);
+    this._bhRingOuter?.setPosition(x, y);
+    this.drawBlackHoleDisk();
+
+    if (pulse % 8 === 0 && this.settings.particles) {
+      const a = this.blackHole.angle;
+      shardBurst(this, x + Math.cos(a) * R * 0.4, y + Math.sin(a) * R * 0.4, 0xff2244, 3);
+    }
   }
 
   stopBlackHole() {
+    this._bhDisk?.destroy();
+    this._bhCore?.destroy();
     this._bhRing?.destroy();
+    this._bhRingOuter?.destroy();
+    this._bhDisk = null;
+    this._bhCore = null;
     this._bhRing = null;
+    this._bhRingOuter = null;
     this.blackHole = null;
+  }
+
+  clearBallEchoFx(ball) {
+    if (!ball._echoSprites) return;
+    ball._echoSprites.forEach((s) => s?.destroy?.());
+    ball._echoSprites = null;
   }
 
   freezeMovingBricks(ms) {
@@ -1734,24 +1833,53 @@ export class GameScene extends Phaser.Scene {
   }
 
   updateEchoOrbs(ball, dtSec) {
-    if (!ball.echoMode) return;
+    if (!ball.echoMode) {
+      this.clearBallEchoFx(ball);
+      return;
+    }
     ball.echoAngle += dtSec * GAME.ECHO_ORBIT_SPEED;
-    const orbitR = ball.r * GAME.ECHO_ORBIT_RADIUS;
+    const orbitR = Math.max(
+      ball.r * GAME.ECHO_ORBIT_RADIUS,
+      BRICK.HEIGHT * 1.15,
+      BRICK.WIDTH * 0.55,
+      52,
+    );
     const count = GAME.ECHO_ORBIT_COUNT;
+    const nodeR = Math.max(ball.r * 1.1, 10);
+
+    if (!ball._echoSprites || ball._echoSprites.length !== count) {
+      this.clearBallEchoFx(ball);
+      ball._echoSprites = [];
+      for (let i = 0; i < count; i++) {
+        const core = this.add.image(0, 0, 'ball-core')
+          .setDepth(23).setTint(0xf0f0ff).setAlpha(0.9).setBlendMode('ADD');
+        const halo = this.add.image(0, 0, 'orb')
+          .setDepth(22).setTint(0xc8b8ff).setAlpha(0.45).setBlendMode('ADD');
+        ball._echoSprites.push({ core, halo });
+      }
+    }
+
     ball._echoCd = ball._echoCd ?? new Map();
     const now = this.time.now;
     for (let i = 0; i < count; i++) {
       const a = ball.echoAngle + (i * Math.PI * 2) / count;
       const ex = ball.x + Math.cos(a) * orbitR;
       const ey = ball.y + Math.sin(a) * orbitR;
+      const sprites = ball._echoSprites[i];
+      if (sprites) {
+        sprites.core.setPosition(ex, ey).setDisplaySize(nodeR * 2, nodeR * 2);
+        sprites.halo.setPosition(ex, ey).setDisplaySize(nodeR * 4.2, nodeR * 4.2)
+          .setAlpha(0.38 + 0.12 * Math.sin(this.frame * 0.2 + i));
+      }
+      const hitR = nodeR + BRICK.HEIGHT * 0.65;
       for (const br of this.bricks) {
         if (!br.alive || br.indestructible) continue;
         if ((ball._echoCd.get(br) ?? 0) > now) continue;
-        const hitR = orbitR * 0.5 + Math.min(br.w, br.h) * 0.35;
         if (Math.hypot(ex - br.cx, ey - br.cy) > hitR) continue;
         if (br.hit(1)) {
           this.destroyBrick(br, true, ball);
-          ball._echoCd.set(br, now + 140);
+          ball._echoCd.set(br, now + 120);
+          hitSpark(this, ex, ey, { tint: 0xe8e0ff, count: 4, spread: 16 });
         }
       }
     }
@@ -2275,8 +2403,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   tryBrickPowerDrop(brick) {
-    if (brick.type !== 'silver' && brick.type !== 'explosive' && brick.type !== 'reinforced') return;
-    if (Math.random() >= this.dropChance()) return;
+    if (!brick || brick.indestructible) return;
+    const noDrop = ['gold', 'steel', 'boss', 'portal', 'hostage'];
+    if (noDrop.includes(brick.type)) return;
+
+    let chanceMult = 0.7;
+    if (brick.type === 'normal' || brick.type === 'invisible') chanceMult = 0.4;
+    else if (['silver', 'explosive', 'reinforced'].includes(brick.type)) chanceMult = 1;
+    else if (['nest', 'shifting', 'moss', 'mirror'].includes(brick.type)) chanceMult = 0.55;
+
+    const seed = this.nextPowerDropSeed();
+    const rng = mulberry32(seed);
+    if (rng() >= this.dropChance() * chanceMult) return;
     const cap = this.spawnPowerCapsule(brick.cx, brick.cy);
     if (!cap) return;
     this.floatText(brick.cx, brick.cy - 20, 'DROP!', powerColorHex(cap.key), 18);
@@ -2406,7 +2544,7 @@ export class GameScene extends Phaser.Scene {
 
   doRestart() {
     RunPersistence.clearRun();
-    this.scene.stop(SCENES.HUD);
+    this.scene.stop(SCENES.UI);
     this.scene.start(SCENES.GAME, { newGame: true });
   }
 
@@ -2479,11 +2617,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.killTweensOf(this.paddle.body);
     this.paddle.body?.setAngle(0);
     this.paddle.body?.setScale(1);
-    try {
-      await Monetization.maybeShowLevelInterstitial();
-    } catch (e) {
-      console.warn('[Game] interstitial skipped', e);
-    }
+    AdBreakPolicy.recordLevelSuccess();
     try {
       this.scene.launch(SCENES.LEVEL_COMPLETE, {
         level: this.level, message: pick(LEVEL_CLEARED_MESSAGES), bonus, score: this.score, stars,
@@ -2549,9 +2683,12 @@ export class GameScene extends Phaser.Scene {
 
   emitStats() {
     const nestsLeft = this.bricks.filter((b) => b.alive && b.type === 'nest').length;
+    const bricksLeft = this.destructiblesLeft();
+    const bricksTotal = Math.max(1, this._levelDestructibles ?? bricksLeft);
     this.bus?.emit('hud:stats', {
       score: this.score, lives: this.lives, level: this.level,
-      bricksLeft: this.destructiblesLeft(), combo: this.combo,
+      bricksLeft,
+      brickProgress: clamp(1 - bricksLeft / bricksTotal, 0, 1),
       difficulty: this.difficulty?.rating ?? 1,
       band: this.difficulty?.label ?? '',
       goalText: goalProgressText(this.goal, {
@@ -2655,14 +2792,15 @@ export class GameScene extends Phaser.Scene {
 
     this.powerSys.tick(dtMs);
     this.statusSys.tick();
-    if (this.blackHole && this.powerSys.isActive('BlackHole') && this.frame % 18 === 0) {
-      this.pullBlackHole();
+    if (this.blackHole && this.powerSys.isActive('BlackHole')) {
+      this.pullBlackHole(realDt / 1000);
     }
     this.challengeSys.update(dtMs, this.combo);
 
     const inv = this.controlsInverted ? -1 : 1;
-    if (this.cursors.left.isDown) this.paddle.moveByKeyboard(-1 * inv, realDt / 1000, ts);
-    if (this.cursors.right.isDown) this.paddle.moveByKeyboard(1 * inv, realDt / 1000, ts);
+    const dtSecKb = realDt / 1000;
+    if (this.cursors.left.isDown || isArrowHeld('left')) this.paddle.moveByKeyboard(-1 * inv, dtSecKb, ts);
+    if (this.cursors.right.isDown || isArrowHeld('right')) this.paddle.moveByKeyboard(1 * inv, dtSecKb, ts);
 
     if (this.paddle.hasCannon && !this.paddle.stunned) {
       const aimX = this.paddle.cannonType === 'shock'
@@ -2672,9 +2810,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     const inPlay = this.balls.some((b) => !b.stuck);
-    if (inPlay) {
-      this.enemyTimer -= dtMs;
-      if (this.enemyTimer <= 0 && this.enemies.length < this.maxEnemies) {
+    const levelAge = this.time.now - (this.levelStartTime ?? this.time.now);
+    const canSpawnEnemies = inPlay || (levelAge > 2200 && this.enemies.length < 1);
+    if (canSpawnEnemies) {
+      this.enemyTimer -= dtMs * (inPlay ? 1 : 0.5);
+      if (this.enemyTimer <= 0 && this.enemies.length < (inPlay ? this.maxEnemies : 1)) {
         this.enemyTimer = rand(this.enemySpawnMs * 0.7, this.enemySpawnMs * 1.3);
         const x = rand(GAME.WALL_X + 60, GAME.WIDTH - GAME.WALL_X - 60);
         const e = Enemy.random(this, x, this.level);
@@ -2788,52 +2928,75 @@ export class GameScene extends Phaser.Scene {
     audio.blip(660);
   }
 
-  applyBallSteering(ball, dtSec) {
-    if (!ball.missileMode && !ball.gravityMode) return;
-
-    const px = this.paddle.x;
-    const py = this.paddle.top - ball.r * 0.5;
-    const dx = px - ball.x;
-    const dy = py - ball.y;
-    const dist = Math.max(48, Math.hypot(dx, dy));
+  /** Curve ball velocity toward a world target (positive strength = homing). */
+  steerBallToward(ball, tx, ty, dtSec, { radialMult, swirlMult, extraVy = 0, phaseRate = 8 }) {
+    const dx = tx - ball.x;
+    const dy = ty - ball.y;
+    const dist = Math.max(40, Math.hypot(dx, dy));
     const nx = dx / dist;
     const ny = dy / dist;
     const tanX = -ny;
     const tanY = nx;
     const baseSp = ball.speed || ball.baseSpeed;
-    ball._steerPhase = (ball._steerPhase ?? 0) + dtSec * (ball.missileMode ? 8 : 5.5);
-
-    if (ball.missileMode) {
-      const radial = baseSp * GAME.STEER_MISSILE_RADIAL;
-      const swirl = Math.sin(ball._steerPhase) * GAME.STEER_SWIRL_MISSILE * baseSp * 0.01;
-      ball.vx += (nx * radial + tanX * swirl) * dtSec;
-      ball.vy += (ny * radial + tanY * swirl) * dtSec;
-    }
-    if (ball.gravityMode) {
-      const radial = baseSp * GAME.STEER_GRAVITY_RADIAL;
-      const swirl = Math.sin(ball._steerPhase) * GAME.STEER_SWIRL_GRAVITY * baseSp * 0.01;
-      ball.vy += baseSp * GAME.STEER_GRAVITY_EXTRA_Y * dtSec;
-      ball.vx += (nx * radial + tanX * swirl) * dtSec;
-      ball.vy += (ny * radial + tanY * swirl) * dtSec;
-    }
-
+    ball._steerPhase = (ball._steerPhase ?? 0) + dtSec * phaseRate;
+    const radial = baseSp * radialMult;
+    const swirl = Math.sin(ball._steerPhase) * swirlMult * baseSp * 0.014;
+    ball.vx += (nx * radial + tanX * swirl) * dtSec;
+    ball.vy += (ny * radial + tanY * swirl) * dtSec;
+    if (extraVy) ball.vy += baseSp * extraVy * dtSec;
     ball.clampToSpeed({
       minMult: GAME.STEER_SPEED_MIN,
       maxMult: GAME.STEER_SPEED_MAX,
     });
   }
 
+  applyBallSteering(ball, dtSec) {
+    if (!ball.missileMode && !ball.gravityMode) return;
+
+    if (ball.missileMode) {
+      const tgt = this.nearestDestructible(ball.x, ball.y);
+      const tx = tgt?.cx ?? this.paddle.x;
+      const ty = tgt?.cy ?? this.paddle.top - ball.r;
+      this.steerBallToward(ball, tx, ty, dtSec, {
+        radialMult: GAME.STEER_MISSILE_RADIAL,
+        swirlMult: GAME.STEER_SWIRL_MISSILE,
+        phaseRate: 10,
+      });
+      const now = this.time.now;
+      if (now > (ball._missileSparkCd ?? 0) && this.settings.particles) {
+        ball._missileSparkCd = now + 55;
+        const ang = Math.atan2(ball.vy, ball.vx) + Math.PI;
+        hitSpark(this, ball.x + Math.cos(ang) * ball.r, ball.y + Math.sin(ang) * ball.r, {
+          tint: 0x5ecf8a, count: 3, spread: 22,
+        });
+      }
+      return;
+    }
+
+    if (ball.gravityMode) {
+      const tx = this.paddle.x;
+      const ty = this.paddle.top - ball.r * 0.6;
+      this.steerBallToward(ball, tx, ty, dtSec, {
+        radialMult: GAME.STEER_GRAVITY_RADIAL,
+        swirlMult: GAME.STEER_SWIRL_GRAVITY,
+        extraVy: GAME.STEER_GRAVITY_EXTRA_Y,
+        phaseRate: 6,
+      });
+    }
+  }
+
   resolveBallWalls(ball, lw, rw, tw) {
     if (ball.wrap) {
+      const span = rw - lw;
       if (ball.x < lw + ball.r) {
-        ball.x = rw - ball.r;
-        ball.vx = Math.abs(ball.vx) * 1.04;
-        hitSpark(this, ball.x, ball.y, { tint: 0xffe156, count: 3, spread: 14 });
+        ball.x += span;
+        hitSpark(this, ball.x, ball.y, { tint: 0xffe156, count: 4, spread: 16 });
+        rippleRing(this, ball.x, ball.y, { tint: 0xffe156, scale: 1.8, dur: 220 });
         audio.wall();
-      } else if (ball.x >= rw - ball.r) {
-        ball.x = lw + ball.r;
-        ball.vx = -Math.abs(ball.vx) * 1.04;
-        hitSpark(this, ball.x, ball.y, { tint: 0xffe156, count: 3, spread: 14 });
+      } else if (ball.x > rw - ball.r) {
+        ball.x -= span;
+        hitSpark(this, ball.x, ball.y, { tint: 0xffe156, count: 4, spread: 16 });
+        rippleRing(this, ball.x, ball.y, { tint: 0xffe156, scale: 1.8, dur: 220 });
         audio.wall();
       }
     } else {
@@ -2889,12 +3052,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   updateBalls(dtSec) {
-    const lw = GAME.WALL_X, rw = GAME.WIDTH - GAME.WALL_X, tw = GAME.WALL_TOP;
+    const bx = ballSideInset();
+    const lw = bx;
+    const rw = GAME.WIDTH - bx;
+    const tw = GAME.WALL_TOP;
     const env = this.envSpeedMult();
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const ball = this.balls[i];
       if (ball.stuck) {
-        ball.x = clamp(this.paddle.x + ball.stuckOffset, lw + ball.r, rw - ball.r);
+        const pin = paddleSideInset();
+        ball.x = clamp(
+          this.paddle.x + ball.stuckOffset,
+          pin + ball.r,
+          GAME.WIDTH - pin - ball.r,
+        );
         ball.y = this.paddle.top - ball.r;
         continue;
       }
@@ -2916,8 +3087,9 @@ export class GameScene extends Phaser.Scene {
         if (this.tryPaddleBounce(ball, prevY)) paddleHit = true;
       }
 
-      if ((this.powerSys.isActive('Shield') || this.powerSys.isActive('ShieldII')) && ball.y + ball.r > GAME.HEIGHT - 18) {
-        ball.vy = -Math.abs(ball.vy); ball.y = GAME.HEIGHT - 18 - ball.r;
+      const floorY = GAME.ARENA_FLOOR ?? GAME.HEIGHT;
+      if ((this.powerSys.isActive('Shield') || this.powerSys.isActive('ShieldII')) && ball.y + ball.r > floorY - 18) {
+        ball.vy = -Math.abs(ball.vy); ball.y = floorY - 18 - ball.r;
         this.shieldHitsLeft = (this.shieldHitsLeft || 1) - 1;
         if (this.shieldHitsLeft <= 0) {
           this.powerSys.clear('Shield');
@@ -3201,7 +3373,8 @@ export class GameScene extends Phaser.Scene {
       const a = 0.3 + 0.16 * Math.sin(this.frame * 0.2);
       const tint = this.powerSys.isActive('ShieldII') ? 0xffffff : powerFillColor('Shield');
       this.shieldGfx.fillStyle(tint, a);
-      this.shieldGfx.fillRect(GAME.WALL_X, GAME.HEIGHT - 18, GAME.WIDTH - GAME.WALL_X * 2, 16);
+      const floor = GAME.ARENA_FLOOR ?? GAME.HEIGHT;
+      this.shieldGfx.fillRect(GAME.WALL_X, floor - 18, GAME.WIDTH - GAME.WALL_X * 2, 16);
     }
 
     this.fogGfx.clear();

@@ -72,12 +72,16 @@ Test mode uses [Google's official test unit IDs](https://developers.google.com/a
 
 2. Banner shows on **Menu** via `Monetization.showBanner()`.
 
-Web **interstitial / rewarded** are not available through basic AdSense. Options:
-- Enable in `AdsConfig.web.interstitial` / `rewarded` and wire [`Google Ad Manager`](https://admanager.google.com/) units, then expose:
-  ```javascript
-  window.__googleShowInterstitial = async () => { /* return true when shown */ };
-  window.__googleShowRewarded = async (placement) => { /* return true when rewarded */ };
-  ```
+Web **interstitial / rewarded** are not available through basic AdSense alone. This repo wires:
+
+| Layer | Role |
+|-------|------|
+| [`lib/ads/adsenseWeb.ts`](../lib/ads/adsenseWeb.ts) | AdSense script + `#ad-banner` mount (shell) |
+| [`lib/ads/webAdBridge.ts`](../lib/ads/webAdBridge.ts) | `window.__googleShowInterstitial` / `__googleShowRewarded` |
+| [`components/ads/WebAdBridge.tsx`](../components/ads/WebAdBridge.tsx) | Registers bridge on `/play` |
+| Phaser `AdBreakScene` | Fallback when GAM units are not configured |
+
+Optional [`Google Ad Manager`](https://admanager.google.com/) units via `VITE_ADMANAGER_INTERSTITIAL_WEB` / `VITE_ADMANAGER_REWARDED_WEB` — implement `window.__gptShowInterstitial` / `__gptShowRewarded` to call GPT; otherwise the bridge uses in-game overlays.
 - Or ship native apps for full rewarded/interstitial support.
 
 ## Ad moments (already wired)

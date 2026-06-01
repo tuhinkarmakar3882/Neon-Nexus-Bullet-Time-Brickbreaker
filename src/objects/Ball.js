@@ -204,6 +204,7 @@ export class Ball {
     const c = this.tint();
     const mod = this.isModified();
     const chaos = this.missileMode || this.gravityMode || this.echoMode;
+    const missile = this.missileMode;
     const speed = Math.hypot(this.vx, this.vy);
     const d = this.r * 2.35;
     const idTint = this._identityTint ?? 0xffffff;
@@ -213,7 +214,7 @@ export class Ball {
       .setAlpha(mod ? 0.4 : 0.5);
 
     this.core.setPosition(this.x, this.y).setDisplaySize(d, d).setTint(c).setAlpha(1)
-      .setRotation(chaos ? this._steerPhase * 0.35 : 0);
+      .setRotation(missile ? Math.atan2(this.vy, this.vx) + Math.PI / 2 : (chaos ? this._steerPhase * 0.35 : 0));
 
     const haloScale = (mod ? 4.8 : 4.2) + Math.min(0.6, speed / 900) + (chaos ? 0.35 : 0);
     const glow = fxGlowScale(this.scene, 1);
@@ -232,12 +233,19 @@ export class Ball {
 
     if (!mod) this.trail.setParticleTint(this._identityIndex === 0 ? this._trailTint : idTint);
     else this.trail.setParticleTint(c);
-    this.trail.frequency = chaos ? 5 : (mod ? 9 : (TRAIL_PROFILES[this._trailId]?.frequency ?? 14));
+    this.trail.frequency = missile ? 4 : (chaos ? 6 : (mod ? 9 : (TRAIL_PROFILES[this._trailId]?.frequency ?? 14)));
     this.trailTarget.x = this.x;
     this.trailTarget.y = this.y;
   }
 
   destroy() {
+    if (this._echoSprites) {
+      this._echoSprites.forEach((s) => {
+        s?.core?.destroy?.();
+        s?.halo?.destroy?.();
+      });
+      this._echoSprites = null;
+    }
     this.core.destroy(); this.halo.destroy(); this.ring.destroy(); this.rim.destroy();
     this.shadow.destroy(); this.trail.destroy();
   }

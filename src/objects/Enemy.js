@@ -1,4 +1,4 @@
-import { GAME } from '../config/Constants.js';
+import { BRICK, GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
 
 // Neon garden pests — crisp silhouettes with glowing outlines.
@@ -10,7 +10,7 @@ export class Enemy {
     this.scene = scene;
     this.kind = kind || KINDS[(Math.random() * KINDS.length) | 0];
     this.color = COLORS[this.kind];
-    this.r = Math.max(18, GAME.HEIGHT * 0.019);
+    this.r = Math.max(16, Math.min(BRICK.HEIGHT * 1.15, GAME.HEIGHT * 0.026));
     this.x = x;
     this.y = GAME.WALL_TOP + this.r + 4;
     this.alive = true;

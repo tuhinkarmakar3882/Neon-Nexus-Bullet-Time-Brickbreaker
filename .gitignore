@@ -1,6 +1,9 @@
 # Dependencies & build output
 node_modules/
 dist/
+out/
+_archive/dist-vite-build/
+.next/
 .vite/
 
 # OS / IDE

@@ -1,3 +1,5 @@
+import { envBool as envBoolShared, envStr } from './env.js';
+
 /**
  * Google Ads / AdMob configuration — edit this file or set VITE_* env vars at build time.
  *
@@ -34,15 +36,8 @@ const GOOGLE_TEST = {
   },
 };
 
-function envStr(key, fallback = '') {
-  const v = import.meta.env?.[key];
-  return (typeof v === 'string' && v.length > 0) ? v : fallback;
-}
-
 function envBool(key, fallback) {
-  const v = import.meta.env?.[key];
-  if (v === undefined || v === '') return fallback;
-  return v === 'true' || v === '1';
+  return envBoolShared(key, fallback);
 }
 
 /** Production ad unit IDs — replace with your AdMob / AdSense IDs. */
@@ -90,11 +85,14 @@ export const AdsConfig = {
 
   units: PRODUCTION.units,
 
-  /** Which ad surfaces are active per platform (auto-derived when using google provider). */
+  /**
+   * Web surfaces — banner needs AdSense client+slot; interstitial/rewarded use
+   * Ad Manager (VITE_ADMANAGER_*) or Phaser overlay fallbacks via webAdBridge.
+   */
   web: {
     banner: true,
-    interstitial: false,
-    rewarded: false,
+    interstitial: true,
+    rewarded: true,
   },
 
   interstitial: {
@@ -107,7 +105,7 @@ export const AdsConfig = {
   banner: {
     enabled: true,
     /** Shown on web when AdSense is not configured or in demo provider mode. */
-    placeholderLabel: 'Sponsored',
+    placeholderLabel: 'Advertisement',
   },
 
   /** Rewarded placements — map to analytics / AdMob custom data if needed. */
@@ -184,9 +182,12 @@ export function isAdSurfaceEnabled(type) {
   if (AdsConfig.provider === 'noop') return false;
   const platform = adPlatform();
   if (platform === 'web') {
-    if (type === 'banner') return AdsConfig.web.banner && !!resolveAdUnit('banner', 'web')?.client;
-    if (type === 'interstitial') return AdsConfig.web.interstitial && !!resolveAdUnit('interstitial', 'web');
-    if (type === 'rewarded') return AdsConfig.web.rewarded && !!resolveAdUnit('rewarded', 'web');
+    if (type === 'banner') {
+      const slot = resolveAdUnit('banner', 'web');
+      return AdsConfig.web.banner && !!(slot?.client && slot?.slot);
+    }
+    if (type === 'interstitial') return AdsConfig.web.interstitial;
+    if (type === 'rewarded') return AdsConfig.web.rewarded;
     return false;
   }
   return !!resolveAdUnit(type, platform);

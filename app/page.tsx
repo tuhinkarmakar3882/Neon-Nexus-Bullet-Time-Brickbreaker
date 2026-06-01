@@ -1,0 +1,79 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { TitleMenu } from '@/components/shell/TitleMenu';
+import { useGameMeta } from '@/components/shell/useGameMeta';
+import { navigateToPlay } from '@/lib/shell/routes';
+import { triggerProgressShare, shareOutcomeHint } from '@/lib/shell/triggerShare';
+import { SHELL_COPY } from '@/lib/copy/shell';
+import { RunPersistence } from '@/src/systems/RunPersistence.js';
+import {
+  canOfferInstall,
+  onInstallPromptReady,
+  triggerInstallPrompt,
+} from '@/src/systems/InstallPrompt.js';
+import { audio } from '@/src/systems/AudioManager.js';
+import { SaveManager } from '@/src/systems/SaveManager.js';
+import { DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '@/src/config/Constants.js';
+
+export default function HomePage() {
+  const { gems, highScore, run } = useGameMeta();
+  const [hint, setHint] = useState('');
+  const [installReady, setInstallReady] = useState(false);
+  const c = SHELL_COPY.home;
+
+  useEffect(() => {
+    setInstallReady(canOfferInstall());
+    const off = onInstallPromptReady(() => setInstallReady(canOfferInstall()));
+    return () => {
+      off();
+    };
+  }, []);
+
+  const unlockAudio = () => {
+    audio.init();
+    audio.resume();
+    const s = SaveManager.loadSettings();
+    audio.setSoundEnabled(s.sound);
+    audio.setMusicEnabled(s.music);
+    audio.setSfxVolume(s.sfxVolume ?? DEFAULT_SFX_VOLUME);
+    audio.setMusicVolume(s.musicVolume ?? DEFAULT_MUSIC_VOLUME);
+    audio.applyMusicSettings({ musicVolume: s.musicVolume });
+    audio.setMenuMusic();
+  };
+
+  const onPlay = (resume: boolean) => {
+    unlockAudio();
+    navigateToPlay({ resume });
+  };
+
+  const onNewGame = () => {
+    unlockAudio();
+    RunPersistence.clearRun();
+    navigateToPlay({ resume: false });
+  };
+
+  const onInstall = async () => {
+    const { outcome } = await triggerInstallPrompt();
+    if (outcome === 'accepted') setHint(c.installAccepted);
+    else if (outcome === 'unavailable') setHint(c.installManual);
+  };
+
+  const onShare = async () => {
+    setHint(SHELL_COPY.share.preparing);
+    const res = await triggerProgressShare({ gems, highScore });
+    setHint(shareOutcomeHint(res));
+  };
+
+  return (
+    <TitleMenu
+      run={run}
+      hint={hint}
+      installReady={installReady}
+      onPlay={onPlay}
+      onNewGame={onNewGame}
+      onShare={onShare}
+      onInstall={onInstall}
+    />
+  );
+}

@@ -27,43 +27,27 @@ async function loadAdMob() {
   }
 }
 
-function injectAdSense(client) {
-  if (!client || document.querySelector('script[data-adsense]')) return;
-  const s = document.createElement('script');
-  s.async = true;
-  s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${client}`;
-  s.crossOrigin = 'anonymous';
-  s.dataset.adsense = '1';
-  document.head.appendChild(s);
-}
-
-function mountWebBanner() {
+async function mountWebBanner() {
   const slot = resolveAdUnit('banner', 'web');
   if (!slot?.client || !slot?.slot) return false;
-
-  injectAdSense(slot.client);
   const el = document.getElementById('ad-banner');
   if (!el) return false;
-
-  el.innerHTML = '';
-  el.dataset.adsense = '1';
-  const ins = document.createElement('ins');
-  ins.className = 'adsbygoogle';
-  ins.style.display = 'block';
-  ins.style.width = '100%';
-  ins.style.height = '50px';
-  ins.setAttribute('data-ad-client', slot.client);
-  ins.setAttribute('data-ad-slot', slot.slot);
-  ins.setAttribute('data-full-width-responsive', 'true');
-  el.appendChild(ins);
-
   try {
-    (window.adsbygoogle = window.adsbygoogle || []).push({});
+    const { mountAdSenseBanner } = await import('../../lib/ads/adsenseWeb.ts');
+    return mountAdSenseBanner(el, slot);
   } catch (e) {
-    console.warn('[Ads] AdSense banner push failed', e);
+    console.warn('[Ads] AdSense mount failed', e);
     return false;
   }
-  return true;
+}
+
+async function ensureWebAdBridge() {
+  try {
+    const { registerWebAdBridge } = await import('../../lib/ads/webAdBridge.ts');
+    registerWebAdBridge();
+  } catch (e) {
+    console.warn('[Ads] web bridge registration skipped', e);
+  }
 }
 
 export function createGoogleAdProvider(game) {
@@ -101,7 +85,8 @@ export function createGoogleAdProvider(game) {
 
     init: async () => {
       if (!isNativePlatform()) {
-        if (isAdSurfaceEnabled('banner')) mountWebBanner();
+        await ensureWebAdBridge();
+        if (isAdSurfaceEnabled('banner')) await mountWebBanner();
         return;
       }
 
@@ -274,7 +259,7 @@ export function createGoogleAdProvider(game) {
       }
 
       const el = showWebBannerBar();
-      if (!el?.dataset.adsense && !mountWebBanner()) applyBannerPlaceholder(el);
+      if (!el?.dataset.adsense && !(await mountWebBanner())) applyBannerPlaceholder(el);
     },
 
     hideBanner: async () => {

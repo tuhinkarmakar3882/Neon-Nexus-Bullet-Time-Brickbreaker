@@ -1,7 +1,7 @@
 {
   "appId": "com.tuhinkarmakar.neonnexus",
   "appName": "Neon Nexus",
-  "webDir": "dist",
+  "webDir": "out",
   "bundledWebRuntime": false,
   "backgroundColor": "#05060a",
   "android": {

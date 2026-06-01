@@ -1,4 +1,4 @@
-import { GAME, BRICK, JARDINAIN } from '../config/Constants.js';
+import { GAME, BRICK, JARDINAIN, playfieldSideInset } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
 import { themeForLevel } from '../config/Themes.js';
 import { pickLevelGoal } from '../config/LevelGoals.js';
@@ -36,12 +36,57 @@ const PATTERN_DEFS = [
   { id: 'gauntlet', minLevel: 13, weight: 3 },
   { id: 'islands', minLevel: 14, weight: 4 },
   { id: 'perlin', minLevel: 10, weight: 5 },
+  { id: 'chevron', minLevel: 4, weight: 5 },
+  { id: 'braid', minLevel: 6, weight: 4 },
+  { id: 'bulwark', minLevel: 9, weight: 4 },
 ];
+
+/** Layout families — zones pick from different groups so multi-zone levels feel distinct. */
+const PATTERN_GROUPS = {
+  dense: ['rows', 'pyramid', 'frame', 'fortress', 'fortressRing', 'fortressSplit', 'hive', 'cascade', 'bulwark'],
+  lattice: ['checker', 'columns', 'diamond', 'cross', 'ring', 'split', 'braid'],
+  organic: ['scatter', 'islands', 'perlin', 'wave', 'zigzag', 'chevron'],
+  structural: ['arch', 'tunnel', 'staircase', 'towers', 'spiral', 'gauntlet'],
+};
+
+const SPARSE_PATTERN_IDS = new Set(['scatter', 'islands', 'ring', 'tunnel', 'perlin', 'zigzag']);
+
+/** Target fill fraction per zone before gap-packing (holes stay for arch/tunnel). */
+const PATTERN_FILL_TARGET = {
+  rows: 0.98,
+  pyramid: 0.96,
+  frame: 0.96,
+  fortress: 0.97,
+  fortressRing: 0.95,
+  fortressSplit: 0.93,
+  hive: 0.94,
+  cascade: 0.93,
+  bulwark: 0.94,
+  checker: 0.92,
+  columns: 0.9,
+  diamond: 0.9,
+  braid: 0.91,
+  chevron: 0.92,
+  arch: 0.8,
+  tunnel: 0.82,
+  cross: 0.78,
+  split: 0.88,
+  wave: 0.9,
+  scatter: 0.88,
+  islands: 0.86,
+  perlin: 0.9,
+  ring: 0.85,
+  zigzag: 0.9,
+  staircase: 0.88,
+  towers: 0.89,
+  spiral: 0.87,
+  gauntlet: 0.86,
+};
 
 const TWISTS = [
   { id: 'none', minLevel: 1, weight: 10 },
   { id: 'mirrored', minLevel: 3, weight: 4 },
-  { id: 'sparse', minLevel: 4, weight: 3 },
+  { id: 'sparse', minLevel: 14, weight: 1 },
   { id: 'explosiveCore', minLevel: 6, weight: 4 },
   { id: 'invisibleCrown', minLevel: 7, weight: 3 },
   { id: 'goldVein', minLevel: 5, weight: 3 },
@@ -63,44 +108,88 @@ function isMobileLayout() {
   return GAME.IS_PORTRAIT;
 }
 
-/** Portrait phones get denser, multi-zone layouts earlier. */
-function mobileLevelBoost(level) {
-  if (!isMobileLayout()) return { rowBonus: 0, densityBoost: 0, maxRows: 16 };
-  return {
-    rowBonus: 2 + Math.floor(level / 3),
-    densityBoost: 0.05,
-    maxRows: 20,
-  };
+/** Rows that fit between header and paddle without clipping. */
+function maxRowsForArena(top, bh) {
+  const gap = BRICK.GAP;
+  const bottom = (GAME.ARENA_FLOOR ?? GAME.HEIGHT) - gap * 2;
+  return Math.max(6, Math.floor((bottom - top + gap) / (bh + gap)));
+}
+
+/**
+ * Brick grid that always fits inside [arenaLeft, arenaRight] — never overflows the canvas.
+ * @returns {{ cols: number, bw: number, bh: number, gap: number, gridW: number, gridLeft: number, gridRight: number }}
+ */
+function fitBrickLayout(arenaLeft, arenaRight) {
+  const gap = BRICK.GAP;
+  const bh = BRICK.HEIGHT;
+  const arenaW = Math.max(80, arenaRight - arenaLeft);
+  const minCols = isMobileLayout() ? 6 : 7;
+  const maxCols = Math.floor((arenaW + gap) / (BRICK.WIDTH * 0.58 + gap));
+  const idealCell = BRICK.WIDTH * 0.9;
+  const minBw = BRICK.WIDTH * 0.66;
+
+  let cols = Math.max(
+    minCols,
+    Math.min(maxCols, Math.floor((arenaW + gap) / (idealCell + gap))),
+  );
+  let bw = (arenaW - (cols - 1) * gap) / cols;
+
+  while (cols > 4 && bw < minBw) {
+    cols -= 1;
+    bw = (arenaW - (cols - 1) * gap) / cols;
+  }
+  while (cols > 4 && cols * bw + (cols - 1) * gap > arenaW + 0.25) {
+    cols -= 1;
+    bw = (arenaW - (cols - 1) * gap) / cols;
+  }
+  bw = Math.min(BRICK.WIDTH, bw);
+
+  const gridW = cols * bw + (cols - 1) * gap;
+  const gridLeft = arenaLeft + Math.max(0, (arenaW - gridW) / 2);
+  const gridRight = gridLeft + gridW;
+  return { cols, bw, bh, gap, gridW, gridLeft, gridRight };
+}
+
+/** Drop or trim bricks that spill past the playable band (twists / moving bricks). */
+function clampBricksInArena(bricks, left, right, top) {
+  const bottom = (GAME.ARENA_FLOOR ?? GAME.HEIGHT) - BRICK.GAP * 2;
+  for (let i = bricks.length - 1; i >= 0; i--) {
+    const b = bricks[i];
+    const edgeR = b.x + b.w;
+    const edgeB = b.y + b.h;
+    if (b.x < left - 0.5 || edgeR > right + 0.5 || b.y < top - 0.5 || edgeB > bottom + 0.5) {
+      bricks.splice(i, 1);
+      continue;
+    }
+    const cx = b.x + b.w / 2;
+    const maxAmp = Math.max(0, Math.min(cx - left, right - cx) - b.w * 0.08);
+    if (b.moveAmp > maxAmp) b.moveAmp = maxAmp;
+  }
 }
 
 export function buildLevel(level, campaignSeed = 12345) {
   const diff = difficultyFor(level);
-  const mobile = mobileLevelBoost(level);
   const levelSeed = (campaignSeed + level * 997) >>> 0;
   const rng = mulberry32(levelSeed);
   const noise = new Noise(levelSeed ^ 0xabc123);
   const theme = themeForLevel(level, levelSeed);
   const isBoss = level % GAME.BOSS_EVERY === 0;
 
-  const arenaLeft = GAME.WALL_X + BRICK.GAP;
-  const arenaRight = GAME.WIDTH - GAME.WALL_X - BRICK.GAP;
-  const arenaW = arenaRight - arenaLeft;
+  const side = playfieldSideInset();
+  const arenaLeft = side;
+  const arenaRight = GAME.WIDTH - side;
   const top = GAME.WALL_TOP + BRICK.GAP * 2;
 
-  const cols = Math.max(6, Math.floor((arenaW + BRICK.GAP) / (BRICK.WIDTH + BRICK.GAP)));
-  const bw = (arenaW - (cols - 1) * BRICK.GAP) / cols;
-  const bh = BRICK.HEIGHT;
+  const { cols, bw, bh, gridLeft, gridRight } = fitBrickLayout(arenaLeft, arenaRight);
+  const arenaMaxRows = maxRowsForArena(top, bh);
+  const rowCap = Math.min(diff.layoutMaxRows, arenaMaxRows);
 
-  const rowJitter = (rng() * 2.4 | 0) - 1;
-  const totalRows = isBoss
-    ? 11 + (rng() > 0.5 ? 1 : 0) + (mobile.rowBonus > 0 ? 1 : 0)
-    : clamp(
-      6 + diff.rowBonus + mobile.rowBonus + rowJitter + (rng() < 0.45 ? 1 : 0) + (isMobileLayout() ? 1 : 0),
-      6,
-      mobile.maxRows,
-    );
+  const baseRows = isBoss
+    ? 10 + (level % 2)
+    : 7 + diff.rowBonus + diff.layoutRowBonus + (diff.rowJitter ?? 0) + (level % 2);
+  const totalRows = clamp(baseRows, 7, rowCap);
 
-  const fillDensity = Math.min(1, diff.patternDensity + mobile.densityBoost);
+  const fillDensity = Math.min(1, diff.patternDensity + diff.layoutDensityBoost + (level <= 4 ? 0.02 : 0));
 
   const twist = isBoss ? 'none' : pickWeighted(TWISTS.filter((t) => level >= t.minLevel), rng);
   const mutators = pickMutators(level, rng, diff, isBoss);
@@ -108,36 +197,50 @@ export function buildLevel(level, campaignSeed = 12345) {
   const gravityScale = pickGravity(level, rng, twist, diff);
   const goal = pickLevelGoal(level, levelSeed, isBoss);
 
-  const typeRolls = buildTypeRolls(level, diff, rng);
-  let nestBudget = Math.min(diff.gnomeMaxAlive, Math.max(2, 1 + Math.floor(level / 2) + (rng() > 0.7 ? 1 : 0)));
+  const typeRolls = diff.typeRolls;
+  let nestBudget = Math.min(diff.gnomeMaxAlive, diff.nestBudget);
 
   const bricks = [];
   const patternNames = [];
-  const usedPatterns = new Set();
 
   if (isBoss) {
     const variant = ['fortress', 'fortressRing', 'fortressSplit'][Math.floor(rng() * 3)];
     patternNames.push(variant.toUpperCase());
     fillZone(bricks, {
       pattern: variant, zoneRows: totalRows, rowOffset: 0, cols, bw, bh,
-      arenaLeft, top, level, levelSeed, noise, rng, diff, theme, typeRolls,
+      arenaLeft: gridLeft, top, level, levelSeed, noise, rng, diff, theme, typeRolls,
       nestBudget, isBoss: true, bossPlaced: { v: false },
       fillDensity,
+      sparsePatternBoost: diff.sparsePatternBoost,
+      level,
+    });
+    packZoneGaps(bricks, {
+      pattern: variant, zoneRows: totalRows, rowOffset: 0, cols, bw, bh,
+      arenaLeft: gridLeft, top, level, levelSeed, noise, theme, rng, diff,
     });
   } else {
-    const zoneCount = pickZoneCount(level, rng);
+    const zoneCount = diff.zoneCount;
     const zoneRows = splitRows(totalRows, zoneCount, rng);
+    const zonePatterns = pickZonePatterns(level, levelSeed, zoneCount, rng);
     let rowOffset = 0;
     for (let z = 0; z < zoneCount; z++) {
-      const pattern = pickPattern(level, rng, usedPatterns);
-      usedPatterns.add(pattern);
+      const pattern = zonePatterns[z];
       patternNames.push(pattern.toUpperCase());
       const budgetSlice = Math.ceil(nestBudget / (zoneCount - z));
+      const zoneSeed = (levelSeed + z * 1337 + pattern.length * 97) >>> 0;
       fillZone(bricks, {
         pattern, zoneRows: zoneRows[z], rowOffset, cols, bw, bh,
-        arenaLeft, top, level, levelSeed: levelSeed + z * 1337, noise, rng, diff, theme, typeRolls,
+        arenaLeft: gridLeft, top, level, levelSeed: zoneSeed, noise, rng, diff, theme, typeRolls,
         nestBudget: budgetSlice, isBoss: false, bossPlaced: { v: false },
         fillDensity,
+        sparsePatternBoost: diff.sparsePatternBoost,
+        level,
+        zoneIndex: z,
+        layoutVariant: (levelSeed + z * 41) & 7,
+      });
+      packZoneGaps(bricks, {
+        pattern, zoneRows: zoneRows[z], rowOffset, cols, bw, bh,
+        arenaLeft: gridLeft, top, level, levelSeed: zoneSeed, noise, theme, rng, diff,
       });
       nestBudget -= budgetSlice;
       rowOffset += zoneRows[z];
@@ -145,14 +248,15 @@ export function buildLevel(level, campaignSeed = 12345) {
   }
 
   ensurePlayable(bricks, theme, rng);
-  applyTwist(bricks, twist, cols, bw, bh, arenaLeft, top, rng, level);
+  applyTwist(bricks, twist, cols, bw, bh, gridLeft, top, rng, level, gridRight);
   placePortals(bricks, rng, level);
   clusterExplosives(bricks, rng, level);
   linkBrickPairs(bricks, rng);
+  clampBricksInArena(bricks, arenaLeft, arenaRight, top);
   finalizeLevel(bricks, {
     theme,
     rng,
-    layout: { bw, bh, arenaLeft, top, cols },
+    layout: { bw, bh, arenaLeft: gridLeft, arenaRight, top, cols },
     level,
     isBoss,
     goal,
@@ -177,36 +281,69 @@ export function buildLevel(level, campaignSeed = 12345) {
   };
 }
 
-function pickZoneCount(level, rng) {
-  if (isMobileLayout()) {
-    if (level <= 2) return rng() < 0.5 ? 2 : 1;
-    if (level <= 5) return rng() < 0.3 ? 2 : 3;
-    if (level <= 12) return rng() < 0.2 ? 2 : rng() < 0.65 ? 3 : 4;
-    return rng() < 0.12 ? 3 : 4;
-  }
-  if (level <= 2) return 1;
-  if (level <= 4) return rng() < 0.45 ? 1 : 2;
-  if (level <= 10) return rng() < 0.2 ? 1 : rng() < 0.7 ? 2 : 3;
-  if (level <= 18) return rng() < 0.1 ? 2 : rng() < 0.5 ? 3 : 4;
-  return rng() < 0.2 ? 3 : 4;
-}
-
 function splitRows(total, zones, rng) {
   if (zones <= 1) return [total];
-  const out = new Array(zones).fill(1);
-  let rem = total - zones;
+  const minPerZone = total >= zones * 3 ? 3 : 2;
+  const out = new Array(zones).fill(minPerZone);
+  let rem = total - minPerZone * zones;
   while (rem > 0) {
     const i = Math.floor(rng() * zones);
-    if (out[i] < Math.ceil(total / zones) + 2) { out[i]++; rem--; }
+    if (out[i] < Math.ceil(total / zones) + 3) { out[i]++; rem--; }
     else rem--;
   }
   return out;
 }
 
-function pickPattern(level, rng, used) {
-  const boost = isMobileLayout() ? 2 : 0;
-  const pool = PATTERN_DEFS.filter((p) => level + boost >= p.minLevel && !used.has(p.id));
-  return pickWeightedItem(pool.length ? pool : PATTERN_DEFS, rng).id;
+function patternGroup(id) {
+  for (const [group, ids] of Object.entries(PATTERN_GROUPS)) {
+    if (ids.includes(id)) return group;
+  }
+  return 'dense';
+}
+
+function patternFillTarget(pattern, level) {
+  const base = PATTERN_FILL_TARGET[pattern] ?? 0.92;
+  return Math.min(0.98, base + Math.min(0.04, (level - 1) * 0.002));
+}
+
+/**
+ * Pick `zoneCount` patterns: level signature + weighted picks from unused layout families.
+ */
+function pickZonePatterns(level, levelSeed, zoneCount, rng) {
+  const boost = isMobileLayout() ? 1 : 0;
+  const eligible = PATTERN_DEFS.filter((p) => level + boost >= p.minLevel);
+  const used = new Set();
+  const usedGroups = new Set();
+  const out = [];
+
+  const earlyIds = new Set(['rows', 'pyramid', 'checker', 'columns', 'chevron', 'wave', 'frame']);
+  const sigPool = level <= 6
+    ? eligible.filter((p) => earlyIds.has(p.id))
+    : eligible;
+  const sigIdx = (level * 23 + (levelSeed >>> 4) + (levelSeed & 0xff)) % Math.max(1, sigPool.length);
+  const signature = sigPool[sigIdx]?.id ?? eligible[0]?.id;
+  if (signature) {
+    out.push(signature);
+    used.add(signature);
+    usedGroups.add(patternGroup(signature));
+  }
+
+  while (out.length < zoneCount) {
+    let pool = eligible.filter((p) => !used.has(p.id));
+    const altGroup = pool.filter((p) => !usedGroups.has(patternGroup(p.id)));
+    if (altGroup.length >= 2) pool = altGroup;
+    if (!pool.length) {
+      used.clear();
+      usedGroups.clear();
+      pool = [...eligible];
+    }
+    const picked = pickWeightedItem(pool, rng).id;
+    out.push(picked);
+    used.add(picked);
+    usedGroups.add(patternGroup(picked));
+  }
+
+  return out;
 }
 
 function pickWeightedItem(items, rng) {
@@ -229,7 +366,8 @@ function pickMutators(level, rng, diff, isBoss) {
   if (!first) return [];
   const out = [first];
   if (isBoss || level < diff.mutatorMinLevel + 6) return out;
-  if (rng() < 0.32) {
+  const levelRoll = ((level * 1103515245 + 12345) >>> 0) / 0xffffffff;
+  if (levelRoll < diff.secondMutatorChance) {
     const pool = MUTATORS.filter((m) => m !== first);
     const second = pool[Math.floor(rng() * pool.length)];
     if (second) out.push(second);
@@ -245,39 +383,80 @@ function pickMutator(level, rng, diff, isBoss) {
     return true;
   });
   if (!pool.length) return null;
-  if (!isBoss && rng() > clamp(0.35 + (level - diff.mutatorMinLevel) * 0.04, 0.35, 0.85)) return null;
+  const levelRoll = ((level * 2654435761 + 0x9e3779b9) >>> 0) / 0xffffffff;
+  if (!isBoss && levelRoll > diff.mutatorChance) return null;
   return pool[Math.floor(rng() * pool.length)];
 }
 
 function pickGravity(level, rng, twist, diff) {
-  let g = 1;
-  if (twist === 'heavyGravity' || twist === 'HeavyGravity') g = 1.35;
-  if (level >= 22 && rng() < 0.2) g = 0.65;
-  else if (level >= 14 && rng() < 0.25) g = 1.35;
-  else if (level % 11 === 0 && rng() < 0.5) g = 0.72;
-  else if (rng() < 0.12) g = rng() < 0.5 ? 0.78 : 1.28;
-  if (diff.band >= 3 && rng() < 0.18) g *= 1.08;
+  let g = diff.gravityBase ?? 1;
+  if (twist === 'heavyGravity' || twist === 'HeavyGravity') g = Math.max(g, 1.35);
+  if (twist === 'shiftingBand' && level >= 8) g *= 1.05;
   return clamp(g, 0.6, 1.45);
 }
 
-function buildTypeRolls(level, diff, rng) {
-  const bias = rng() * 0.04;
-  const tactical = level >= 8 ? clamp(0.02 + level * 0.003, 0, 0.12) : 0;
+function brickAtCell(arenaLeft, top, bw, bh, absR, c, rowShift = 0) {
   return {
-    explode: clamp(0.05 + level * 0.0028 + bias, 0.05, 0.16),
-    silver: clamp(0.04 + level * 0.032 + bias, 0, 0.48),
-    reinforced: level >= 4 ? clamp(0.06 + level * 0.006, 0, 0.28) : 0,
-    invisible: level >= 4 ? clamp(0.05 + level * 0.005, 0, 0.26) : 0,
-    moving: level >= 3 ? clamp(0.05 + (level - 3) * 0.014 + diff.movingBoost, 0, 0.42) : 0,
-    nest: clamp(0.08 + level * 0.005, 0.08, 0.26),
-    tactical,
-    mirror: tactical * 0.35,
-    moss: tactical * 0.35,
-    beehive: level >= 10 ? tactical * 0.4 : 0,
-    seedpod: level >= 12 ? tactical * 0.35 : 0,
-    linked: level >= 14 ? tactical * 0.25 : 0,
-    hostage: level >= 6 ? clamp(0.03 + level * 0.002, 0, 0.1) : 0,
+    x: arenaLeft + c * (bw + BRICK.GAP) + rowShift,
+    y: top + absR * (bh + BRICK.GAP),
+    w: bw,
+    h: bh,
+    zoneRow: absR,
   };
+}
+
+/** Fill intentional gaps in a zone up to pattern-specific density (keeps arch/tunnel holes). */
+function packZoneGaps(bricks, ctx) {
+  const {
+    pattern, zoneRows, rowOffset, cols, bw, bh, arenaLeft, top, level, levelSeed, noise, theme, rng, diff,
+  } = ctx;
+  const cellW = bw + BRICK.GAP;
+  const cellH = bh + BRICK.GAP;
+  const target = Math.floor(cols * zoneRows * patternFillTarget(pattern, level));
+
+  const inZone = bricks.filter((b) => {
+    const gr = Math.round((b.y - top) / cellH);
+    return gr >= rowOffset && gr < rowOffset + zoneRows;
+  });
+  if (inZone.length >= target) return;
+
+  const occupied = new Set();
+  for (const b of inZone) {
+    const gr = Math.round((b.y - top) / cellH);
+    const gc = Math.round((b.x - arenaLeft) / cellW);
+    occupied.add(`${gr},${gc}`);
+  }
+
+  const empties = [];
+  for (let r = 0; r < zoneRows; r++) {
+    const absR = rowOffset + r;
+    for (let c = 0; c < cols; c++) {
+      if (occupied.has(`${absR},${c}`)) continue;
+      if (!exists(pattern, r, c, zoneRows, cols, (levelSeed ?? level * 17) + rowOffset, noise, rng, 1, absR, 1.1, level)) continue;
+      empties.push({ r, c, absR });
+    }
+  }
+
+  for (let i = empties.length - 1; i > 0; i--) {
+    const j = (rng() * (i + 1)) | 0;
+    [empties[i], empties[j]] = [empties[j], empties[i]];
+  }
+
+  let need = target - inZone.length;
+  for (const { absR, c } of empties) {
+    if (need <= 0) break;
+    const rowShift = (absR % 2 === 1) ? cellW * 0.05 : 0;
+    bricks.push({
+      ...brickAtCell(arenaLeft, top, bw, bh, absR, c, rowShift),
+      type: 'normal',
+      color: theme.bricks[(absR + c + rowOffset) % theme.bricks.length],
+      moving: false,
+      movePhase: rng() * Math.PI * 2,
+      moveSpeed: (0.65 + rng() * 0.8) * diff.moveSpeedMult,
+      moveAmp: 0,
+    });
+    need--;
+  }
 }
 
 function fillZone(bricks, ctx) {
@@ -285,16 +464,24 @@ function fillZone(bricks, ctx) {
     pattern, zoneRows, rowOffset, cols, bw, bh, arenaLeft, top, level, levelSeed,
     noise, rng, diff, theme, typeRolls, nestBudget, isBoss, bossPlaced,
     fillDensity = diff.patternDensity,
+    sparsePatternBoost = 1.05,
+    zoneIndex = 0,
+    layoutVariant = 0,
   } = ctx;
   let nests = nestBudget;
+  const cellW = bw + BRICK.GAP;
+  const colorOffset = zoneIndex * 2 + (layoutVariant & 1);
 
   for (let r = 0; r < zoneRows; r++) {
     const absR = rowOffset + r;
+    const rowShift = (absR % 2 === 1)
+      ? cellW * (0.04 + (layoutVariant % 4) * 0.015)
+      : 0;
     for (let c = 0; c < cols; c++) {
-      if (!exists(pattern, r, c, zoneRows, cols, levelSeed + rowOffset, noise, rng, fillDensity, absR)) continue;
+      if (!exists(pattern, r, c, zoneRows, cols, levelSeed + rowOffset, noise, rng, fillDensity, absR, sparsePatternBoost, level)) continue;
 
       let type = 'normal';
-      let color = theme.bricks[(absR + c) % theme.bricks.length];
+      let color = theme.bricks[(absR + c + colorOffset) % theme.bricks.length];
       let moving = false;
 
       if (isGold(pattern, r, c, zoneRows, cols, level, absR)) {
@@ -331,13 +518,11 @@ function fillZone(bricks, ctx) {
       }
 
       bricks.push({
-        x: arenaLeft + c * (bw + BRICK.GAP),
-        y: top + absR * (bh + BRICK.GAP),
-        w: bw, h: bh, type, color, moving,
+        ...brickAtCell(arenaLeft, top, bw, bh, absR, c, rowShift),
+        type, color, moving,
         movePhase: rng() * Math.PI * 2,
         moveSpeed: (0.65 + rng() * 1.1) * diff.moveSpeedMult,
         moveAmp: bw * (0.12 + rng() * 0.28) * (1 + diff.movingBoost * 0.5),
-        zoneRow: absR,
       });
     }
   }
@@ -505,7 +690,10 @@ function ensureCannonsOnlyReachable(bricks, theme, rng, layout) {
   ensureClearPath(bricks, theme, rng, layout, true);
 }
 
-function ensureMinBricks(bricks, layout, theme, rng, min = 12) {
+function ensureMinBricks(bricks, layout, theme, rng, min = 18) {
+  const target = Math.max(min, Math.floor(layout.cols * 2.2));
+  if (bricks.length >= target) return;
+  min = target;
   if (bricks.length >= min) return;
   const { arenaLeft, top, bw, bh, cols } = layout;
   let row = 0;
@@ -682,9 +870,9 @@ export function validateLevel(bricks, opts = {}) {
   return { valid: issues.length === 0, issues };
 }
 
-function applyTwist(bricks, twist, cols, bw, bh, arenaLeft, top, rng, level) {
+function applyTwist(bricks, twist, cols, bw, bh, arenaLeft, top, rng, level, gridRight) {
   if (twist === 'none' || !bricks.length) return;
-  const arenaRight = arenaLeft + cols * (bw + BRICK.GAP) - BRICK.GAP;
+  const arenaRight = gridRight ?? (arenaLeft + cols * (bw + BRICK.GAP) - BRICK.GAP + bw);
 
   if (twist === 'mirrored') {
     for (const b of bricks) {
@@ -695,7 +883,7 @@ function applyTwist(bricks, twist, cols, bw, bh, arenaLeft, top, rng, level) {
 
   if (twist === 'sparse') {
     const cands = bricks.filter((b) => !['gold', 'steel', 'boss'].includes(b.type));
-    const sparseRatio = isMobileLayout() ? 0.03 + rng() * 0.04 : 0.05 + rng() * 0.06;
+    const sparseRatio = 0.02 + rng() * 0.025;
     const remove = Math.floor(cands.length * sparseRatio);
     for (let i = 0; i < remove && cands.length; i++) {
       const idx = bricks.indexOf(cands.splice(Math.floor(rng() * cands.length), 1)[0]);
@@ -756,7 +944,7 @@ function applyTwist(bricks, twist, cols, bw, bh, arenaLeft, top, rng, level) {
 }
 
 function clusterExplosives(bricks, rng, level) {
-  if (level < 6 || rng() > 0.45) return;
+  if (level < 4 || rng() > (level >= 12 ? 0.62 : 0.5)) return;
   const ex = bricks.filter((b) => b.type === 'explosive');
   if (ex.length < 2) return;
   const seed = ex[Math.floor(rng() * ex.length)];
@@ -842,7 +1030,7 @@ function hash(a, b) {
   return n - Math.floor(n);
 }
 
-function exists(pattern, r, c, rows, cols, seed, noise, rng, density = 1, absR = r) {
+function exists(pattern, r, c, rows, cols, seed, noise, rng, density = 1, absR = r, sparsePatternBoost = 1.05, level = 1) {
   const midC = (cols - 1) / 2;
   const midR = (rows - 1) / 2;
   let place = true;
@@ -864,7 +1052,7 @@ function exists(pattern, r, c, rows, cols, seed, noise, rng, density = 1, absR =
       place = Math.abs(c - midC) / (midC || 1) + Math.abs(r - midR) / (midR || 1) <= 1.05;
       break;
     case 'columns':
-      place = c % 3 !== 1;
+      place = c % 4 !== 2;
       break;
     case 'checker':
       place = (r + c + absR) % 2 === 0;
@@ -873,7 +1061,7 @@ function exists(pattern, r, c, rows, cols, seed, noise, rng, density = 1, absR =
       place = !(r < rows - 2 && Math.abs(c - midC) < cols * 0.2);
       break;
     case 'zigzag':
-      place = ((r + c + Math.floor(seed * 0.01)) % 4) < 2;
+      place = ((r + c + Math.floor(seed * 0.01)) % 5) < 3;
       break;
     case 'spiral': {
       const ring = Math.min(r, c, rows - 1 - r, cols - 1 - c);
@@ -887,7 +1075,7 @@ function exists(pattern, r, c, rows, cols, seed, noise, rng, density = 1, absR =
       place = c % 4 < 2;
       break;
     case 'scatter':
-      place = hash(r + seed, c - seed) > 0.38;
+      place = hash(r + seed, c - seed) > 0.2;
       break;
     case 'staircase': {
       const w = Math.max(2, Math.floor(cols * 0.38));
@@ -896,13 +1084,13 @@ function exists(pattern, r, c, rows, cols, seed, noise, rng, density = 1, absR =
       break;
     }
     case 'tunnel':
-      place = Math.abs(c - midC) > 1.5 || r < rows * 0.28 || r > rows * 0.72;
+      place = Math.abs(c - midC) > 1.2 || r < rows * 0.22 || r > rows * 0.78;
       break;
     case 'wave':
-      place = Math.abs(c - midC - Math.sin(r * 0.75 + seed * 0.02) * cols * 0.28) > 1.1;
+      place = Math.abs(c - midC - Math.sin(r * 0.75 + seed * 0.02) * cols * 0.26) > 0.85;
       break;
     case 'perlin':
-      place = noise.perlin2(c * 0.32 + seed * 0.01, r * 0.32 + absR * 0.1) > -0.08;
+      place = noise.perlin2(c * 0.32 + seed * 0.01, r * 0.32 + absR * 0.1) > -0.18;
       break;
     case 'split':
       place = c < cols * 0.38 || c > cols * 0.62;
@@ -914,22 +1102,38 @@ function exists(pattern, r, c, rows, cols, seed, noise, rng, density = 1, absR =
       place = Math.abs(Math.abs(c - midC) - cols * 0.28) < 1.3 || Math.abs(Math.abs(r - midR) - rows * 0.32) < 0.9;
       break;
     case 'cascade':
-      place = (c + r * 2) % 5 !== 0;
+      place = (c + r * 2) % 6 !== 0;
       break;
     case 'hive':
-      place = (c % 3 !== 1) || (r % 2 === 0);
+      place = (c % 3 !== 1) || (r % 2 === 0) || (c + r) % 4 === 0;
       break;
     case 'gauntlet':
       place = Math.abs(c - midC) <= 2.5 || r < 1 || r >= rows - 1;
       break;
     case 'islands':
-      place = hash(r * 3 + seed, c * 5) > 0.42 && hash(r + c, seed) > 0.35;
+      place = hash(r * 3 + seed, c * 5) > 0.24 && hash(r + c, seed) > 0.22;
+      break;
+    case 'chevron':
+      place = Math.abs(c - midC) <= r * 0.52 + 1.1 || Math.abs(c - midC) <= (rows - 1 - r) * 0.48 + 1;
+      break;
+    case 'braid':
+      place = ((c + r + absR) % 3 !== 0) || ((c - r + cols) % 4 !== 1);
+      break;
+    case 'bulwark':
+      place = c < 2 || c >= cols - 2 || (c + r) % 3 === 0;
       break;
     default:
       place = true;
   }
   if (!place) return false;
-  return density >= 1 || rng() < density;
+  if (SPARSE_PATTERN_IDS.has(pattern)) {
+    const keep = Math.min(1, density * sparsePatternBoost * (level <= 4 ? 1.06 : 1));
+    return rng() < keep;
+  }
+  if (level <= 3 && ['checker', 'columns', 'zigzag'].includes(pattern)) {
+    return rng() < Math.min(1, 0.92 + density * 0.08);
+  }
+  return true;
 }
 
 function isGold(pattern, r, c, rows, cols, level, absR = r) {

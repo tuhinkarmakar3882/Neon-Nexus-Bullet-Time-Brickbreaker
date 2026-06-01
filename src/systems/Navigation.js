@@ -1,6 +1,9 @@
 /** Unified back navigation — Android hardware back, browser history, and Escape. */
 import { Capacitor } from '@capacitor/core';
 import { SCENES } from '../config/Constants.js';
+import { closeLegalShell, isLegalShellOpen, wireLegalShellNavigation } from '../shell/LegalShell.js';
+import { exitToHome } from '../shell/routes.js';
+import { handlePlayEscape } from './GameKeyboard.js';
 
 export const NAV = {
   MENU: 'menu',
@@ -17,11 +20,9 @@ const BLOCKING_OVERLAYS = [
   SCENES.PURCHASE,
 ];
 
-/** Opened from Pause while Game is paused/sleeping. */
-const PAUSE_CHILD_OVERLAYS = [SCENES.SHOP, SCENES.SETTINGS, SCENES.CODEX];
-
-/** Opened from Menu (Menu paused behind). */
-const MENU_OVERLAYS = [SCENES.SHOP, SCENES.SETTINGS, SCENES.CODEX];
+/** Legacy overlay keys — shop/settings/codex are React routes now. */
+const PAUSE_CHILD_OVERLAYS = [];
+const MENU_OVERLAYS = [];
 
 let gameRef = null;
 let lastMenuBackAt = 0;
@@ -107,10 +108,6 @@ function tryOverlayBack(scenes, keys) {
   return null;
 }
 
-function isMenuFlow(scenes) {
-  return scenes.isPaused(SCENES.MENU) || scenes.isSleeping(SCENES.MENU);
-}
-
 function isGameplayRunning(scenes) {
   const gameScene = scenes.getScene(SCENES.GAME);
   return !!(
@@ -124,22 +121,36 @@ function isGameplayRunning(scenes) {
 
 export function quitGameToMenu(game = gameRef) {
   const scenes = game?.scene;
-  if (!scenes) return;
+  if (!scenes) {
+    exitToHome();
+    return;
+  }
   for (const key of [SCENES.PAUSE, ...PAUSE_CHILD_OVERLAYS, SCENES.GAMEOVER, SCENES.LEVEL_COMPLETE]) {
     if (scenes.isActive(key)) scenes.stop(key);
   }
-  if (scenes.isActive(SCENES.HUD)) scenes.stop(SCENES.HUD);
+  if (scenes.isActive(SCENES.UI)) scenes.stop(SCENES.UI);
   if (scenes.isActive(SCENES.GAME)) scenes.stop(SCENES.GAME);
   clearGameplayHistory();
-  scenes.start(SCENES.MENU);
+  exitToHome();
 }
 
 /**
  * @returns {{ handled: boolean, action?: string }}
  */
 export function goBack(game = gameRef) {
+  if (isLegalShellOpen()) {
+    closeLegalShell();
+    return { handled: true, action: 'legal-shell' };
+  }
+
   const scenes = game?.scene;
-  if (!scenes) return { handled: false };
+  if (!scenes) {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back();
+      return { handled: true, action: 'shell-back' };
+    }
+    return { handled: false };
+  }
 
   const blocking = tryOverlayBack(scenes, BLOCKING_OVERLAYS);
   if (blocking) return blocking;
@@ -148,10 +159,8 @@ export function goBack(game = gameRef) {
   const pauseSleeping = scenes.isSleeping(SCENES.PAUSE);
 
   if (pauseActive) {
-    const pauseScene = scenes.getScene(SCENES.PAUSE);
-    if (pauseScene?.handleBack?.()) {
-      return { handled: true, action: 'pause-resume', key: SCENES.PAUSE };
-    }
+    scenes.getScene(SCENES.PAUSE)?.resume?.(true);
+    return { handled: true, action: 'pause-resume', key: SCENES.PAUSE };
   }
 
   if (pauseSleeping || pauseActive) {
@@ -165,26 +174,15 @@ export function goBack(game = gameRef) {
 
   if (isGameplayRunning(scenes)) {
     for (const key of PAUSE_CHILD_OVERLAYS) {
-      if (scenes.isActive(key) && !isMenuFlow(scenes)) {
-        scenes.stop(key);
-      }
+      if (scenes.isActive(key)) scenes.stop(key);
     }
     scenes.getScene(SCENES.GAME).requestPause();
     return { handled: true, action: 'pause-game' };
   }
 
-  if (scenes.isActive(SCENES.GAME) && !scenes.isActive(SCENES.MENU)) {
+  if (scenes.isActive(SCENES.GAME)) {
     quitGameToMenu(game);
     return { handled: true, action: 'game-exit' };
-  }
-
-  if (isMenuFlow(scenes)) {
-    const menuOverlay = tryOverlayBack(scenes, MENU_OVERLAYS);
-    if (menuOverlay) return menuOverlay;
-  }
-
-  if (scenes.isActive(SCENES.MENU) && !scenes.isPaused(SCENES.MENU)) {
-    return { handled: handleMenuExitAttempt(game), action: 'menu-exit' };
   }
 
   return { handled: false, action: 'none' };
@@ -200,7 +198,7 @@ function handleMenuExitAttempt(game) {
     return true;
   }
   lastMenuBackAt = now;
-  game?.events?.emit('hud:toast', { text: 'Press back again to exit', ms: 2000 });
+  game?.events?.emit('hud:toast', { text: 'Press back again to exit the app', ms: 2000 });
   return true;
 }
 
@@ -224,9 +222,14 @@ export function attachPopstateListener(game) {
     }
     if (historyDepth > 0) historyDepth -= 1;
 
+    if (isLegalShellOpen()) {
+      closeLegalShell({ fromHistory: true });
+      return;
+    }
+
     const kind = window.history.state?.neonNav;
     const scenes = game?.scene;
-    if (kind === NAV.MENU && scenes?.isActive(SCENES.GAME)) {
+    if ((kind === NAV.MENU || kind === NAV.GAME) && scenes?.isActive(SCENES.GAME)) {
       quitGameToMenu(game);
       return;
     }
@@ -243,7 +246,10 @@ export function attachEscapeListener(game) {
     if (e.key !== 'Escape') return;
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    const result = goBack(game);
+    const scenes = game?.scene;
+    const onPlay = scenes?.isActive(SCENES.GAME) || scenes?.isActive(SCENES.PAUSE);
+    let result = onPlay ? handlePlayEscape(game) : goBack(game);
+    if (onPlay && !result.handled) result = goBack(game);
     if (result.handled) e.preventDefault();
   });
 }

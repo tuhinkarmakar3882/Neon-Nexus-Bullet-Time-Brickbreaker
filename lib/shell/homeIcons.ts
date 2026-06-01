@@ -1,0 +1,38 @@
+import type { IconNode } from 'lucide';
+import {
+  Archive,
+  BookOpen,
+  Download,
+  Gem,
+  Link2,
+  Package,
+  Play,
+  RotateCcw,
+  Settings,
+  Share2,
+  ShoppingBag,
+  Sparkles,
+  Sprout,
+  Trophy,
+  Zap,
+} from 'lucide';
+
+/** Lucide icons used on the home hub — keep in sync with nav actions. */
+export const HOME_ICONS = {
+  brand: Sparkles,
+  play: Play,
+  resume: Play,
+  newGame: RotateCcw,
+  codex: BookOpen,
+  shop: ShoppingBag,
+  settings: Settings,
+  share: Share2,
+  install: Download,
+  connect: Link2,
+  savedRun: Zap,
+  gems: Gem,
+  best: Trophy,
+  vault: Package,
+  archive: Archive,
+  garden: Sprout,
+} as const satisfies Record<string, IconNode>;

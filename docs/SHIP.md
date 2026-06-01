@@ -30,10 +30,10 @@ pnpm run ship:check:android
 ### Tech (automated)
 
 ```bash
-pnpm run ship:web          # validate env → build dist/
+pnpm run ship:web          # validate env → build out/
 ```
 
-Deploy `dist/` to Vercel or Netlify. Set the same `VITE_*` in the host dashboard plus server-only `STRIPE_*`.
+Deploy `out/` to Vercel or Netlify (see [PWA.md](./PWA.md)). Set the same `VITE_*` in the host dashboard plus server-only `STRIPE_*`.
 
 ### You (click ops)
 

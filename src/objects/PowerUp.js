@@ -1,7 +1,8 @@
 import { GAME } from '../config/Constants.js';
 import {
-  POWERS, powerFillColor, powerBadgeTextColor, powerPillLabel,
+  POWERS, powerFillColor, powerBadgeTextColor, powerPillLabel, resolvePowerKey,
 } from '../config/PowerUps.js';
+import { rollPositivePower } from '../config/DropTables.js';
 import { PAL } from '../config/Palette.js';
 import { iconTextureKey } from '../utils/IconTextures.js';
 import { rand } from '../utils/Helpers.js';
@@ -11,9 +12,13 @@ import { fitTextWidth, displayStyle } from '../utils/Typography.js';
 export class PowerUp {
   constructor(scene, x, y, key, opts = {}) {
     this.scene = scene;
-    this.key = key;
+    let resolved = resolvePowerKey(key);
+    if (!POWERS[resolved]) {
+      resolved = rollPositivePower(scene.level ?? 1, (scene.levelSeed ?? 1) ^ 0xfeed);
+    }
+    this.key = resolved;
     this.variant = opts.variant ?? 'normal';
-    const def = POWERS[key];
+    const def = POWERS[this.key];
     this.color = powerFillColor(key);
     this.polarity = def?.polarity ?? 'pos';
     this.label = powerPillLabel(key);

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME, BRICK } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
-import { PANEL_SLICE } from '../utils/Textures.js';
+import { brickPanelInsets } from '../utils/Textures.js';
 import { lerpColor, clamp } from '../utils/Helpers.js';
 import { difficultyFor } from '../systems/DifficultyScaler.js';
 import { popScale } from '../utils/MicroFx.js';
@@ -58,8 +58,18 @@ export class Brick {
 
     const panelKey = INDESTRUCTIBLE_PANEL[type] ?? 'panel';
     const useTint = !INDESTRUCTIBLE_PANEL[type];
-    this.panel = scene.add.nineslice(this.cx, this.cy, panelKey, undefined, w, h, PANEL_SLICE, PANEL_SLICE, PANEL_SLICE, PANEL_SLICE)
-      .setDepth(10).setTint(useTint ? color : 0xffffff).setAlpha(0.96);
+    const slice = brickPanelInsets(w, h);
+    this.panel = scene.add.nineslice(
+      this.cx, this.cy, panelKey, undefined, w, h,
+      slice.left, slice.right, slice.top, slice.bottom,
+    )
+      .setDepth(10)
+      .setAlpha(0.98);
+    if (useTint && typeof this.panel.setTintFill === 'function') {
+      this.panel.setTintFill(color);
+    } else {
+      this.panel.setTint(useTint ? color : 0xffffff);
+    }
     if (type === 'gold' || type === 'steel') {
       this.panel.setBlendMode(Phaser.BlendModes.NORMAL);
     }
@@ -214,10 +224,18 @@ export class Brick {
     const flashTint = (this.type === 'gold' || this.type === 'steel' || this.type === 'hostage')
       ? 0xffffff
       : lerpColor(this.color, 0xffffff, 0.7);
-    this.panel.setTint(flashTint);
+    if (typeof this.panel.setTintFill === 'function' && !INDESTRUCTIBLE_PANEL[this.type]) {
+      this.panel.setTintFill(flashTint);
+    } else {
+      this.panel.setTint(flashTint);
+    }
     this.scene.time.delayedCall(60, () => {
       if (!this.panel.active) return;
-      this.panel.setTint(INDESTRUCTIBLE_PANEL[this.type] ? 0xffffff : this.color);
+      if (typeof this.panel.setTintFill === 'function' && !INDESTRUCTIBLE_PANEL[this.type]) {
+        this.panel.setTintFill(this.color);
+      } else {
+        this.panel.setTint(INDESTRUCTIBLE_PANEL[this.type] ? 0xffffff : this.color);
+      }
     });
     this.scene.tweens.add({ targets: this.panel, scaleX: 1.1, scaleY: 1.14, duration: 70, yoyo: true });
     if (this.crackImg) this.scene.tweens.add({ targets: this.crackImg, alpha: { from: 0.4, to: 0.95 }, duration: 90, yoyo: true });

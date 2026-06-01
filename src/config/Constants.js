@@ -12,6 +12,8 @@ export const GAME = {
   CONTINUES: 2,
 
   WALL_X: 30,
+  /** Horizontal clamp for paddle (may be tighter than WALL_X when side HUD is in DOM). */
+  PADDLE_INSET: 30,
   WALL_TOP: 180,
 
   BALL_MIN_SPEED: 560,
@@ -24,17 +26,20 @@ export const GAME = {
   BOUNCE_SPEED_DELTA: 0.012,
   BALL_LEVEL_BASE_MULT: 1.04,
 
-  /** Homing / gravity steering — radial accel as fraction of ball speed per second. */
-  STEER_MISSILE_RADIAL: -0.16,
-  STEER_GRAVITY_RADIAL: 0.32,
-  STEER_GRAVITY_EXTRA_Y: 0.11,
-  STEER_SWIRL_MISSILE: 3.6,
-  STEER_SWIRL_GRAVITY: 2.4,
-  STEER_SPEED_MIN: 0.58,
-  STEER_SPEED_MAX: 1.68,
+  /** Homing / gravity steering — radial accel as fraction of ball speed per second (positive = toward target). */
+  STEER_MISSILE_RADIAL: 0.58,
+  STEER_GRAVITY_RADIAL: 0.62,
+  STEER_GRAVITY_EXTRA_Y: 0.32,
+  STEER_SWIRL_MISSILE: 6.2,
+  STEER_SWIRL_GRAVITY: 3.4,
+  STEER_SPEED_MIN: 0.62,
+  STEER_SPEED_MAX: 1.75,
   ECHO_ORBIT_COUNT: 8,
-  ECHO_ORBIT_SPEED: 7.2,
-  ECHO_ORBIT_RADIUS: 4.2,
+  ECHO_ORBIT_SPEED: 9.5,
+  /** Multiplier on ball radius for echo satellite orbit path. */
+  ECHO_ORBIT_RADIUS: 3.4,
+  /** Black hole pull radius (fraction of min screen dimension). */
+  BLACK_HOLE_RADIUS: 0.34,
 
   PADDLE_BASE_WIDTH: 220,
   PADDLE_EXPAND_MULT: 1.35,
@@ -66,10 +71,16 @@ export const GAME = {
   MAX_BALLS: 24,
   MAX_BALLS_MOBILE: 16,
   IS_PORTRAIT: false,
+  /** Header + side meters rendered in React on /play (canvas = arena only). */
+  USE_DOM_HUD: false,
   SAFE_TOP: 10,
   SAFE_BOTTOM: 0,
   SAFE_LEFT: 0,
   SAFE_RIGHT: 0,
+  /** Y of playable floor (walls stop here; paddle sits above). */
+  ARENA_FLOOR: 800,
+  /** Reserved strip at bottom for paddle, ball, and touch targets. */
+  PLAY_MARGIN_BOTTOM: 72,
   MAX_BULLETS: 160,
   MAX_POWERS: 24,
 
@@ -144,9 +155,11 @@ export const GAME = {
 };
 
 export const BRICK = {
+  /** Classic tile proportions (width : height). */
   WIDTH: 96,
   HEIGHT: 38,
   GAP: 10,
+  DESIGN_RATIO: 96 / 38,
   HP: { normal: 1, silver: 2, gold: Infinity, steel: Infinity, explosive: 1, nest: 1, boss: 3, reinforced: 2, invisible: 1, portal: 1, shifting: 1, mirror: 1, moss: 2, beehive: 1, seedpod: 1, linked: 1, hostage: 1 },
 };
 
@@ -190,13 +203,41 @@ export function computeLayout(winW, winH, insets) {
   GAME.HEIGHT = H;
 
   const safe = insets ?? { top: 0, bottom: 0, left: 0, right: 0 };
-  GAME.SAFE_TOP = Math.max(8, Math.round(safe.top || 0));
-  GAME.SAFE_BOTTOM = Math.max(8, Math.round(safe.bottom || 0));
+  GAME.SAFE_TOP = Math.max(10, Math.round(safe.top || 0));
+  GAME.SAFE_BOTTOM = Math.max(12, Math.round(safe.bottom || 0));
   GAME.SAFE_LEFT = Math.round(safe.left || 0);
   GAME.SAFE_RIGHT = Math.round(safe.right || 0);
 
-  GAME.WALL_X = Math.round(clampN(W * 0.022, 14, 36));
-  GAME.WALL_TOP = Math.round(H * (isPortrait ? 0.085 : 0.11)) + GAME.SAFE_TOP;
+  /** Slim edge overlays (12–16px) — drawn on top; do not shrink arena width. */
+  GAME.UI_EDGE_W = Math.round(clampN(W * 0.036, 12, 16));
+  /** When true, header + edge meters live in React DOM; canvas is playfield-only. */
+  if (GAME.USE_DOM_HUD) {
+    GAME.UI_HEADER_H = 0;
+    GAME.UI_HEADER_GAP = Math.round(clampN(H * 0.008, 4, 8));
+    GAME.UI_EDGE_W = 0;
+    GAME.WALL_TOP = GAME.SAFE_TOP + GAME.UI_HEADER_GAP;
+  } else {
+    GAME.WALL_X = Math.round(clampN(W * 0.022, 14, 36));
+    GAME.PADDLE_INSET = GAME.WALL_X;
+    /** Compact top HUD (~6.5% H, clamped) — single stat row per wireframe. */
+    GAME.UI_HEADER_H = Math.round(clampN(H * (isPortrait ? 0.065 : 0.07), 44, 58));
+    /** Float gap between header island and playfield. */
+    GAME.UI_HEADER_GAP = Math.round(clampN(H * 0.01, 6, 10));
+    GAME.WALL_TOP = GAME.SAFE_TOP + GAME.UI_HEADER_H + GAME.UI_HEADER_GAP;
+  }
+
+  /** Bottom play strip — paddle, ball, launch hint (scales with screen height). */
+  GAME.PLAY_MARGIN_BOTTOM = Math.round(
+    H * (isPortrait ? 0.08 : 0.06) + GAME.SAFE_BOTTOM,
+  );
+  GAME.ARENA_FLOOR = H - GAME.PLAY_MARGIN_BOTTOM;
+  if (GAME.ARENA_FLOOR < GAME.WALL_TOP + H * 0.45) {
+    GAME.PLAY_MARGIN_BOTTOM = Math.round(
+      H * (isPortrait ? 0.13 : 0.09) + GAME.SAFE_BOTTOM,
+    );
+    GAME.ARENA_FLOOR = H - GAME.PLAY_MARGIN_BOTTOM;
+  }
+  GAME.UI_PLAY_H = Math.max(64, GAME.ARENA_FLOOR - GAME.WALL_TOP);
 
   GAME.IS_PORTRAIT = isPortrait;
 
@@ -229,11 +270,21 @@ export function computeLayout(winW, winH, insets) {
     24,
     38,
   ));
-  GAME.PADDLE_Y_OFFSET = Math.round(H * (isPortrait ? 0.042 : 0.048)) + GAME.SAFE_BOTTOM;
+  GAME.PADDLE_Y_OFFSET = Math.round(
+    GAME.PLAY_MARGIN_BOTTOM * 0.58 + GAME.PADDLE_HEIGHT * 0.5,
+  );
   /** Tie paddle speed to height so wide/narrow aspect changes don't skew feel */
   GAME.PADDLE_SPEED = Math.round(H * 0.88);
 
   GAME.BALL_RADIUS = Math.round(clampN(H * 0.0098, 9, 16));
+  if (GAME.USE_DOM_HUD) {
+    /** Rails live in React DOM — canvas edge is the play wall; ball needs radius clearance only. */
+    GAME.WALL_X = Math.max(2, Math.round(GAME.BALL_RADIUS * 0.28));
+    GAME.PADDLE_INSET = 0;
+  } else if (GAME.WALL_X == null) {
+    GAME.WALL_X = Math.round(clampN(W * 0.022, 14, 36));
+    GAME.PADDLE_INSET = GAME.WALL_X;
+  }
   GAME.BALL_MIN_SPEED = Math.round(H * 0.44);
   GAME.BALL_MAX_SPEED = Math.round(H * 0.95);
 
@@ -245,11 +296,37 @@ export function computeLayout(winW, winH, insets) {
   JARDINAIN.LAUNCH_SPEED = Math.round(H * 1.15);
   JARDINAIN.DISLODGE_SPEED = Math.round(H * 0.65);
 
-  BRICK.WIDTH = Math.round(H * (isPortrait ? 0.068 : 0.07));
-  BRICK.HEIGHT = Math.round(H * (isPortrait ? 0.026 : 0.03));
-  BRICK.GAP = Math.round(H * (isPortrait ? 0.0055 : 0.008));
+  BRICK.GAP = Math.round(clampN(H * (isPortrait ? 0.0032 : 0.004), 3, 6));
+  BRICK.HEIGHT = Math.round(clampN(H * (isPortrait ? 0.052 : 0.048), 32, 46));
+  BRICK.WIDTH = Math.round(BRICK.HEIGHT * BRICK.DESIGN_RATIO);
+
+  if (typeof document !== 'undefined') {
+    const root = document.documentElement;
+    root.style.setProperty('--play-aspect-w', String(W));
+    root.style.setProperty('--play-aspect-h', String(H));
+  }
 
   return { W, H };
+}
+
+/** Left/right clamp for paddle center — flush to #game-root when DOM HUD has side rails. */
+export function paddleSideInset() {
+  if (GAME.USE_DOM_HUD) return GAME.PADDLE_INSET ?? 0;
+  return GAME.PADDLE_INSET ?? GAME.WALL_X;
+}
+
+/** Ball side walls — inset by ball radius so the orb clears the edge glow. */
+export function ballSideInset() {
+  if (GAME.USE_DOM_HUD) {
+    return Math.max(2, Math.round((GAME.BALL_RADIUS ?? 12) * 0.35));
+  }
+  return GAME.WALL_X;
+}
+
+/** Left/right inset for brick grid (aligned with paddle travel on DOM HUD). */
+export function playfieldSideInset() {
+  if (GAME.USE_DOM_HUD) return BRICK.GAP;
+  return GAME.WALL_X + BRICK.GAP;
 }
 
 export const STORAGE = {
@@ -283,7 +360,9 @@ export const SCENES = {
   PRELOAD: 'Preload',
   MENU: 'Menu',
   GAME: 'Game',
-  HUD: 'HUD',
+  UI: 'UIScene',
+  /** @deprecated use SCENES.UI */
+  HUD: 'UIScene',
   PAUSE: 'Pause',
   SETTINGS: 'Settings',
   GAMEOVER: 'GameOver',

@@ -1,4 +1,5 @@
 import { AdsConfig, isAdsEnabled } from '../config/AdsConfig.js';
+import { getEnv } from '../config/env.js';
 import { createDemoAdProvider } from './DemoAdProvider.js';
 import { createGoogleAdProvider } from './GoogleAdProvider.js';
 import { createNoopAdProvider } from './NoopAdProvider.js';
@@ -9,7 +10,7 @@ import { createNoopAdProvider } from './NoopAdProvider.js';
  */
 export function createAdProvider(game) {
   const mode = (AdsConfig.provider || 'demo').toLowerCase();
-  const isProd = import.meta.env?.PROD;
+  const isProd = getEnv('NODE_ENV') === 'production' || getEnv('MODE') === 'production';
 
   if (isProd && mode === 'demo') {
     console.warn('[Monetization] VITE_AD_PROVIDER=demo in production — set to google for ad-supported release.');

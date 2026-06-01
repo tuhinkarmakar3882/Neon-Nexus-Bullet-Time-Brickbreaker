@@ -17,7 +17,10 @@ export class Jardinain {
     this.brick = brick;
     this.tier = tier;
     this.tierDef = GNOME_TIERS[tier] ?? GNOME_TIERS.normal;
-    this.r = Math.max(15, GAME.HEIGHT * 0.013);
+    this.r = Math.max(
+      14,
+      Math.min(brick.h * 0.78, brick.w * 0.42, GAME.HEIGHT * 0.024),
+    );
     this.bob = rand(0, Math.PI * 2);
     this.juggleCount = 0;
     this.vy = 0;

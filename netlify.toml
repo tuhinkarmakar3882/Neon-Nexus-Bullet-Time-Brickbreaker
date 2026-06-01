@@ -1,7 +1,14 @@
-[build]
-  publish = "dist"
-  command = "pnpm run build"
+# Neon Nexus — Next.js static export (output: "out")
+# https://nextjs.org/docs/app/building-your-application/deploying/static-exports
 
+[build]
+  command = "pnpm install && pnpm run build"
+  publish = "out"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Stripe IAP (serverless) — same paths as Vercel /api
 [[redirects]]
   from = "/api/fulfill-session"
   to = "/.netlify/functions/fulfill-session"
@@ -17,10 +24,41 @@
   to = "/.netlify/functions/stripe-webhook"
   status = 200
 
+# App routes use trailing slashes (next.config.mjs trailingSlash: true)
 [[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+  from = "/play"
+  to = "/play/"
+  status = 301
+
+[[redirects]]
+  from = "/codex"
+  to = "/codex/"
+  status = 301
+
+[[redirects]]
+  from = "/shop"
+  to = "/shop/"
+  status = 301
+
+[[redirects]]
+  from = "/settings"
+  to = "/settings/"
+  status = 301
+
+[[redirects]]
+  from = "/share"
+  to = "/share/"
+  status = 301
+
+[[redirects]]
+  from = "/connect"
+  to = "/connect/"
+  status = 301
+
+[[redirects]]
+  from = "/install"
+  to = "/install/"
+  status = 301
 
 [[headers]]
   for = "/*"
@@ -30,17 +68,12 @@
     X-Frame-Options = "DENY"
 
 [[headers]]
-  for = "/assets/*"
+  for = "/_next/static/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
-  for = "/index.html"
-  [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-
-[[headers]]
-  for = "/sw.js"
+  for = "/*.html"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
@@ -49,8 +82,3 @@
   [headers.values]
     Content-Type = "text/plain; charset=utf-8"
     Cache-Control = "public, max-age=3600"
-
-[[headers]]
-  for = "/registerSW.js"
-  [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
