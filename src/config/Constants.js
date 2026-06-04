@@ -79,6 +79,8 @@ export const GAME = {
   IS_PORTRAIT: false,
   /** Header + side meters rendered in React on /play (canvas = arena only). */
   USE_DOM_HUD: false,
+  /** Reserved DOM dead zone below canvas on /play — keeps touches off OS nav gestures. */
+  DOM_BOTTOM_GUTTER: 56,
   SAFE_TOP: 10,
   SAFE_BOTTOM: 0,
   SAFE_LEFT: 0,
@@ -235,18 +237,20 @@ export function computeLayout(winW, winH, insets) {
     GAME.WALL_TOP = GAME.SAFE_TOP + GAME.UI_HEADER_H + GAME.UI_HEADER_GAP;
   }
 
-  /** Bottom play strip — paddle, ball, launch hint (scales with screen height). */
-  GAME.PLAY_MARGIN_BOTTOM = Math.round(
-    H * (isPortrait ? 0.08 : 0.06) + GAME.SAFE_BOTTOM,
-  );
-  GAME.ARENA_FLOOR = H - GAME.PLAY_MARGIN_BOTTOM;
-  if (GAME.ARENA_FLOOR < GAME.WALL_TOP + H * 0.45) {
+  if (!GAME.USE_DOM_HUD) {
+    /** Bottom play strip — paddle, ball, launch hint (scales with screen height). */
     GAME.PLAY_MARGIN_BOTTOM = Math.round(
-      H * (isPortrait ? 0.13 : 0.09) + GAME.SAFE_BOTTOM,
+      H * (isPortrait ? 0.08 : 0.06) + GAME.SAFE_BOTTOM,
     );
     GAME.ARENA_FLOOR = H - GAME.PLAY_MARGIN_BOTTOM;
+    if (GAME.ARENA_FLOOR < GAME.WALL_TOP + H * 0.45) {
+      GAME.PLAY_MARGIN_BOTTOM = Math.round(
+        H * (isPortrait ? 0.13 : 0.09) + GAME.SAFE_BOTTOM,
+      );
+      GAME.ARENA_FLOOR = H - GAME.PLAY_MARGIN_BOTTOM;
+    }
+    GAME.UI_PLAY_H = Math.max(64, GAME.ARENA_FLOOR - GAME.WALL_TOP);
   }
-  GAME.UI_PLAY_H = Math.max(64, GAME.ARENA_FLOOR - GAME.WALL_TOP);
 
   GAME.IS_PORTRAIT = isPortrait;
 
@@ -279,13 +283,28 @@ export function computeLayout(winW, winH, insets) {
     24,
     38,
   ));
+  GAME.BALL_RADIUS = Math.round(clampN(H * 0.0098, 9, 16));
+
+  if (GAME.USE_DOM_HUD) {
+    GAME.PLAY_MARGIN_BOTTOM = Math.round(
+      GAME.PADDLE_HEIGHT * 2 + GAME.BALL_RADIUS + GAME.SAFE_BOTTOM,
+    );
+    GAME.ARENA_FLOOR = H - GAME.PLAY_MARGIN_BOTTOM;
+    if (GAME.ARENA_FLOOR < GAME.WALL_TOP + H * 0.45) {
+      GAME.PLAY_MARGIN_BOTTOM = Math.round(
+        H * (isPortrait ? 0.12 : 0.08) + GAME.SAFE_BOTTOM,
+      );
+      GAME.ARENA_FLOOR = H - GAME.PLAY_MARGIN_BOTTOM;
+    }
+    GAME.UI_PLAY_H = Math.max(64, GAME.ARENA_FLOOR - GAME.WALL_TOP);
+  }
+
   GAME.PADDLE_Y_OFFSET = Math.round(
     GAME.PLAY_MARGIN_BOTTOM * 0.58 + GAME.PADDLE_HEIGHT * 0.5,
   );
   /** Tie paddle speed to height so wide/narrow aspect changes don't skew feel */
   GAME.PADDLE_SPEED = Math.round(H * 0.88);
 
-  GAME.BALL_RADIUS = Math.round(clampN(H * 0.0098, 9, 16));
   if (GAME.USE_DOM_HUD) {
     /** Rails live in React DOM — canvas edge is the play wall; ball needs radius clearance only. */
     GAME.WALL_X = Math.max(2, Math.round(GAME.BALL_RADIUS * 0.28));
@@ -315,10 +334,21 @@ export function computeLayout(winW, winH, insets) {
     const root = document.documentElement;
     root.style.setProperty('--play-aspect-w', String(W));
     root.style.setProperty('--play-aspect-h', String(H));
+    const gutter = GAME.USE_DOM_HUD ? (GAME.DOM_BOTTOM_GUTTER ?? 56) : 0;
+    if (GAME.USE_DOM_HUD) {
+      root.style.setProperty('--play-bottom-gutter-base', `${gutter}px`);
+      root.style.setProperty(
+        '--play-bottom-gutter',
+        `calc(${gutter}px + env(safe-area-inset-bottom, 0px))`,
+      );
+    }
   }
 
   return { W, H };
 }
+
+/** Bottom gutter height for DOM play frame (px). */
+export const PLAY_DOM_BOTTOM_GUTTER = GAME.DOM_BOTTOM_GUTTER;
 
 /** Left/right clamp for paddle — flush to playfield edges (bricks use playfieldSideInset). */
 export function paddleSideInset() {

@@ -427,16 +427,19 @@ body.shell-play .shell-route-enter {
   --play-hud-pad-x: max(8px, env(safe-area-inset-left, 0px));
   --play-hud-pad-r: max(8px, env(safe-area-inset-right, 0px));
   --play-hud-pad-top: max(6px, env(safe-area-inset-top, 0px));
+  --play-bottom-gutter-base: 56px;
+  --play-bottom-gutter: calc(var(--play-bottom-gutter-base) + env(safe-area-inset-bottom, 0px));
 
   display: grid;
   grid-template-columns: var(--play-rail-w) minmax(0, 1fr) var(--play-rail-w);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) var(--play-bottom-gutter);
   grid-template-areas:
     'header header header'
-    'left game right';
+    'left game right'
+    '. gutter .';
   column-gap: 0;
   row-gap: 0;
-  padding: var(--play-hud-pad-top) var(--play-hud-pad-r) max(6px, env(safe-area-inset-bottom, 0px))
+  padding: var(--play-hud-pad-top) var(--play-hud-pad-r) max(0px, env(safe-area-inset-bottom, 0px))
     var(--play-hud-pad-x);
 }
 
@@ -446,10 +449,14 @@ body.shell-play .shell-route-enter {
 
 .play-stage--hud #play-hud-left {
   grid-area: left;
+  grid-row: 2;
+  align-self: stretch;
 }
 
 .play-stage--hud #play-hud-right {
   grid-area: right;
+  grid-row: 2;
+  align-self: stretch;
 }
 
 .play-stage--hud #game-root {
@@ -465,7 +472,22 @@ body.shell-play .shell-route-enter {
   background: #060a14;
   border: 1px solid var(--play-frame-border);
   border-top: none;
+  border-bottom: none;
   box-shadow: inset 0 0 32px rgba(0, 0, 0, 0.35);
+}
+
+/* Dead zone below canvas — no paddle input; avoids OS edge/back/home gestures. */
+.play-stage--hud .play-bottom-gutter {
+  grid-area: gutter;
+  pointer-events: auto;
+  touch-action: auto;
+  -webkit-user-select: none;
+  user-select: none;
+  min-height: var(--play-bottom-gutter);
+  background: #060a14;
+  border: 1px solid var(--play-frame-border);
+  border-top: 1px solid rgba(88, 156, 255, 0.22);
+  box-shadow: inset 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .play-stage--hud #game-root canvas {
@@ -832,6 +854,7 @@ body.shell-play .shell-route-enter {
 
 .play-stage--hud > .play-boot,
 .play-stage--hud > #boot-splash,
+.play-stage--hud > .play-bottom-gutter,
 .play-stage--hud > .pause-overlay,
 .play-stage--hud > .game-over-overlay,
 .play-stage--hud > .play-boot-error {
@@ -1516,11 +1539,10 @@ body.shell-scroll:has(.ad-banner-slot--visible) .shell-page {
 }
 
 .shell-header--premium {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  column-gap: 14px;
-  row-gap: 0;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 14px;
   flex-wrap: nowrap;
   padding: 4px 0 8px;
   position: relative;
@@ -1528,13 +1550,13 @@ body.shell-scroll:has(.ad-banner-slot--visible) .shell-page {
 }
 
 .shell-header--premium .shell-header__chrome {
-  grid-column: 1 / -1;
-  grid-row: 1;
+  width: 100%;
 }
 
 .shell-header--premium .shell-back {
-  grid-column: 1;
-  grid-row: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   align-self: center;
   margin-top: 0.35rem;
@@ -1542,10 +1564,10 @@ body.shell-scroll:has(.ad-banner-slot--visible) .shell-page {
 }
 
 .shell-header--premium .shell-header-meta {
-  grid-column: 2;
-  grid-row: 2;
+  flex: 1 1 auto;
+  min-width: 0;
   align-self: center;
-  padding-top: 2px;
+  padding-top: 0;
 }
 
 .shell-header-meta {
@@ -3133,8 +3155,9 @@ body.shell-scroll:has(.ad-banner-slot--visible) .shell-page--title {
   }
 
   .shell-back {
-    padding: 8px 12px;
-    font-size: 0.72rem;
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 0.75rem;
   }
 
   .shell-header-badge {

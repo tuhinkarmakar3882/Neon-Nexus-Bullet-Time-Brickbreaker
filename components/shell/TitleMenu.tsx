@@ -20,7 +20,8 @@ type SavedRun = {
 type TitleMenuProps = {
   run: SavedRun | null;
   hint: string;
-  installReady: boolean;
+  showInstall: boolean;
+  installPromptReady: boolean;
   onPlay: (resume: boolean) => void;
   onNewGame: () => void;
   onShare: () => void;
@@ -76,7 +77,8 @@ function MenuEntry({
 export function TitleMenu({
   run,
   hint,
-  installReady,
+  showInstall,
+  installPromptReady,
   onPlay,
   onNewGame,
   onShare,
@@ -179,17 +181,19 @@ export function TitleMenu({
           </button>
 
           <div className="title-screen__utility-row">
-            {installReady ? (
-              <button type="button" className="title-screen__utility-pill" onClick={onInstall}>
-                <LucideIcon icon={HOME_ICONS.install} size={15} />
-                <span>{c.nav.installShort}</span>
-              </button>
-            ) : (
-              <Link href={ROUTES.install} className="title-screen__utility-pill" prefetch>
-                <LucideIcon icon={HOME_ICONS.install} size={15} />
-                <span>{c.nav.installShort}</span>
-              </Link>
-            )}
+            {showInstall ? (
+              installPromptReady ? (
+                <button type="button" className="title-screen__utility-pill" onClick={onInstall}>
+                  <LucideIcon icon={HOME_ICONS.install} size={15} />
+                  <span>{c.nav.installShort}</span>
+                </button>
+              ) : (
+                <Link href={ROUTES.install} className="title-screen__utility-pill" prefetch>
+                  <LucideIcon icon={HOME_ICONS.install} size={15} />
+                  <span>{c.nav.installShort}</span>
+                </Link>
+              )
+            ) : null}
             <Link href={ROUTES.connect} className="title-screen__utility-pill" prefetch>
               <LucideIcon icon={HOME_ICONS.connect} size={15} />
               <span>{c.nav.connectShort}</span>

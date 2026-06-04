@@ -188,7 +188,7 @@ export class GameScene extends Phaser.Scene {
     this.gems = [];
 
     this.arenaGfx = this.add.graphics().setDepth(5);
-    this.shieldGfx = this.add.graphics().setDepth(7);
+    this.shieldGfx = this.add.graphics().setDepth(19.5).setBlendMode(Phaser.BlendModes.ADD);
     this.fogGfx = this.add.graphics().setDepth(850).setScrollFactor(0).setAlpha(0);
     this.aimGfx = this.add.graphics().setDepth(23);
 
@@ -3600,12 +3600,13 @@ export class GameScene extends Phaser.Scene {
   /** Safety-net bar — flush under the paddle, spanning ball wall insets. */
   getShieldBarRect() {
     const inset = ballSideInset();
-    const barH = Math.max(10, Math.round((GAME.PADDLE_HEIGHT ?? 28) * 0.45));
-    const gap = Math.max(3, Math.round(barH * 0.25));
+    const barH = Math.max(16, Math.round((GAME.PADDLE_HEIGHT ?? 28) * 0.62));
+    const gap = Math.max(4, Math.round(barH * 0.2));
     const paddleBottom = this.paddle
       ? this.paddle.y + this.paddle.h * 0.5
       : GAME.HEIGHT - (GAME.PADDLE_Y_OFFSET ?? 78) + (GAME.PADDLE_HEIGHT ?? 28) * 0.5;
-    const top = Math.min(paddleBottom + gap, GAME.HEIGHT - barH - 4);
+    const floorLimit = GAME.HEIGHT - barH - 6;
+    const top = Math.min(paddleBottom + gap, floorLimit);
     return {
       x: inset,
       y: top,
@@ -3613,6 +3614,38 @@ export class GameScene extends Phaser.Scene {
       h: barH,
       top,
     };
+  }
+
+  drawShieldBar() {
+    this.shieldGfx.clear();
+    if (!this.powerSys.isActive('Shield') && !this.powerSys.isActive('ShieldII')) return;
+
+    const isII = this.powerSys.isActive('ShieldII');
+    const tint = isII ? 0xffffff : powerFillColor('Shield');
+    const bar = this.getShieldBarRect();
+    const pulse = 0.62 + 0.28 * Math.sin(this.frame * 0.16);
+    const hits = Math.max(1, this.shieldHitsLeft || 1);
+
+    this.shieldGfx.fillStyle(tint, pulse * 0.18);
+    this.shieldGfx.fillRect(bar.x - 4, bar.y - 5, bar.w + 8, bar.h + 10);
+
+    this.shieldGfx.fillStyle(tint, pulse * 0.72);
+    this.shieldGfx.fillRect(bar.x, bar.y, bar.w, bar.h);
+
+    this.shieldGfx.lineStyle(3, 0xffffff, pulse * 0.95);
+    this.shieldGfx.lineBetween(bar.x + 2, bar.top + 1, bar.x + bar.w - 2, bar.top + 1);
+
+    this.shieldGfx.lineStyle(2, tint, pulse * 0.9);
+    this.shieldGfx.strokeRect(bar.x + 1, bar.y + 1, bar.w - 2, bar.h - 2);
+
+    if (hits > 1) {
+      const seg = bar.w / hits;
+      for (let i = 1; i < hits; i++) {
+        const sx = bar.x + seg * i;
+        this.shieldGfx.lineStyle(1, 0x223355, 0.55);
+        this.shieldGfx.lineBetween(sx, bar.y + 2, sx, bar.y + bar.h - 2);
+      }
+    }
   }
 
   updateBalls(dtSec) {
@@ -3967,16 +4000,7 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    this.shieldGfx.clear();
-    if (this.powerSys.isActive('Shield') || this.powerSys.isActive('ShieldII')) {
-      const a = 0.3 + 0.16 * Math.sin(this.frame * 0.2);
-      const tint = this.powerSys.isActive('ShieldII') ? 0xffffff : powerFillColor('Shield');
-      const bar = this.getShieldBarRect();
-      this.shieldGfx.fillStyle(tint, a);
-      this.shieldGfx.fillRect(bar.x, bar.y, bar.w, bar.h);
-      this.shieldGfx.lineStyle(2, tint, a * 1.35);
-      this.shieldGfx.strokeRect(bar.x + 1, bar.y + 1, bar.w - 2, bar.h - 2);
-    }
+    this.drawShieldBar();
 
     this.fogGfx.clear();
     if (this.powerSys.isActive('FogSight')) {

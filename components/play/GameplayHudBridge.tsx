@@ -2,8 +2,6 @@
 
 import { useEffect } from 'react';
 import { GameplayHud } from '@/components/play/GameplayHud';
-import { PowerCoachBanner } from '@/components/play/PowerCoachBanner';
-import { NexusCoachBanner } from '@/components/play/NexusCoachBanner';
 import { useGameplayHudState } from '@/lib/shell/useGameplayHudState';
 import { syncPlayFrameLayout } from '@/src/systems/LayoutManager.js';
 
@@ -25,8 +23,6 @@ export function GameplayHudBridge() {
   return (
     <>
       <GameplayHud state={state} />
-      <PowerCoachBanner />
-      <NexusCoachBanner />
     </>
   );
 }

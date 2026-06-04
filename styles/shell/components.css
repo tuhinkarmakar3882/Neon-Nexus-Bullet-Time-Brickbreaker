@@ -113,19 +113,27 @@
 }
 
 .shell-back {
-  min-height: 36px;
-  padding: 8px 12px;
-  gap: 0.4em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 10px 14px;
+  gap: 0.35em;
   font-family: var(--type-body);
   font-size: 0.8125rem;
   font-weight: 600;
+  line-height: 1;
   letter-spacing: 0.02em;
   text-transform: none;
+  text-decoration: none;
   color: var(--text);
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-cta);
   box-shadow: none;
+  cursor: pointer;
+  box-sizing: border-box;
 }
 
 .shell-back:hover {
@@ -136,7 +144,9 @@
 
 .shell-back__icon {
   flex-shrink: 0;
+  display: block;
   opacity: 0.85;
+  margin-top: 0;
 }
 
 /* ── Settings ── */

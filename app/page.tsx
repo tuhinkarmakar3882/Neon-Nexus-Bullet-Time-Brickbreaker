@@ -11,6 +11,7 @@ import { SHELL_COPY } from '@/lib/copy/shell';
 import { RunPersistence } from '@/src/systems/RunPersistence.js';
 import {
   canOfferInstall,
+  isStandaloneDisplay,
   onInstallPromptReady,
   triggerInstallPrompt,
 } from '@/src/systems/InstallPrompt.js';
@@ -21,7 +22,8 @@ import { DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '@/src/config/Constants
 export default function HomePage() {
   const { gems, highScore, run } = useGameMeta();
   const [hint, setHint] = useState('');
-  const [installReady, setInstallReady] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
+  const [installPromptReady, setInstallPromptReady] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showSharePreview, setShowSharePreview] = useState(false);
   const c = SHELL_COPY.home;
@@ -31,10 +33,16 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    setInstallReady(canOfferInstall());
-    const off = onInstallPromptReady(() => setInstallReady(canOfferInstall()));
+    const refresh = () => {
+      setShowInstall(!isStandaloneDisplay());
+      setInstallPromptReady(canOfferInstall());
+    };
+    refresh();
+    const off = onInstallPromptReady(refresh);
+    window.addEventListener('appinstalled', refresh);
     return () => {
       off();
+      window.removeEventListener('appinstalled', refresh);
     };
   }, []);
 
@@ -98,7 +106,8 @@ export default function HomePage() {
       <TitleMenu
         run={run}
         hint={hint}
-        installReady={installReady}
+        showInstall={showInstall}
+        installPromptReady={installPromptReady}
         onPlay={onPlay}
         onNewGame={onNewGame}
         onShare={onShare}

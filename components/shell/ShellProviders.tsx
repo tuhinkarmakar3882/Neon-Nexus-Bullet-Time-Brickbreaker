@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { initAppShell, hideShellBanner } from '@/src/shell/initAppShell.js';
+import { audio } from '@/src/systems/AudioManager.js';
 import { closeLegalShell, isLegalShellOpen, wireLegalShellNavigation } from '@/src/shell/LegalShell.js';
 import {
   consumeOverlayHistoryPop,
@@ -20,6 +21,10 @@ type ShellProvidersProps = {
 export function ShellProviders({ children }: ShellProvidersProps) {
   const pathname = usePathname();
   const isPlay = pathname?.startsWith('/play');
+
+  useEffect(() => {
+    audio.attachDocumentLifecycle(() => window.__NEON);
+  }, []);
 
   useEffect(() => {
     if (pathname) trackScreenView(pathname);

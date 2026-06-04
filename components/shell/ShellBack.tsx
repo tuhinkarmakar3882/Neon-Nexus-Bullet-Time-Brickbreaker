@@ -13,7 +13,7 @@ type ShellBackProps = {
 export function ShellBack({ href, onClick, label = 'Back' }: ShellBackProps) {
   const inner = (
     <>
-      <LucideIcon icon={ChevronLeft} size={18} className="shell-back__icon" />
+      <LucideIcon icon={ChevronLeft} size={20} className="shell-back__icon" />
       <span>{label}</span>
     </>
   );

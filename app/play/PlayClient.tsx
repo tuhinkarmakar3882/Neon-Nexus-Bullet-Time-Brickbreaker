@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { ROUTES } from '@/lib/shell/routes';
 import { PlayBootSplash } from '@/components/shell/PlayBootSplash';
@@ -18,6 +18,7 @@ import {
   setBootSplash,
 } from '@/src/shell/BootSplash.js';
 import { syncPlayFrameLayout, syncViewportLayout } from '@/src/systems/LayoutManager.js';
+import { PLAY_DOM_BOTTOM_GUTTER } from '@/src/config/Constants.js';
 
 const PHASES = SHELL_COPY.play.phases;
 const BOOT_ERR = SHELL_COPY.play.bootError;
@@ -93,9 +94,13 @@ export default function PlayClient() {
   }, [bootAttempt]);
 
   return (
-    <div className="play-stage play-stage--hud">
+    <div
+      className="play-stage play-stage--hud"
+      style={{ '--play-bottom-gutter-base': `${PLAY_DOM_BOTTOM_GUTTER}px` } as CSSProperties}
+    >
       <GameplayHudBridge />
       <main id="game-root" aria-label="Neon Nexus game canvas" />
+      <div className="play-bottom-gutter" aria-hidden="true" />
       <PlayBootSplash />
       <WebAdBridge />
       <PauseOverlayBridge />

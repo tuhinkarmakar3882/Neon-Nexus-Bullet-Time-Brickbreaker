@@ -34,6 +34,7 @@ export class AudioManager {
     this._gnomeIdleTimer = null;
     this._ambienceOn = false;
     this._spatialPan = true;
+    this._documentLifecycleAttached = false;
   }
 
   _initTracks() {
@@ -365,9 +366,15 @@ export class AudioManager {
     if (this.sfxGain) {
       this._applySfxGain();
     }
-    if (!this.musicOn || !game?.scene) return;
+    if (!this.musicOn) return;
 
-    const sm = game.scene;
+    const sm = game?.scene;
+    if (!sm) {
+      if (this._isMenu) this.setMenuMusic();
+      else if (this._currentTrackDef?.url) this.startMusic();
+      return;
+    }
+
     if (sm.isActive('Menu')) {
       this.setMenuMusic();
       return;
@@ -381,6 +388,35 @@ export class AudioManager {
         });
       }
     }
+  }
+
+  /**
+   * Pause music/SFX when the tab, window, or native app loses focus.
+   * @param {() => import('phaser').Game | null | undefined} [getGame]
+   */
+  attachDocumentLifecycle(getGame = () => (typeof window !== 'undefined' ? window.__NEON : null)) {
+    if (this._documentLifecycleAttached || typeof document === 'undefined') return;
+    this._documentLifecycleAttached = true;
+
+    const onHide = () => this.pauseForBackground();
+    const onShow = () => this.resumeFromBackground(getGame());
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) onHide();
+      else onShow();
+    });
+    window.addEventListener('pagehide', onHide);
+    window.addEventListener('pageshow', onShow);
+    window.addEventListener('blur', onHide);
+    window.addEventListener('focus', onShow);
+
+    import('@capacitor/core').then(({ Capacitor }) => {
+      if (!Capacitor.isNativePlatform()) return;
+      import('@capacitor/app').then(({ App }) => {
+        App.addListener('pause', onHide);
+        App.addListener('resume', onShow);
+      }).catch(() => {});
+    }).catch(() => {});
   }
 
   // ---------- SFX voices ----------
