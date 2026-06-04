@@ -623,7 +623,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.challengeSys.onLevelStart(this.level, isBoss, this.levelSeed, null, activeMutators);
     this.ensureLevelWinnable();
-    audio.setLevelMusic(this.level, this.levelSeed, {
+    audio.setLevelMusic(this.level, this.campaignSeed, {
       biome: theme.biome ?? 'garden',
       isBoss,
     });

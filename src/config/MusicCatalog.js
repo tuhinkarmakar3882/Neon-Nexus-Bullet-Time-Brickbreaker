@@ -1,9 +1,16 @@
 /**
  * Pixabay ambient/chill loops — commercial use per Pixabay License.
- * Host copies in public/audio/ for offline PWA cache (optional).
+ *
+ * Add URLs to PIXABAY_URLS; optional titles live in PIXABAY_TRACK_META.
+ * Level music shuffles through the full list without repeats until every
+ * track has played, then starts a new shuffled cycle (seeded by campaign).
  */
 
-/** Curated Pixabay loop URLs (instrumental chill / electronic). */
+import { mulberry32 } from '../utils/Helpers.js';
+
+/** @typedef {'garden'|'nexus'|'frost'|'ember'} MusicBiome */
+
+/** Verified Pixabay CDN loops — append new entries here. */
 export const PIXABAY_URLS = [
   'https://cdn.pixabay.com/audio/2025/03/19/audio_56ae1dae5f.mp3',
   'https://cdn.pixabay.com/audio/2025/02/19/audio_3b45f7d855.mp3',
@@ -13,50 +20,33 @@ export const PIXABAY_URLS = [
   'https://cdn.pixabay.com/audio/2025/03/18/audio_7d5c12b31a.mp3',
   'https://cdn.pixabay.com/audio/2024/09/16/audio_a10608d6cd.mp3',
   'https://cdn.pixabay.com/audio/2022/03/23/audio_07b2a04be3.mp3',
+  'https://cdn.pixabay.com/audio/2025/12/11/audio_249561b3fc.mp3',
+  'https://cdn.pixabay.com/audio/2025/09/29/audio_77a36612dd.mp3',
+  'https://cdn.pixabay.com/audio/2025/06/23/audio_61f7224981.mp3',
+  'https://cdn.pixabay.com/audio/2026/04/24/audio_ab21a4c2bb.mp3',
 ];
 
-/** Tagged catalog — rotates by level, biome, and boss flag. */
-export const PIXABAY_TRACKS = [
-  { id: 'menu-prism', url: PIXABAY_URLS[0], energy: 0.45, menu: true, biomes: ['garden', 'nexus'] },
-  { id: 'garden-glow', url: PIXABAY_URLS[1], energy: 0.62, biomes: ['garden', 'nexus'] },
-  { id: 'nexus-grid', url: PIXABAY_URLS[2], energy: 0.72, biomes: ['nexus', 'garden'] },
-  { id: 'frost-haze', url: PIXABAY_URLS[3], energy: 0.38, biomes: ['frost', 'garden'] },
-  { id: 'ember-drive', url: PIXABAY_URLS[4], energy: 0.78, biomes: ['ember', 'nexus'] },
-  { id: 'boss-surge', url: PIXABAY_URLS[5], energy: 0.88, boss: true, biomes: ['nexus', 'ember'] },
-  { id: 'zen-drift', url: PIXABAY_URLS[6], energy: 0.32, biomes: ['garden', 'frost'] },
-  { id: 'neon-drift', url: PIXABAY_URLS[7], energy: 0.55, biomes: ['nexus', 'garden'] },
-  { id: 'lofi-bed', url: PIXABAY_URLS[8], energy: 0.42, biomes: ['garden', 'frost'] },
-  { id: 'garden-bloom', url: PIXABAY_URLS[1], energy: 0.48, biomes: ['garden'] },
-  { id: 'nexus-pulse', url: PIXABAY_URLS[2], energy: 0.68, biomes: ['nexus'] },
-  { id: 'frost-mist', url: PIXABAY_URLS[3], energy: 0.35, biomes: ['frost'] },
-  { id: 'ember-heat', url: PIXABAY_URLS[4], energy: 0.74, biomes: ['ember'] },
-  { id: 'boss-core', url: PIXABAY_URLS[5], energy: 0.82, boss: true, biomes: ['ember', 'nexus'] },
-  { id: 'calm-pads', url: PIXABAY_URLS[6], energy: 0.30, biomes: ['garden', 'frost'] },
-  { id: 'circuit-grove', url: PIXABAY_URLS[7], energy: 0.58, biomes: ['nexus', 'ember'] },
-  { id: 'moss-hollow', url: PIXABAY_URLS[8], energy: 0.40, biomes: ['garden'] },
-  { id: 'deep-nexus', url: PIXABAY_URLS[0], energy: 0.65, biomes: ['nexus'] },
-  { id: 'ice-lattice', url: PIXABAY_URLS[3], energy: 0.44, biomes: ['frost', 'nexus'] },
-  { id: 'forge-line', url: PIXABAY_URLS[4], energy: 0.70, biomes: ['ember', 'nexus'] },
-  { id: 'starlit-menu', url: PIXABAY_URLS[7], energy: 0.46, menu: true, biomes: ['nexus', 'garden'] },
-  { id: 'aurora-bed', url: PIXABAY_URLS[6], energy: 0.36, biomes: ['frost', 'garden'] },
-];
+/**
+ * Optional display metadata keyed by URL — add a row when you curate a new loop.
+ * @type {Record<string, { id?: string, title?: string, menu?: boolean }>}
+ */
+export const PIXABAY_TRACK_META = {
+  [PIXABAY_URLS[0]]: { id: 'twilight-atrium', title: 'Twilight Atrium', menu: true },
+  [PIXABAY_URLS[1]]: { id: 'neon-grove', title: 'Neon Grove' },
+  [PIXABAY_URLS[2]]: { id: 'circuit-pulse', title: 'Circuit Pulse' },
+  [PIXABAY_URLS[3]]: { id: 'frost-lattice', title: 'Frost Lattice' },
+  [PIXABAY_URLS[4]]: { id: 'ember-forge', title: 'Ember Forge' },
+  [PIXABAY_URLS[5]]: { id: 'siege-overture', title: 'Siege Overture' },
+  [PIXABAY_URLS[6]]: { id: 'zen-drift', title: 'Zen Drift', menu: true },
+  [PIXABAY_URLS[7]]: { id: 'lofi-hollow', title: 'Lo-Fi Hollow' },
+  [PIXABAY_URLS[8]]: { id: 'neon-drift', title: 'Neon Drift' },
+  [PIXABAY_URLS[9]]: { id: 'pulse-horizon', title: 'Pulse Horizon' },
+  [PIXABAY_URLS[10]]: { id: 'deep-current', title: 'Deep Current' },
+  [PIXABAY_URLS[11]]: { id: 'aurora-bloom', title: 'Aurora Bloom' },
+};
 
 /** @deprecated use PIXABAY_URLS */
 export const PIXABAY_POOL = PIXABAY_URLS;
-
-export const MUSIC_TRACKS = {
-  menu: {
-    id: 'menu',
-    url: PIXABAY_URLS[0],
-    volume: 0.42,
-    loop: true,
-  },
-  garden: { id: 'garden', biome: 'garden', url: PIXABAY_URLS[1], volume: 0.38, loop: true },
-  nexus: { id: 'nexus', biome: 'nexus', url: PIXABAY_URLS[2], volume: 0.38, loop: true },
-  frost: { id: 'frost', biome: 'frost', url: PIXABAY_URLS[3], volume: 0.38, loop: true },
-  ember: { id: 'ember', biome: 'ember', url: PIXABAY_URLS[4], volume: 0.40, loop: true },
-  boss: { id: 'boss', url: PIXABAY_URLS[5], volume: 0.42, loop: true },
-};
 
 const BIOME_VOLUME = {
   garden: 0.38,
@@ -65,58 +55,119 @@ const BIOME_VOLUME = {
   ember: 0.40,
 };
 
+/** Legacy biome shortcuts — first URL per role. */
+export const MUSIC_TRACKS = {
+  menu: { id: 'menu', title: 'Twilight Atrium', url: PIXABAY_URLS[0], volume: 0.42, loop: true },
+  garden: { id: 'garden', biome: 'garden', title: 'Neon Grove', url: PIXABAY_URLS[1] ?? PIXABAY_URLS[0], volume: 0.38, loop: true },
+  nexus: { id: 'nexus', biome: 'nexus', title: 'Circuit Pulse', url: PIXABAY_URLS[2] ?? PIXABAY_URLS[0], volume: 0.38, loop: true },
+  frost: { id: 'frost', biome: 'frost', title: 'Frost Lattice', url: PIXABAY_URLS[3] ?? PIXABAY_URLS[0], volume: 0.38, loop: true },
+  ember: { id: 'ember', biome: 'ember', title: 'Ember Forge', url: PIXABAY_URLS[4] ?? PIXABAY_URLS[0], volume: 0.40, loop: true },
+  boss: { id: 'boss', title: 'Siege Overture', url: PIXABAY_URLS[5] ?? PIXABAY_URLS[0], volume: 0.42, loop: true },
+};
+
 export function normalizeMusicVariant(_v) {
   return 'auto';
 }
 
-function pickPool(opts = {}) {
-  let pool = PIXABAY_TRACKS;
-  const biome = opts.biome ?? 'garden';
-
-  if (opts.isBoss) {
-    const bossPool = pool.filter((t) => t.boss || t.energy >= 0.72);
-    if (bossPool.length) pool = bossPool;
-  } else {
-    const biomePool = pool.filter((t) => !t.boss && (!t.biomes || t.biomes.includes(biome)));
-    if (biomePool.length) pool = biomePool;
-  }
-
-  return pool.length ? pool : PIXABAY_TRACKS;
+function activeUrls() {
+  return PIXABAY_URLS.filter(Boolean);
 }
 
-/** Menu / overlay music — calm track from catalog. */
-export function menuTrackForVariant(_variant = 'auto') {
-  const menuFirst = PIXABAY_TRACKS.find((t) => t.menu) ?? PIXABAY_TRACKS[0];
+function hashFromUrl(url) {
+  const match = url.match(/audio_([a-f0-9]+)\.mp3/i);
+  return match?.[1]?.slice(0, 8) ?? '';
+}
+
+function trackFromUrl(url, index) {
+  const meta = PIXABAY_TRACK_META[url] ?? {};
+  const hash = hashFromUrl(url);
   return {
-    id: 'menu-auto',
-    url: menuFirst.url,
-    volume: 0.42,
-    loop: true,
+    id: meta.id ?? (hash ? `pixabay-${hash}` : `track-${index + 1}`),
+    title: meta.title ?? (hash ? `Pixabay ${hash}` : `Ambient ${index + 1}`),
+    url,
+    menu: !!meta.menu,
   };
 }
 
-/**
- * Pick a Pixabay ambient loop for this level — rotates through the catalog
- * deterministically from level + seed + biome.
- */
-export function trackForLevel(level, seed = level, opts = {}) {
-  const biome = opts.biome ?? 'garden';
+/** @deprecated derived from PIXABAY_URLS + PIXABAY_TRACK_META */
+export const PIXABAY_TRACKS = activeUrls().map((url, index) => trackFromUrl(url, index));
+
+function seededShuffle(items, seed) {
+  const arr = [...items];
+  const rng = mulberry32(seed >>> 0);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function cycleSeed(campaignSeed, cycleIndex) {
+  return (campaignSeed ^ (cycleIndex * 0x9e3779b1)) >>> 0;
+}
+
+/** Shuffled URL order for one full pass through the catalog (no repeats within cycle). */
+function shuffleOrderForCycle(pool, campaignSeed, cycleIndex) {
+  const order = seededShuffle(pool, cycleSeed(campaignSeed, cycleIndex));
+  if (cycleIndex > 0 && order.length > 1) {
+    const prev = seededShuffle(pool, cycleSeed(campaignSeed, cycleIndex - 1));
+    const prevLast = prev[prev.length - 1];
+    if (order[0] === prevLast) {
+      [order[0], order[1]] = [order[1], order[0]];
+    }
+  }
+  return order;
+}
+
+/** Pick URL for a level — unique within each catalog cycle, reshuffled each cycle. */
+export function urlForLevel(level, campaignSeed = level) {
+  const pool = activeUrls();
+  if (!pool.length) return '';
+  const n = pool.length;
   const lv = Math.max(1, level | 0);
-  const s = (seed >>> 0) ^ (lv * 0x9e3779b1);
-  const pool = pickPool({ biome, isBoss: opts.isBoss });
+  const cycle = Math.floor((lv - 1) / n);
+  const pos = (lv - 1) % n;
+  const order = shuffleOrderForCycle(pool, campaignSeed >>> 0, cycle);
+  return order[pos] ?? pool[0];
+}
 
-  const biomeOff = { garden: 0, nexus: 1, frost: 2, ember: 3 }[biome] ?? 0;
-  const idx = (lv + biomeOff + (s & 0xffff)) % pool.length;
-  const track = pool[idx];
-
+function trackToDef(track, opts = {}) {
+  const biome = opts.biome ?? 'garden';
   return {
-    id: `L${lv}-${biome}`,
+    id: track.id,
+    title: track.title,
     url: track.url,
     volume: opts.isBoss ? 0.42 : (BIOME_VOLUME[biome] ?? 0.38),
     loop: true,
     biome,
-    level: lv,
+    level: opts.level,
   };
+}
+
+/** Menu / overlay music — calm menu-tagged tracks, or first URL. */
+export function menuTrackForVariant(variant = 'auto') {
+  const pool = activeUrls();
+  const menuUrls = pool.filter((url) => PIXABAY_TRACK_META[url]?.menu);
+  const menuPool = menuUrls.length ? menuUrls : pool;
+  const idx = typeof variant === 'number'
+    ? variant % menuPool.length
+    : Math.floor(Date.now() / 60000) % menuPool.length;
+  const url = menuPool[idx] ?? menuPool[0];
+  const index = pool.indexOf(url);
+  return trackToDef(trackFromUrl(url, Math.max(0, index)), { biome: 'garden' });
+}
+
+/**
+ * Level music — random non-repeating shuffle of PIXABAY_URLS per campaign.
+ * @param {number} level
+ * @param {number} [campaignSeed] run seed (campaignSeed from GameScene)
+ */
+export function trackForLevel(level, campaignSeed = level, opts = {}) {
+  const lv = Math.max(1, level | 0);
+  const url = urlForLevel(lv, campaignSeed);
+  const index = Math.max(0, activeUrls().indexOf(url));
+  const track = trackFromUrl(url, index);
+  return trackToDef(track, { biome: opts.biome ?? 'garden', level: lv, isBoss: opts.isBoss });
 }
 
 /** @deprecated use trackForLevel */
@@ -125,13 +176,24 @@ export function trackForBiome(biome, opts = {}) {
 }
 
 export function allTrackUrls() {
-  return [...new Set(PIXABAY_TRACKS.map((t) => t.url))];
+  return [...new Set(activeUrls())];
 }
 
 /** Alternate Pixabay URLs when primary track fails to load/play. */
 export function pixabayAlternates(primaryUrl) {
-  const all = allTrackUrls();
-  return all.filter((u) => u !== primaryUrl);
+  return allTrackUrls().filter((u) => u !== primaryUrl);
 }
 
-export const MUSIC_CREDITS = 'Background music from Pixabay contributors.';
+export function musicCatalogSummary() {
+  return activeUrls().map((url, index) => {
+    const track = trackFromUrl(url, index);
+    return {
+      id: track.id,
+      title: track.title,
+      menu: !!track.menu,
+      url,
+    };
+  });
+}
+
+export const MUSIC_CREDITS = 'Background music from Pixabay contributors (ambient & chill loops).';

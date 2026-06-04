@@ -1201,7 +1201,7 @@ flowchart LR
 | **PlayBilling** | `src/systems/PlayBilling.js` | RevenueCat native IAP + Stripe web checkout redirect |
 | **SceneLaunch** | `src/systems/SceneLaunch.js` | Phaser 4 `game.scene.run()` wrapper for parallel scenes from providers |
 | **NativeBridge** | `src/systems/NativeBridge.js` | Capacitor back button, audio pause/resume, splash, status bar |
-| **MusicCatalog** | `src/config/MusicCatalog.js` | Pixabay ambient loop URLs per biome + menu |
+| **MusicCatalog** | `src/config/MusicCatalog.js` | 10 Pixabay loops with titles, biome tags, energy ramp; `trackForLevel` / `menuTrackForVariant` |
 | **TrackPlayer** | `src/systems/AudioManager.js` | HTMLAudio crossfade; Pixabay loops per level |
 | **WebUnlock** | `src/systems/WebUnlock.js` | Stripe session fulfill + unlock code redeem (web PWA) |
 | **createAdProvider** | `src/systems/createAdProvider.js` | Freemium ad provider selection + prod demo warning |

@@ -375,7 +375,7 @@ export class AudioManager {
     if (sm.isActive('Game')) {
       const gs = sm.getScene('Game');
       if (gs?.sys?.isActive?.() && !gs.over) {
-        this.setLevelMusic(gs.level ?? 1, gs.levelSeed ?? gs.campaignSeed ?? 1, {
+        this.setLevelMusic(gs.level ?? 1, gs.campaignSeed ?? gs.levelSeed ?? 1, {
           biome: gs.theme?.biome ?? 'garden',
           isBoss: !!gs.isBoss,
         });

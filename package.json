@@ -1,6 +1,6 @@
 {
   "name": "neon-nexus-bullet-time-brickbreaker",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Neon Nexus: Bullet-Time Brick Breaker — a visually-stunning, cross-platform neon brick breaker built on Phaser 4.",
   "type": "module",
   "author": "Tuhin Karmakar",
@@ -30,6 +30,7 @@
     "test:migration": "node scripts/validate-save-migration.mjs",
     "validate:drops": "node scripts/validate-drops.mjs",
     "validate:cosmetics": "node scripts/validate-cosmetics.mjs",
+    "validate:music": "node scripts/validate-music.mjs",
     "check:secrets": "node scripts/check-no-secrets.mjs"
   },
   "dependencies": {
