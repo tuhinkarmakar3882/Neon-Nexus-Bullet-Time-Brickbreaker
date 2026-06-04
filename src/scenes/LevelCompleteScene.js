@@ -12,6 +12,10 @@ import { fitTextWidth, orbitronStyle, uiPx, displayStyle } from '../utils/Typogr
 import { AdBreakPolicy } from '../systems/AdBreakPolicy.js';
 import { getGameScene } from '../utils/SceneRefs.js';
 import { resumeGameScene, safeStartNextLevel } from '../systems/GameGuard.js';
+import {
+  dispatchLevelCompleteOverlayClose,
+  dispatchLevelCompleteOverlayOpen,
+} from '../shell/levelCompleteOverlayDom.js';
 
 export class LevelCompleteScene extends Phaser.Scene {
   constructor() { super(SCENES.LEVEL_COMPLETE); }
@@ -21,17 +25,158 @@ export class LevelCompleteScene extends Phaser.Scene {
     InputRouter.onOverlayOpen(SCENES.LEVEL_COMPLETE);
     this.input.setTopOnly(true);
     const d = this.d;
-    const gs = getGameScene(this);
+    this.gs = getGameScene(this);
+    this.showAdBtn = !Monetization.removeAds && isAdSurfaceEnabled('rewarded');
+    this.doubled = false;
+
+    if (GAME.USE_DOM_HUD) {
+      this._domLevelComplete = true;
+      dispatchLevelCompleteOverlayOpen(this.buildOverlayPayload());
+      this.events.once('shutdown', () => dispatchLevelCompleteOverlayClose());
+      this.setupAdvanceFlow({ domHud: true });
+      return;
+    }
+
+    this.buildPhaserUI();
+    this.setupAdvanceFlow({ domHud: false });
+  }
+
+  buildOverlayPayload() {
+    const d = this.d;
+    const gs = this.gs;
+    return {
+      level: d.level ?? 1,
+      message: d.message || '',
+      bonus: d.bonus ?? 0,
+      score: d.score ?? gs?.score ?? 0,
+      stars: d.stars ?? 1,
+      lives: d.lives ?? gs?.lives ?? 0,
+      goal: d.goal,
+      gemsEarned: d.gemsEarned,
+      gems: d.gems ?? MetaProgress.getGems(),
+      showDoubleBonus: this.showAdBtn,
+    };
+  }
+
+  async doubleBonus() {
+    const gs = this.gs;
+    const d = this.d;
+    if (this.doubled || !this.showAdBtn || !gs?.applyLevelBonusDouble) {
+      return { ok: false, message: 'Bonus already doubled' };
+    }
+    try {
+      const res = await Monetization.offerRewarded('double_bonus');
+      if (res.granted && gs.applyLevelBonusDouble()) {
+        this.doubled = true;
+        audio.blip(880);
+        return {
+          ok: true,
+          message: 'Bonus doubled!',
+          bonus: (d.bonus ?? 0) * 2,
+          score: gs.score,
+        };
+      }
+      if (res.unavailable) {
+        audio.blip(220);
+        return { ok: false, message: 'Video unavailable — bonus unchanged' };
+      }
+      if (res.cancelled) {
+        audio.blip(220);
+        return { ok: false, message: 'Watch the full video for 2× bonus' };
+      }
+      audio.blip(220);
+      return { ok: false, message: 'Could not apply bonus — try again' };
+    } catch {
+      audio.blip(220);
+      return { ok: false, message: 'Video unavailable — bonus unchanged' };
+    }
+  }
+
+  async shareProgress() {
+    const d = this.d;
+    const gs = this.gs;
+    const displayScore = d.score ?? gs?.score ?? 0;
+    const stars = d.stars ?? 1;
+    const lives = d.lives ?? gs?.lives ?? 0;
+    const res = await shareProgressScreenshot(this.game, {
+      kind: 'levelComplete',
+      shareData: {
+        level: d.level ?? 1,
+        score: displayScore,
+        lives,
+        stars,
+        gemsEarned: d.gemsEarned,
+      },
+      uiScore: displayScore,
+      level: d.level ?? 1,
+      lives,
+      gems: MetaProgress.getGems(),
+      treasury: d.treasury ?? MetaProgress.getTreasury(),
+      badge: `🌿 LEVEL ${d.level ?? 1} CLEARED`,
+      badgeColor: '#7eb87a',
+      heroStat: displayScore.toLocaleString(),
+      heroLabel: 'SCORE',
+      line2: `${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`,
+      line2Label: `BONUS +${d.bonus ?? 0}`,
+      line3: d.gemsEarned != null ? `+${d.gemsEarned}` : 'NEXT',
+      line3Label: d.gemsEarned != null ? 'GEMS EARNED' : 'LEVEL',
+      hook: 'Garden secured — the siege rolls on',
+    });
+    if (res.ok) {
+      if (res.method === 'download+clipboard') return 'Saved! Message copied.';
+      if (res.method === 'download') return 'Screenshot saved!';
+      return 'Shared!';
+    }
+    return 'Share cancelled';
+  }
+
+  setupAdvanceFlow({ domHud }) {
+    let advanced = false;
+    const advance = async () => {
+      if (advanced) return;
+      advanced = true;
+      InputRouter.onOverlayClose(SCENES.LEVEL_COMPLETE);
+      this.scene.stop();
+      const gs = this.gs;
+      if (!gs?.startNextLevel) {
+        console.warn('[LevelComplete] Game scene unavailable — resuming');
+        resumeGameScene(this.game);
+        return;
+      }
+      try {
+        await AdBreakPolicy.onContinueAfterLevelClear(this.game);
+      } catch (e) {
+        console.warn('[LevelComplete] ad break skipped', e);
+      }
+      if (!safeStartNextLevel(gs)) {
+        resumeGameScene(this.game);
+      }
+    };
+    this.advance = advance;
+
+    this.time.delayedCall(4200, advance);
+
+    if (!domHud) {
+      this.time.delayedCall(1400, () => {
+        this.input.once('pointerdown', advance);
+        this.input.keyboard.once('keydown-SPACE', advance);
+        this.input.keyboard.once('keydown-ESC', () => this.handleBack());
+      });
+    }
+  }
+
+  buildPhaserUI() {
+    const d = this.d;
+    const gs = this.gs;
     const panel = makeResponsiveOverlayPanel(this, { maxCardW: 680 });
     const frame = overlayFrame(panel, { footerReserve: uiPx(130, { min: 110, max: 140 }) });
-    const showAdBtn = !Monetization.removeAds && isAdSurfaceEnabled('rewarded');
+    const showAdBtn = this.showAdBtn;
     const btnW = showAdBtn
       ? Math.min(frame.btnW / 2 - uiPx(6, { min: 4, max: 8 }), uiPx(160, { max: 180 }))
       : Math.min(frame.btnW, uiPx(200, { max: 220 }));
     const btnH = uiPx(44, { min: 40, max: 48 });
     const btnGap = uiPx(12, { min: 8, max: 14 });
     const actionsY = frame.cardBot - uiPx(72, { min: 64, max: 80 });
-    let doubled = false;
 
     const compact = GAME.IS_PORTRAIT || GAME.HEIGHT < 760;
     const lineGap = uiPx(compact ? 16 : 22, { min: 12, max: 26 });
@@ -116,62 +261,19 @@ export class LevelCompleteScene extends Phaser.Scene {
 
     if (showAdBtn) {
       makeButton(this, leftX, actionsY, '2× BONUS', async () => {
-        if (doubled || !gs?.applyLevelBonusDouble) return;
-        this.doubleStatus.setText('Loading video…');
-        try {
-          const res = await Monetization.offerRewarded('double_bonus');
-          if (res.granted && gs.applyLevelBonusDouble()) {
-            doubled = true;
-            this.bonusText.setText(`CLEAR BONUS  +${(d.bonus ?? 0) * 2}  (DOUBLED!)`);
-            this.scoreText.setText(`SCORE  ${gs.score.toLocaleString()}`);
-            this.doubleStatus.setText('Bonus doubled!');
-            audio.blip(880);
-          } else if (res.unavailable) {
-            this.doubleStatus.setText('Video unavailable — bonus unchanged');
-            audio.blip(220);
-          } else if (res.cancelled) {
-            this.doubleStatus.setText('Watch the full video for 2× bonus');
-            audio.blip(220);
-          } else {
-            this.doubleStatus.setText('Could not apply bonus — try again');
-            audio.blip(220);
-          }
-        } catch {
-          this.doubleStatus.setText('Video unavailable — bonus unchanged');
-          audio.blip(220);
+        const res = await this.doubleBonus();
+        this.doubleStatus.setText(res.message);
+        if (res.ok) {
+          this.bonusText.setText(`CLEAR BONUS  +${res.bonus}  (DOUBLED!)`);
+          this.scoreText.setText(`SCORE  ${res.score.toLocaleString()}`);
         }
       }, { width: btnW, height: btnH, fontSize: '13px', primary: false });
     }
 
     makeButton(this, showAdBtn ? rightX : frame.cx, actionsY, 'SHARE', async () => {
       this.shareStatus.setText('Preparing screenshot…');
-      const res = await shareProgressScreenshot(this.game, {
-        kind: 'levelComplete',
-        shareData: {
-          level: d.level ?? 1,
-          score: displayScore,
-          lives,
-          stars,
-          gemsEarned: d.gemsEarned,
-        },
-        uiScore: displayScore,
-        level: d.level ?? 1,
-        lives,
-        gems: MetaProgress.getGems(),
-        treasury: d.treasury ?? MetaProgress.getTreasury(),
-        badge: `🌿 LEVEL ${d.level ?? 1} CLEARED`,
-        badgeColor: '#7eb87a',
-        heroStat: displayScore.toLocaleString(),
-        heroLabel: 'SCORE',
-        line2: `${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`,
-        line2Label: `BONUS +${d.bonus ?? 0}`,
-        line3: d.gemsEarned != null ? `+${d.gemsEarned}` : 'NEXT',
-        line3Label: d.gemsEarned != null ? 'GEMS EARNED' : 'LEVEL',
-        hook: 'Garden secured — the siege rolls on',
-      });
-      this.shareStatus.setText(res.ok
-        ? (res.method === 'download+clipboard' ? 'Saved! Message copied.' : res.method === 'download' ? 'Screenshot saved!' : 'Shared!')
-        : 'Share cancelled');
+      const msg = await this.shareProgress();
+      this.shareStatus.setText(msg);
     }, { width: btnW, height: btnH, fontSize: '13px', primary: false, color: PAL.accent3 });
 
     const hint = this.add.text(frame.cx, frame.cardBot - uiPx(14, { min: 10, max: 16 }), 'Tap to continue', {
@@ -189,39 +291,11 @@ export class LevelCompleteScene extends Phaser.Scene {
       hint.setAlpha(0.7);
       this.tweens.add({ targets: hint, alpha: 0.25, yoyo: true, repeat: -1, duration: 700 });
     });
-
-    let advanced = false;
-    const advance = async () => {
-      if (advanced) return;
-      advanced = true;
-      InputRouter.onOverlayClose(SCENES.LEVEL_COMPLETE);
-      this.scene.stop();
-      if (!gs?.startNextLevel) {
-        console.warn('[LevelComplete] Game scene unavailable — resuming');
-        resumeGameScene(this.game);
-        return;
-      }
-      try {
-        await AdBreakPolicy.onContinueAfterLevelClear(this.game);
-      } catch (e) {
-        console.warn('[LevelComplete] ad break skipped', e);
-      }
-      if (!safeStartNextLevel(gs)) {
-        resumeGameScene(this.game);
-      }
-    };
-    this._advance = advance;
-    this.time.delayedCall(4200, advance);
-    this.time.delayedCall(1400, () => {
-      this.input.once('pointerdown', advance);
-      this.input.keyboard.once('keydown-SPACE', advance);
-      this.input.keyboard.once('keydown-ESC', () => this.handleBack());
-    });
   }
 
   handleBack() {
-    if (this._advance) {
-      this._advance();
+    if (this.advance) {
+      this.advance();
       return true;
     }
     return false;

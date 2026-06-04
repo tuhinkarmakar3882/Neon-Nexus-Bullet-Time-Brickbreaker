@@ -96,7 +96,7 @@ export const AdsConfig = {
   },
 
   interstitial: {
-    everyLevels: 2,
+    everyLevels: 10,
     minIntervalMs: 90_000,
     /** Show in-game AdBreak overlay after a native interstitial (usually false). */
     overlayAfterNative: false,

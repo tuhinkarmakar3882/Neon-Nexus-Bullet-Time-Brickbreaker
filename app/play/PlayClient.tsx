@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { ROUTES } from '@/lib/shell/routes';
 import { PlayBootSplash } from '@/components/shell/PlayBootSplash';
 import { GameplayHudBridge } from '@/components/play/GameplayHudBridge';
 import { PauseOverlayBridge } from '@/components/play/PauseOverlayBridge';
 import { GameOverOverlayBridge } from '@/components/play/GameOverOverlayBridge';
+import { LevelCompleteOverlayBridge } from '@/components/play/LevelCompleteOverlayBridge';
 import { WebAdBridge } from '@/components/ads/WebAdBridge';
 import { registerWebAdBridge } from '@/lib/ads/webAdBridge';
 import { waitForPlayFrame } from '@/lib/shell/waitForPlayFrame';
@@ -18,7 +19,6 @@ import {
   setBootSplash,
 } from '@/src/shell/BootSplash.js';
 import { syncPlayFrameLayout, syncViewportLayout } from '@/src/systems/LayoutManager.js';
-import { PLAY_DOM_BOTTOM_GUTTER } from '@/src/config/Constants.js';
 
 const PHASES = SHELL_COPY.play.phases;
 const BOOT_ERR = SHELL_COPY.play.bootError;
@@ -94,17 +94,14 @@ export default function PlayClient() {
   }, [bootAttempt]);
 
   return (
-    <div
-      className="play-stage play-stage--hud"
-      style={{ '--play-bottom-gutter-base': `${PLAY_DOM_BOTTOM_GUTTER}px` } as CSSProperties}
-    >
+    <div className="play-stage play-stage--hud">
       <GameplayHudBridge />
       <main id="game-root" aria-label="Neon Nexus game canvas" />
-      <div className="play-bottom-gutter" aria-hidden="true" />
       <PlayBootSplash />
       <WebAdBridge />
       <PauseOverlayBridge />
       <GameOverOverlayBridge />
+      <LevelCompleteOverlayBridge />
       {bootError ? (
         <div className="play-boot-error" role="alertdialog" aria-labelledby="play-boot-error-title">
           <h2 id="play-boot-error-title" className="play-boot-error__title">

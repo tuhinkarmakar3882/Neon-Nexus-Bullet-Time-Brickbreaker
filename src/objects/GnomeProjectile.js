@@ -17,7 +17,7 @@ export class GnomeProjectile {
     this.spin = 0;
 
     const ang = Math.atan2(GAME.HEIGHT - y, targetX - x);
-    const speedMult = scene.potSpeedMult ?? scene.difficulty?.potSpeedMult ?? 1;
+    const speedMult = (scene.potSpeedMult ?? scene.difficulty?.potSpeedMult ?? 1) * (opts.speedMult ?? 1);
     const base = (this.type === 'anchor' ? GAME.POT_SPEED * 0.85 : GAME.POT_SPEED) * speedMult;
     const sp = base;
     const vxBase = Math.cos(ang) * sp * 0.65 + (opts.vxBias ?? 0);

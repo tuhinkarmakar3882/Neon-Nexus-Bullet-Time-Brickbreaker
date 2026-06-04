@@ -93,6 +93,11 @@ export function mountGameOverAdInContainer(el: HTMLElement): void {
   mountInlineOverlayAd(el, AD_PLACEMENTS.GAME_OVER_MENU_BANNER);
 }
 
+/** Mount ad inside the React level-clear card. */
+export function mountLevelCompleteAdInContainer(el: HTMLElement): void {
+  mountInlineOverlayAd(el, AD_PLACEMENTS.LEVEL_COMPLETE_MENU_BANNER);
+}
+
 export function hideInlineOverlayAd(el: HTMLElement): void {
   el.classList.remove('pause-ad-slot--visible', 'pause-ad-slot--inline');
   el.setAttribute('aria-hidden', 'true');

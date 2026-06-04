@@ -40,7 +40,9 @@ export const AdBreakPolicy = {
     if (gs?.scene?.isActive?.()) RunPersistence.saveRun(gs);
 
     const res = await Monetization.showInterstitialAfterContinue(game);
-    if (res?.shown) this.resetCounter();
+    // Always reset cadence after an attempt — unavailable ads must not block progression
+    // or retry on every subsequent level clear.
+    this.resetCounter();
 
     if (gs?.scene?.isActive?.()) RunPersistence.saveRun(gs);
     return res;

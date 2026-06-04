@@ -1,4 +1,4 @@
-/** In-game React overlay copy (pause, game over, HUD). */
+/** In-game React overlay copy (pause, game over, level clear, HUD). */
 
 export const PLAY_COPY = {
   pause: {
@@ -13,6 +13,22 @@ export const PLAY_COPY = {
       score: 'Score',
       combo: 'Combo',
     },
+  },
+  levelComplete: {
+    level: (n: number) => `LEVEL ${n}`,
+    cleared: 'CLEARED',
+    clearBonus: 'CLEAR BONUS',
+    doubledTag: '(DOUBLED!)',
+    score: 'SCORE',
+    gems: 'GEMS',
+    total: 'TOTAL',
+    doubleBonus: '2× BONUS',
+    share: 'SHARE',
+    adLabel: 'Advertisement',
+    preparingShare: 'Preparing screenshot…',
+    loadingVideo: 'Loading video…',
+    hint: 'Tap to continue',
+    hintSoon: '…',
   },
   gameOver: {
     title: 'Game over',

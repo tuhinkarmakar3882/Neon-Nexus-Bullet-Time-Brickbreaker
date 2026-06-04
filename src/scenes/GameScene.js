@@ -22,7 +22,7 @@ import { Bullet } from '../objects/Bullet.js';
 import { PowerUp } from '../objects/PowerUp.js';
 import { Jardinain, JSTATE } from '../objects/Jardinain.js';
 import { GnomeProjectile } from '../objects/GnomeProjectile.js';
-import { rollGnomeTier } from '../config/GnomeTiers.js';
+import { rollGnomeTier, GNOME_TIER } from '../config/GnomeTiers.js';
 import { Enemy } from '../objects/Enemy.js';
 import { Gem } from '../objects/Gem.js';
 import { PowerUpSystem } from '../systems/PowerUpSystem.js';
@@ -401,9 +401,16 @@ export class GameScene extends Phaser.Scene {
     this.arenaGfx?.clear();
   }
 
+  /** In-canvas band below paddle — ignore drag so phone nav gestures don't move the paddle. */
+  _touchDeadY() {
+    if (!GAME.USE_DOM_HUD) return GAME.HEIGHT + 1;
+    return GAME.HEIGHT - (GAME.DOM_BOTTOM_GUTTER ?? 56) - (GAME.SAFE_BOTTOM ?? 0);
+  }
+
   setupInput() {
     this.input.on('pointermove', (p) => {
       if (InputRouter.shouldBlockGameplay() || this.over || this.transitioning || this.draftOpen) return;
+      if (p.y > this._touchDeadY()) return;
       this.paddle.setPointer(p.worldX);
       if (this.balls.some((b) => b.stuck)) {
         const off = clamp(p.worldX - this.paddle.x, -this.paddle.w / 2, this.paddle.w / 2);
@@ -413,6 +420,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (p) => {
       if (InputRouter.shouldBlockGameplay() || this.over || this.transitioning || this.draftOpen) return;
       if (p.y < GAME.WALL_TOP) return;
+      if (p.y > this._touchDeadY()) return;
       const now = this.time.now;
       if (now - (this._lastTapMs ?? 0) < 320 && this.trySpendNexus()) {
         this._lastTapMs = now;
@@ -3352,6 +3360,7 @@ export class GameScene extends Phaser.Scene {
     this.updateJardinains(dtMs, dtSec);
     this.updateEnemies(dtSec);
     this.updateBalls(dtSec);
+    this.catchJardinainsOnPaddle();
     this.recordBallPath();
     this.updateBullets(dtSec, ts);
     this.updatePots(dtSec, ts);
@@ -3405,34 +3414,60 @@ export class GameScene extends Phaser.Scene {
 
   updateJardinains(dtMs, dtSec) {
     const env = this.envSpeedMult();
-    const throwScale = Math.max(0.45, (1 - this.level * 0.04) * (this.jardinainPressure ?? 1) * env * (this.difficulty?.gnomeThrowMult ?? 1));
+    const throwLevelScale = Math.max(
+      0.45,
+      (1 - this.level * 0.04) * (this.jardinainPressure ?? 1) * env * (this.difficulty?.gnomeThrowMult ?? 1),
+    );
     for (let i = this.jardinains.length - 1; i >= 0; i--) {
       const j = this.jardinains[i];
       if (j._destroyed) { this.jardinains.splice(i, 1); continue; }
       if (this.statusSys.isFrozen(j)) continue;
       const frozen = this.isTimeFrozen();
 
-      const throwResult = j.update(dtMs * throwScale, dtSec, env, frozen);
+      const throwResult = j.update(dtMs, dtSec, env, frozen, throwLevelScale);
       if (j.state === JSTATE.IDLE && j.brick?.alive && Math.random() < 0.002) {
         audio.gnomeIdleClink?.({ pan: j.x });
       }
       if (throwResult === 'throw' && !this._nexusSlowMo && this.pots.length < 8) {
         const payload = j.createThrowPayload(this.paddle.x);
-        this.pots.push(new GnomeProjectile(this, j.x, j.y, this.paddle.x, {
-          ...payload,
-          gravityScale: payload.gravityScale * this.levelGravityScale,
-        }));
+        const spawnThrow = (vxBias = 0, speedMult = 1, delayMs = 0) => {
+          this.time.delayedCall(delayMs, () => {
+            if (j._destroyed || this.over || this.pots.length >= 8) return;
+            this.pots.push(new GnomeProjectile(this, j.x, j.y, this.paddle.x, {
+              ...payload,
+              type: payload.type,
+              vxBias: (payload.vxBias ?? 0) + vxBias,
+              speedMult,
+              gravityScale: payload.gravityScale * this.levelGravityScale,
+            }));
+          });
+        };
+        if (j.tier === GNOME_TIER.VOLLEY) {
+          const spread = j.tierDef?.throwVxSpread ?? 180;
+          spawnThrow(-spread * 0.4, 0.72, 0);
+          spawnThrow(0, 0.68, 90);
+          spawnThrow(spread * 0.4, 0.72, 180);
+        } else {
+          spawnThrow(0, j.tier === GNOME_TIER.SNIPER ? 1.08 : 1, 0);
+        }
         wobble(this, j.c, { angle: 10, dur: 160, repeat: 0 });
         hitSpark(this, j.x, j.y - j.r, { tint: 0xc84040, count: 4, spread: 16 });
         audio.blip(220);
       }
+    }
+  }
 
-      if (!frozen && (j.state === JSTATE.FALLING || j.state === JSTATE.CAPTURED)) {
-        if (j.hitsPaddle(this.paddle)) {
-          j.onPaddleCatch(this.paddle);
-        } else if (j.hitFloor()) {
-          j.beginExitFall();
-        }
+  /** Paddle juggle / miss — after ball physics so catches align with the live paddle. */
+  catchJardinainsOnPaddle() {
+    if (this.over || this.transitioning || this.draftOpen) return;
+    const frozen = this.isTimeFrozen();
+    for (const j of this.jardinains) {
+      if (j._destroyed || frozen || this.statusSys.isFrozen(j)) continue;
+      if (j.state !== JSTATE.FALLING && j.state !== JSTATE.CAPTURED) continue;
+      if (j.hitsPaddle(this.paddle)) {
+        j.onPaddleCatch(this.paddle);
+      } else if (j.missedBelowPaddle(this.paddle)) {
+        j.beginExitFall();
       }
     }
   }

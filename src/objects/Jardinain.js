@@ -1,4 +1,4 @@
-import { GAME, JARDINAIN } from '../config/Constants.js';
+import { GAME, JARDINAIN, paddleSideInset } from '../config/Constants.js';
 import { GNOME_TIERS, GNOME_TIER, pickProjectile } from '../config/GnomeTiers.js';
 import { rand, clamp } from '../utils/Helpers.js';
 
@@ -118,6 +118,18 @@ export class Jardinain {
         g.fillTriangle(i * r * 0.22, -r * 1.35, i * r * 0.22 + r * 0.08, -r * 1.55, i * r * 0.22 - r * 0.08, -r * 1.55);
       }
     }
+    if (this.tier === GNOME_TIER.SNIPER) {
+      g.lineStyle(2, 0x44ffaa, 0.85);
+      g.strokeCircle(0, -r * 0.15, r * 0.55);
+      g.fillStyle(0x44ffaa, 0.9);
+      g.fillCircle(0, -r * 0.15, r * 0.12);
+    }
+    if (this.tier === GNOME_TIER.VOLLEY) {
+      g.fillStyle(0xff7744, 0.85);
+      g.fillCircle(-r * 0.42, -r * 1.05, r * 0.11);
+      g.fillCircle(0, -r * 1.12, r * 0.11);
+      g.fillCircle(r * 0.42, -r * 1.05, r * 0.11);
+    }
 
     this.c.add(g);
     this.tip = this.scene.add.image(0, -r * 1.45, 'soft').setTint(hatColor)
@@ -188,8 +200,9 @@ export class Jardinain {
     this.juggleCount++;
     this.hitCooldown = JARDINAIN.JUGGLE_HIT_COOLDOWN_MS;
     this.state = JSTATE.CAPTURED;
-    this.x = clamp(paddle.x, GAME.WALL_X + this.r, GAME.WIDTH - GAME.WALL_X - this.r);
-    this.y = paddle.top - this.r;
+    const inset = paddleSideInset();
+    this.x = clamp(paddle.x, inset + this.r, GAME.WIDTH - inset - this.r);
+    this.y = paddle.top - this.r - 1;
     this.vy = -JARDINAIN.LAUNCH_SPEED * Math.max(0.55, 1 - this.juggleCount * 0.08);
     this.vx = 0;
     this.syncPosition();
@@ -247,12 +260,13 @@ export class Jardinain {
     };
   }
 
-  update(dtMs, dtSec, envMult = 1, frozen = false) {
+  update(dtMs, dtSec, envMult = 1, frozen = false, throwLevelScale = 1) {
     if (this._destroyed) return null;
     if (this.hitCooldown > 0) this.hitCooldown -= dtMs;
     if (frozen) return null;
     const ts = dtSec * envMult;
     const gravScale = this.gravityMult();
+    const throwScale = Math.max(0.45, throwLevelScale);
 
     if (this.state === JSTATE.POPPING) {
       this.updatePopUp(dtMs);
@@ -266,8 +280,9 @@ export class Jardinain {
       this.y = this.brick.y - this.r - 2 + Math.sin(this.bob) * 3;
       this.syncPosition();
 
-      const throwRate = this.scene.potThrowRateMult ?? this.scene.difficulty?.potThrowRateMult ?? 1;
-      this.throwTimer -= dtMs * envMult * throwRate;
+      const throwRate = (this.scene.potThrowRateMult ?? this.scene.difficulty?.potThrowRateMult ?? 1)
+        * (this.tier === GNOME_TIER.VOLLEY ? 1.35 : 1);
+      this.throwTimer -= dtMs * envMult * throwRate * throwScale;
       if (this.throwTimer <= 0) {
         const intervalMult = 1 / Math.max(0.35, throwRate);
         this.throwTimer = rand(
@@ -330,15 +345,28 @@ export class Jardinain {
     }
   }
 
+  missedBelowPaddle(paddle) {
+    if (!paddle || this.state === JSTATE.EXITING) return false;
+    if (this.vy <= 0) return false;
+    // Miss only once the gnome has fallen past the paddle hull — not at ARENA_FLOOR,
+    // which sits above the paddle when the canvas reserves bottom touch space.
+    const missLine = paddle.y + paddle.h * 0.62;
+    return this.y - this.r > missLine;
+  }
+
   hitsPaddle(paddle) {
     if (!this.isAirborne || this.state === JSTATE.EXITING) return false;
     if (this.vy <= 0) return false;
-    return this.x > paddle.left - this.r && this.x < paddle.right + this.r &&
-      this.y + this.r > paddle.top && this.y - this.r < paddle.y + paddle.h / 2;
+    const pad = Math.max(6, this.r * 0.2);
+    return this.x > paddle.left - this.r - pad
+      && this.x < paddle.right + this.r + pad
+      && this.y + this.r >= paddle.top - pad
+      && this.y - this.r <= paddle.y + paddle.h * 0.55;
   }
 
+  /** @deprecated Use missedBelowPaddle — kept for legacy callers. */
   hitFloor() {
-    return this.vy > 0 && this.y + this.r >= GAME.HEIGHT - 8;
+    return this.missedBelowPaddle(this.scene?.paddle);
   }
 
   hitBy(ball) {

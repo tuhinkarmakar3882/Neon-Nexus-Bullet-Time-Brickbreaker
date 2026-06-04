@@ -12,6 +12,8 @@ export const AD_PLACEMENTS = {
   GAME_OVER_MENU_BANNER: 'game-over-menu-banner',
   /** Full-screen interstitial between levels (Phaser AdBreakScene). */
   GAME_INTERSTITIAL: 'game-interstitial',
+  /** Rectangle inside the React level-clear overlay. */
+  LEVEL_COMPLETE_MENU_BANNER: 'level-complete-menu-banner',
   /** Rewarded continue on game over (Phaser GameOverScene). */
   GAME_REWARDED_CONTINUE: 'game-rewarded-continue',
 } as const;

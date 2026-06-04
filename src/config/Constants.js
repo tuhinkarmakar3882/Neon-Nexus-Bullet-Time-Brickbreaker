@@ -79,7 +79,7 @@ export const GAME = {
   IS_PORTRAIT: false,
   /** Header + side meters rendered in React on /play (canvas = arena only). */
   USE_DOM_HUD: false,
-  /** Reserved DOM dead zone below canvas on /play — keeps touches off OS nav gestures. */
+  /** Logical px lifted above canvas bottom for paddle (phone nav dead zone, in-canvas). */
   DOM_BOTTOM_GUTTER: 56,
   SAFE_TOP: 10,
   SAFE_BOTTOM: 0,
@@ -286,13 +286,14 @@ export function computeLayout(winW, winH, insets) {
   GAME.BALL_RADIUS = Math.round(clampN(H * 0.0098, 9, 16));
 
   if (GAME.USE_DOM_HUD) {
+    const touchPad = GAME.DOM_BOTTOM_GUTTER ?? 56;
     GAME.PLAY_MARGIN_BOTTOM = Math.round(
-      GAME.PADDLE_HEIGHT * 2 + GAME.BALL_RADIUS + GAME.SAFE_BOTTOM,
+      touchPad + GAME.SAFE_BOTTOM + GAME.PADDLE_HEIGHT * 2 + GAME.BALL_RADIUS * 1.5,
     );
     GAME.ARENA_FLOOR = H - GAME.PLAY_MARGIN_BOTTOM;
     if (GAME.ARENA_FLOOR < GAME.WALL_TOP + H * 0.45) {
       GAME.PLAY_MARGIN_BOTTOM = Math.round(
-        H * (isPortrait ? 0.12 : 0.08) + GAME.SAFE_BOTTOM,
+        touchPad + GAME.SAFE_BOTTOM + H * (isPortrait ? 0.1 : 0.07),
       );
       GAME.ARENA_FLOOR = H - GAME.PLAY_MARGIN_BOTTOM;
     }
@@ -334,14 +335,6 @@ export function computeLayout(winW, winH, insets) {
     const root = document.documentElement;
     root.style.setProperty('--play-aspect-w', String(W));
     root.style.setProperty('--play-aspect-h', String(H));
-    const gutter = GAME.USE_DOM_HUD ? (GAME.DOM_BOTTOM_GUTTER ?? 56) : 0;
-    if (GAME.USE_DOM_HUD) {
-      root.style.setProperty('--play-bottom-gutter-base', `${gutter}px`);
-      root.style.setProperty(
-        '--play-bottom-gutter',
-        `calc(${gutter}px + env(safe-area-inset-bottom, 0px))`,
-      );
-    }
   }
 
   return { W, H };
