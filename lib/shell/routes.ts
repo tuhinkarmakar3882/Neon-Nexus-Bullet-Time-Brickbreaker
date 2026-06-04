@@ -1,6 +1,8 @@
 import { RunPersistence } from '@/src/systems/RunPersistence.js';
 import { SCENES } from '@/src/config/Constants.js';
 import { setPlayIntent } from '@/lib/shell/playIntent';
+import { audio } from '@/src/systems/AudioManager.js';
+import { SaveManager } from '@/src/systems/SaveManager.js';
 
 export const ROUTES = {
   home: '/',
@@ -42,6 +44,13 @@ export function destroyPhaserIfAny(): void {
     /* ignore */
   }
   window.__NEON = undefined;
+  try {
+    audio.init();
+    const s = SaveManager.loadSettings();
+    if (s.music) audio.setMenuMusic();
+  } catch {
+    /* audio optional during teardown */
+  }
 }
 
 export function exitToHome(): void {
@@ -52,6 +61,7 @@ export function exitToHome(): void {
 
 export function navigateToPlay({ resume = false }: { resume?: boolean } = {}): void {
   if (typeof window === 'undefined') return;
+  if (!resume) RunPersistence.clearRun();
   setPlayIntent({
     mode: resume ? 'resume' : 'new',
     extra: { forceNew: !resume },

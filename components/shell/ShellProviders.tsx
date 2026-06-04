@@ -4,6 +4,8 @@ import { useEffect, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { initAppShell, hideShellBanner } from '@/src/shell/initAppShell.js';
 import { audio } from '@/src/systems/AudioManager.js';
+import { SaveManager } from '@/src/systems/SaveManager.js';
+import { DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '@/src/config/Constants.js';
 import { closeLegalShell, isLegalShellOpen, wireLegalShellNavigation } from '@/src/shell/LegalShell.js';
 import {
   consumeOverlayHistoryPop,
@@ -25,6 +27,20 @@ export function ShellProviders({ children }: ShellProvidersProps) {
   useEffect(() => {
     audio.attachDocumentLifecycle(() => window.__NEON);
   }, []);
+
+  /** Shell routes play menu music; /play level music is owned by GameScene. */
+  useEffect(() => {
+    if (isPlay) return;
+    audio.init();
+    const s = SaveManager.loadSettings();
+    audio.applySettings({
+      sound: s.sound,
+      music: s.music,
+      sfxVolume: s.sfxVolume ?? DEFAULT_SFX_VOLUME,
+      musicVolume: s.musicVolume ?? DEFAULT_MUSIC_VOLUME,
+    });
+    if (s.music) audio.setMenuMusic();
+  }, [isPlay, pathname]);
 
   useEffect(() => {
     if (pathname) trackScreenView(pathname);

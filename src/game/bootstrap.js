@@ -45,7 +45,7 @@ import { syncPendingEntitlements } from '../systems/WebUnlock.js';
 import { launchParallelScene } from '../systems/SceneLaunch.js';
 import { Capacitor } from '@capacitor/core';
 import { getEnv } from '../config/env.js';
-import { peekPlayIntent } from '../shell/playIntent.js';
+import { peekForceNew, peekPlayIntent } from '../shell/playIntent.js';
 import { setBootSplash } from '../shell/BootSplash.js';
 import { attachRuntimeGuards } from '../systems/GameGuard.js';
 
@@ -184,8 +184,14 @@ export function destroyGame() {
   if (!game) return;
   detachGameKeyboard();
   try {
-    const gs = game.scene?.getScene(SCENES.GAME);
-    if (gs?.scene?.isActive?.() && !gs.over) RunPersistence.saveRun(gs);
+    const intent = window.__neonPlayIntent ?? peekPlayIntent();
+    const forceNew = intent?.extra?.forceNew === true || peekForceNew();
+    if (forceNew) {
+      RunPersistence.clearRun();
+    } else {
+      const gs = game.scene?.getScene(SCENES.GAME);
+      if (gs?.scene?.isActive?.() && !gs.over) RunPersistence.saveRun(gs);
+    }
   } catch { /* ignore */ }
   try {
     game.destroy(true);

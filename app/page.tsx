@@ -48,7 +48,7 @@ export default function HomePage() {
 
   const unlockAudio = () => {
     audio.init();
-    audio.resume();
+    audio.gestureUnlock();
     const s = SaveManager.loadSettings();
     audio.applySettings({
       sound: s.sound,
@@ -57,7 +57,7 @@ export default function HomePage() {
       musicVolume: s.musicVolume ?? DEFAULT_MUSIC_VOLUME,
     });
     audio.setMusicEnabled(s.music);
-    audio.setMenuMusic();
+    if (s.music) audio.setMenuMusic();
   };
 
   const onPlay = (resume: boolean) => {

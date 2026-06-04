@@ -35,6 +35,9 @@ export class AudioManager {
     this._ambienceOn = false;
     this._spatialPan = true;
     this._documentLifecycleAttached = false;
+    /** Track waiting for a user gesture after autoplay block. */
+    this._pendingTrackDef = null;
+    this._onGestureUnlock = null;
   }
 
   _initTracks() {
@@ -101,12 +104,15 @@ export class AudioManager {
     next.src = url;
     next.volume = 0;
 
+    this.resume();
     try {
       await next.play();
     } catch {
+      this._pendingTrackDef = trackDef;
       return false;
     }
 
+    this._pendingTrackDef = null;
     this._currentTrackId = trackDef.id;
     this._currentTrackDef = trackDef;
     this._trackSlot = 1 - this._trackSlot;
@@ -126,8 +132,12 @@ export class AudioManager {
   }
 
   async _playPixabayTrack(trackDef) {
-    if (!this.musicOn) return;
-    await this._crossfadeToTrack(trackDef);
+    if (!this.musicOn) return false;
+    if (!trackDef?.url) return false;
+    this._initTracks();
+    const ok = await this._crossfadeToTrack(trackDef);
+    if (!ok) this._pendingTrackDef = trackDef;
+    return ok;
   }
 
   /** Preload all catalog URLs (best-effort). */
@@ -272,7 +282,51 @@ export class AudioManager {
   }
 
   resume() {
-    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+  }
+
+  /** Retry blocked autoplay or resume a paused HTML track after user input. */
+  gestureUnlock() {
+    this.init();
+    this.resume();
+    if (!this.musicOn || this._backgroundPaused) return;
+
+    if (this._pendingTrackDef?.url) {
+      void this._playPixabayTrack(this._pendingTrackDef);
+      return;
+    }
+
+    const active = this._activeTrackEl();
+    if (active?.src) {
+      if (active.paused) {
+        active.play().then(() => this._syncActiveMusicVolume()).catch(() => {});
+      }
+      return;
+    }
+
+    if (this._isPlayRoute?.()) {
+      void this.setLevelMusic(this._level, this._musicSeed, { biome: this._biome, isBoss: this._isBoss });
+      return;
+    }
+    void this.setMenuMusic();
+  }
+
+  _isPlayRoute() {
+    if (typeof window === 'undefined') return false;
+    return window.location.pathname.replace(/\/$/, '') === '/play';
+  }
+
+  _resumeMusicForGame(game) {
+    const gs = game?.scene?.getScene?.('Game');
+    if (gs && !gs.over) {
+      this.setLevelMusic(
+        gs.level ?? 1,
+        gs.campaignSeed ?? gs.levelSeed ?? 1,
+        { biome: gs.theme?.biome ?? 'garden', isBoss: !!gs.isBoss },
+      );
+      return true;
+    }
+    return false;
   }
 
   setSoundEnabled(on) {
@@ -321,8 +375,13 @@ export class AudioManager {
     });
     const active = this._activeTrackEl();
     if (this._currentTrackDef?.url === trackDef.url && active?.src) {
-      if (active.paused) active.play().catch(() => {});
-      this._syncActiveMusicVolume();
+      if (active.paused) {
+        active.play().then(() => this._syncActiveMusicVolume()).catch(() => {
+          this._pendingTrackDef = trackDef;
+        });
+      } else {
+        this._syncActiveMusicVolume();
+      }
       return;
     }
     this._playPixabayTrack(trackDef);
@@ -330,9 +389,14 @@ export class AudioManager {
 
   /** Resume Pixabay track after app background (NativeBridge). */
   startMusic() {
-    if (!this.musicOn) return;
+    if (!this.musicOn || this._backgroundPaused) return;
+    this.resume();
     const el = this._activeTrackEl();
-    if (el?.src) el.play().catch(() => {});
+    if (el?.src) {
+      el.play().then(() => this._syncActiveMusicVolume()).catch(() => {
+        if (this._currentTrackDef) this._pendingTrackDef = this._currentTrackDef;
+      });
+    }
   }
 
   stopMusic() {
@@ -360,34 +424,26 @@ export class AudioManager {
   resumeFromBackground(game) {
     if (!this._backgroundPaused) return;
     this._backgroundPaused = false;
-    if (this.ctx?.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
-    }
+    this.resume();
     if (this.sfxGain) {
       this._applySfxGain();
     }
     if (!this.musicOn) return;
 
-    const sm = game?.scene;
-    if (!sm) {
-      if (this._isMenu) this.setMenuMusic();
+    if (this._isPlayRoute() && this._resumeMusicForGame(game)) return;
+
+    if (!game?.scene) {
+      if (this._isMenu || !this._isPlayRoute()) this.setMenuMusic();
       else if (this._currentTrackDef?.url) this.startMusic();
       return;
     }
 
-    if (sm.isActive('Menu')) {
-      this.setMenuMusic();
+    if (this._isPlayRoute()) {
+      if (this._currentTrackDef?.url) this.startMusic();
       return;
     }
-    if (sm.isActive('Game')) {
-      const gs = sm.getScene('Game');
-      if (gs?.sys?.isActive?.() && !gs.over) {
-        this.setLevelMusic(gs.level ?? 1, gs.campaignSeed ?? gs.levelSeed ?? 1, {
-          biome: gs.theme?.biome ?? 'garden',
-          isBoss: !!gs.isBoss,
-        });
-      }
-    }
+
+    this.setMenuMusic();
   }
 
   /**
@@ -407,8 +463,10 @@ export class AudioManager {
     });
     window.addEventListener('pagehide', onHide);
     window.addEventListener('pageshow', onShow);
-    window.addEventListener('blur', onHide);
-    window.addEventListener('focus', onShow);
+
+    this._onGestureUnlock = () => this.gestureUnlock();
+    document.addEventListener('pointerdown', this._onGestureUnlock, true);
+    document.addEventListener('keydown', this._onGestureUnlock, true);
 
     import('@capacitor/core').then(({ Capacitor }) => {
       if (!Capacitor.isNativePlatform()) return;

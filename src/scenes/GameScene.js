@@ -34,6 +34,7 @@ import { Monetization } from '../systems/Monetization.js';
 import { AdBreakPolicy } from '../systems/AdBreakPolicy.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { RunPersistence } from '../systems/RunPersistence.js';
+import { consumeForceNew } from '../shell/playIntent.js';
 import { InputRouter } from '../systems/InputRouter.js';
 import { isArrowHeld } from '../systems/GameKeyboard.js';
 import { pushGameplayHistory } from '../systems/Navigation.js';
@@ -63,8 +64,13 @@ export class GameScene extends Phaser.Scene {
   constructor() { super(SCENES.GAME); }
 
   init(data) {
-    this._resumeData = data?.resume ?? null;
-    this._newGame = data?.newGame ?? false;
+    this._newGame = data?.newGame === true || data?.forceNew === true;
+    if (this._newGame) {
+      this._resumeData = null;
+      RunPersistence.clearRun();
+    } else {
+      this._resumeData = data?.resume ?? null;
+    }
   }
 
   create() {
@@ -209,6 +215,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.bus = this.game.events;
     this.emitStats();
+    consumeForceNew();
     this.emitGnomeStreak();
     this.emitBtMeter();
     this.bus?.emit('hud:treasury', { value: MetaProgress.getTreasury() });
@@ -424,11 +431,11 @@ export class GameScene extends Phaser.Scene {
       const now = this.time.now;
       if (now - (this._lastTapMs ?? 0) < 320 && this.trySpendNexus()) {
         this._lastTapMs = now;
-        audio.resume();
+        audio.gestureUnlock();
         return;
       }
       this._lastTapMs = now;
-      audio.resume();
+      audio.gestureUnlock();
       this.handleTap(p.worldX);
     });
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -2960,7 +2967,7 @@ export class GameScene extends Phaser.Scene {
   doRestart() {
     RunPersistence.clearRun();
     this.scene.stop(SCENES.UI);
-    this.scene.start(SCENES.GAME, { newGame: true });
+    this.scene.start(SCENES.GAME, { newGame: true, forceNew: true });
   }
 
   doResume() { InputRouter.onOverlayClose(); this.scene.resume(); }

@@ -31,16 +31,16 @@ function attachHudListeners(
 ) {
   const bus = game.events;
 
-  const onStats = (s: HudStats) => {
+    const onStats = (s: HudStats) => {
     patch((prev) => ({
       ...prev,
-      score: s.score ?? prev.score,
+      score: typeof s.score === 'number' ? s.score : prev.score,
       lives: typeof s.lives === 'number' ? s.lives : prev.lives,
-      level: s.level ?? prev.level,
-      bricksLeft: s.bricksLeft ?? prev.bricksLeft,
-      combo: s.combo ?? 0,
+      level: typeof s.level === 'number' ? s.level : prev.level,
+      bricksLeft: typeof s.bricksLeft === 'number' ? s.bricksLeft : prev.bricksLeft,
+      combo: typeof s.combo === 'number' ? s.combo : 0,
       goalText: s.goalText ?? '',
-      gambitReady: (s.combo ?? 0) >= GAME.COMBO_GAMBIT_MIN,
+      gambitReady: (typeof s.combo === 'number' ? s.combo : prev.combo) >= GAME.COMBO_GAMBIT_MIN,
     }));
   };
 
@@ -168,6 +168,7 @@ export function useGameplayHudState() {
 
     const onReady = (e: Event) => {
       const game = (e as CustomEvent<{ game?: Phaser.Game }>).detail?.game;
+      setState(INITIAL_GAMEPLAY_HUD);
       tryAttach(game);
     };
 
