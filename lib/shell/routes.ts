@@ -11,6 +11,8 @@ export const ROUTES = {
   share: '/share/',
   install: '/install/',
   connect: '/connect/',
+  terms: '/terms/',
+  privacy: '/privacy/',
 } as const;
 
 export type ShellRoute = (typeof ROUTES)[keyof typeof ROUTES];
@@ -57,10 +59,15 @@ export function navigateToPlay({ resume = false }: { resume?: boolean } = {}): v
   window.location.href = ROUTES.play;
 }
 
+/** Save active run and open a shell route; return via ?from=play + navigateToPlay({ resume: true }). */
 export function saveRunAndLeavePlay(targetPath: string, query: Record<string, string> = {}): void {
   if (typeof window === 'undefined') return;
-  destroyPhaserIfAny();
-  window.location.href = pathWithQuery(targetPath, query);
+  const g = window.__NEON as { scene?: { getScene: (k: string) => { scene?: { isActive?: () => boolean }; over?: boolean } } } | undefined;
+  const gs = g?.scene?.getScene(SCENES.GAME);
+  if (gs?.scene?.isActive?.() && !gs.over) {
+    RunPersistence.saveRun(gs as Parameters<typeof RunPersistence.saveRun>[0]);
+  }
+  window.location.href = pathWithQuery(targetPath, { from: 'play', ...query });
 }
 
 export function shellBackHref(from?: string | null): string {

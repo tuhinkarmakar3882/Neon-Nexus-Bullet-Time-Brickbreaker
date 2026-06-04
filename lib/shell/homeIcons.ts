@@ -2,6 +2,7 @@ import type { IconNode } from 'lucide';
 import {
   Archive,
   BookOpen,
+  CircleHelp,
   Download,
   Gem,
   Link2,
@@ -35,4 +36,5 @@ export const HOME_ICONS = {
   vault: Package,
   archive: Archive,
   garden: Sprout,
+  tutorial: CircleHelp,
 } as const satisfies Record<string, IconNode>;

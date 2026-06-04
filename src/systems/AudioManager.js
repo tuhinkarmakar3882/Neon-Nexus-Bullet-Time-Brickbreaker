@@ -237,7 +237,8 @@ export class AudioManager {
     return b.n <= max;
   }
 
-  _duckMusic(factor = 0.55, ms = 420) {
+  /** Lower level music briefly (SFX moments, ball-loss beat) without changing track. */
+  duckMusic(factor = 0.55, ms = 420) {
     const active = this._activeTrackEl();
     if (!active || active.paused) return;
     const base = this._baseTrackVolume(this._currentTrackDef) * (1 + this._musicIntensity * 0.05);
@@ -245,6 +246,18 @@ export class AudioManager {
     setTimeout(() => {
       if (active && !active.paused) this._syncActiveMusicVolume();
     }, ms);
+  }
+
+  /** Restore level music volume after ducking; keeps the same track playing. */
+  restoreMusic() {
+    if (!this.musicOn) return;
+    const active = this._activeTrackEl();
+    if (!active?.src) {
+      this.setLevelMusic(this._level, this._musicSeed, { biome: this._biome, isBoss: this._isBoss });
+      return;
+    }
+    if (active.paused) active.play().catch(() => {});
+    this._syncActiveMusicVolume();
   }
 
   sidechainImpulse() {
@@ -301,10 +314,17 @@ export class AudioManager {
     this._musicSeed = seed >>> 0;
     this._biome = opts.biome ?? 'garden';
     this._isBoss = !!opts.isBoss;
-    this._playPixabayTrack(trackForLevel(this._level, this._musicSeed, {
+    const trackDef = trackForLevel(this._level, this._musicSeed, {
       biome: this._biome,
       isBoss: this._isBoss,
-    }));
+    });
+    const active = this._activeTrackEl();
+    if (this._currentTrackDef?.url === trackDef.url && active?.src) {
+      if (active.paused) active.play().catch(() => {});
+      this._syncActiveMusicVolume();
+      return;
+    }
+    this._playPixabayTrack(trackDef);
   }
 
   /** Resume Pixabay track after app background (NativeBridge). */
@@ -622,14 +642,14 @@ export class AudioManager {
     this._sweep(880, 180, 0.42, 'sine', 0.26);
     this._noise(0.14, 0.18, 200, 1600);
     this._sfx(55, 0.4, 'triangle', 0.12);
-    this._duckMusic(0.55, 420);
+    this.duckMusic(0.55, 420);
   }
 
   nexusUnleashed(opts = {}) {
     this._sweep(120, 480, 0.35, 'sine', 0.32, opts);
     this._noise(0.28, 0.22, 60, 1200, opts);
     this._sweep(800, 40, 0.4, 'sawtooth', 0.18, opts);
-    this._duckMusic(0.45, 600);
+    this.duckMusic(0.45, 600);
   }
 
   shieldRebound(opts = {}) {

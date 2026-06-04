@@ -57,7 +57,8 @@ function fillGradientText(ctx, text, cx, cy, font, stops) {
   ctx.restore();
 }
 
-function drawChaosField(ctx, w, h) {
+function drawChaosField(ctx, w, h, opts = {}) {
+  const subtle = !!opts.subtle;
   const bg = ctx.createLinearGradient(0, 0, w, h);
   bg.addColorStop(0, '#1a0a28');
   bg.addColorStop(0.35, '#0c0614');
@@ -65,10 +66,11 @@ function drawChaosField(ctx, w, h) {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, w, h);
 
+  const beamScale = subtle ? 0.45 : 1;
   const beams = [
-    [w * 0.9, h * 0.05, 'rgba(255, 79, 163, 0.28)', 'rgba(255, 79, 163, 0)'],
-    [w * 0.1, h * 0.85, 'rgba(47, 230, 199, 0.22)', 'rgba(47, 230, 199, 0)'],
-    [w * 0.5, h * 0.4, 'rgba(155, 140, 255, 0.16)', 'rgba(155, 140, 255, 0)'],
+    [w * 0.9, h * 0.05, `rgba(255, 79, 163, ${0.28 * beamScale})`, 'rgba(255, 79, 163, 0)'],
+    [w * 0.1, h * 0.85, `rgba(47, 230, 199, ${0.22 * beamScale})`, 'rgba(47, 230, 199, 0)'],
+    [w * 0.5, h * 0.4, `rgba(155, 140, 255, ${0.16 * beamScale})`, 'rgba(155, 140, 255, 0)'],
   ];
   for (const [bx, by, inner, outer] of beams) {
     const glow = ctx.createRadialGradient(bx, by, 0, bx, by, w * 0.55);
@@ -78,34 +80,37 @@ function drawChaosField(ctx, w, h) {
     ctx.fillRect(0, 0, w, h);
   }
 
-  ctx.save();
-  ctx.globalAlpha = 0.06;
-  ctx.strokeStyle = NEON.teal;
-  ctx.lineWidth = 2;
-  for (let i = -h; i < w + h; i += 72) {
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i + h, h);
-    ctx.stroke();
-  }
-  ctx.restore();
+  if (!subtle) {
+    ctx.save();
+    ctx.globalAlpha = 0.06;
+    ctx.strokeStyle = NEON.teal;
+    ctx.lineWidth = 2;
+    for (let i = -h; i < w + h; i += 72) {
+      ctx.beginPath();
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i + h, h);
+      ctx.stroke();
+    }
+    ctx.restore();
 
-  ctx.strokeStyle = 'rgba(232, 184, 109, 0.05)';
-  ctx.lineWidth = 1;
-  for (let x = 0; x < w; x += 48) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, h);
-    ctx.stroke();
-  }
-  for (let y = 0; y < h; y += 48) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(w, y);
-    ctx.stroke();
+    ctx.strokeStyle = 'rgba(232, 184, 109, 0.05)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < w; x += 48) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+    }
+    for (let y = 0; y < h; y += 48) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
   }
 
-  for (let i = 0; i < 90; i++) {
+  const particleCount = subtle ? 24 : 90;
+  for (let i = 0; i < particleCount; i++) {
     const x = (i * 173) % w;
     const y = (i * 97 + 31) % h;
     const r = 0.8 + (i % 4) * 0.6;
@@ -933,6 +938,31 @@ function drawChallengeBanner(ctx, text, cx, cy, w) {
   ctx.fillText(text, cx, cy);
 }
 
+/** Challenge line — caption style (not a faux button). */
+function drawChallengeCaption(ctx, text, cx, y, maxW) {
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = 'rgba(200, 210, 230, 0.88)';
+  let fontSize = 22;
+  ctx.font = canvasFont(fontSize, '600', 'body');
+  while (fontSize > 16 && ctx.measureText(text).width > maxW) {
+    fontSize -= 1;
+    ctx.font = canvasFont(fontSize, '600', 'body');
+  }
+  ctx.fillText(text, cx, y);
+  return y + fontSize * 1.35;
+}
+
+function drawStatsPanel(ctx, x, y, w, h) {
+  ctx.fillStyle = 'rgba(8, 5, 12, 0.88)';
+  roundRect(ctx, x, y, w, h, 24);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(47, 230, 199, 0.32)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, x, y, w, h, 24);
+  ctx.stroke();
+}
+
 function drawStatIcon(ctx, kind, cx, cy, size, color) {
   ctx.save();
   ctx.fillStyle = color;
@@ -1005,7 +1035,7 @@ function displayShareUrl() {
   return url.replace(/^https?:\/\//, '');
 }
 
-/** Game-over share layout — hero score, inline stats, challenge CTA. */
+/** Game-over share layout — compact stats panel, tight CTA stack, footer outside panel. */
 function drawGameOverShareCard(ctx, stats) {
   const w = CARD_W;
   const h = CARD_H;
@@ -1013,75 +1043,49 @@ function drawGameOverShareCard(ctx, stats) {
   ui.hidePreviewScore = true;
   ui.vividPreview = true;
 
-  drawChaosField(ctx, w, h);
+  drawChaosField(ctx, w, h, { subtle: true });
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
 
+  const titleY = 78;
   fillGradientText(
     ctx,
     'NEON NEXUS',
     w / 2,
-    88,
-    canvasFont(68, '900'),
+    titleY,
+    canvasFont(62, '900'),
     [[0, NEON.teal], [0.45, '#ffffff'], [1, NEON.magenta]],
   );
 
   ctx.fillStyle = NEON.cream;
-  ctx.font = canvasFont(24, '700');
-  ctx.shadowColor = NEON.teal;
-  ctx.shadowBlur = 10;
-  ctx.fillText('Bullet-Time Brickbreaker', w / 2, 126);
-  ctx.shadowBlur = 0;
+  ctx.font = canvasFont(22, '600', 'body');
+  ctx.fillText('Bullet-Time Brickbreaker', w / 2, titleY + 44);
 
-  let frameY = 152;
+  let frameY = 138;
   if (stats.badge) {
-    drawBadge(ctx, stats.badge, w / 2, 182, stats.badgeColor ?? NEON.amber);
-    frameY = 214;
+    drawBadge(ctx, stats.badge, w / 2, 196, stats.badgeColor ?? NEON.amber);
+    frameY = 224;
   }
 
-  const frameX = 72;
-  const frameW = w - 144;
-  const frameH = 268;
+  const frameX = 56;
+  const frameW = w - 112;
+  const frameH = 228;
   drawSnapshotFrame(ctx, stats.snapshot ?? null, frameX, frameY, frameW, frameH, ui);
 
-  const panelY = frameY + frameH + 24;
-  const panelX = 48;
-  const panelW = w - 96;
-  const panelH = h - panelY - 72;
-  ctx.fillStyle = 'rgba(8, 5, 12, 0.82)';
-  roundRect(ctx, panelX, panelY, panelW, panelH, 28);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(47, 230, 199, 0.4)';
-  ctx.lineWidth = 2;
-  roundRect(ctx, panelX, panelY, panelW, panelH, 28);
-  ctx.stroke();
+  const panelX = 44;
+  const panelW = w - 88;
+  const panelPadX = 24;
+  const panelPadTop = 32;
+  const panelY = frameY + frameH + 18;
+  const btnW = panelW - panelPadX * 2;
+  const primaryH = 56;
+  const secondaryH = 48;
+  const ctaGap = 12;
+  const statRowH = 76;
 
   const heroLabel = stats.heroLabel ?? 'FINAL SCORE';
-  const heroLabelY = panelY + 52;
-  ctx.fillStyle = 'rgba(190, 205, 230, 0.9)';
-  ctx.font = canvasFont(22, '700', 'body');
-  ctx.textAlign = 'center';
-  ctx.fillText(heroLabel, w / 2, heroLabelY);
-
-  const heroCy = panelY + 148;
-  const heroAccent = stats.isNewBest ? NEON.amber : NEON.teal;
-  fillGradientText(
-    ctx,
-    stats.heroStat ?? '0',
-    w / 2,
-    heroCy,
-    canvasFont(120, '900'),
-    [[0, heroAccent], [0.45, '#ffffff'], [1, NEON.magenta]],
-  );
-
   const subline = stats.scoreSubline ?? '';
-  if (subline) {
-    ctx.fillStyle = stats.isNewBest ? 'rgba(255, 210, 90, 0.92)' : 'rgba(168, 180, 210, 0.9)';
-    ctx.font = canvasFont(24, '600', 'body');
-    ctx.fillText(subline, w / 2, heroCy + 58);
-  }
-
   const pbVal = stats.isNewBest ? stats.line3 ?? '1' : stats.line2 ?? '0';
   const levelVal = stats.isNewBest ? stats.line2 ?? '1' : stats.line3 ?? '1';
   const gemsVal = stats.isNewBest ? stats.line3 ?? fmtStat(stats.gems) : stats.line4 ?? fmtStat(stats.gems);
@@ -1096,52 +1100,82 @@ function drawGameOverShareCard(ctx, stats) {
       { icon: 'level', label: 'LEVEL', value: levelVal, accent: NEON.sky },
       { icon: 'gem', label: 'GEMS', value: gemsVal, accent: NEON.amber },
     ];
-  const statRowY = subline ? panelY + 268 : panelY + 248;
-  drawInlineStatsRow(ctx, statItems, statRowY, panelX + 16, panelW - 32);
-
   const challenge = stats.challengeLine ?? `Can you beat ${stats.heroStat ?? '0'}?`;
-  drawChallengeBanner(ctx, challenge, w / 2, statRowY + 88, panelW - 56);
 
-  const ctaY = panelY + panelH - 56;
+  const labelY = panelY + panelPadTop + 18;
+  const heroCy = labelY + 58;
+  const sublineY = heroCy + 52;
+  const statRowY = (subline ? sublineY + 34 : heroCy + 48) + 14;
+  const challengeY = statRowY + statRowH + 14;
+  const primaryCy = challengeY + 36 + primaryH / 2;
+  const secondaryCy = primaryCy + primaryH / 2 + ctaGap + secondaryH / 2;
+  const panelH = secondaryCy + secondaryH / 2 + panelPadTop - panelY;
+
+  drawStatsPanel(ctx, panelX, panelY, panelW, panelH);
+
+  ctx.fillStyle = 'rgba(190, 205, 230, 0.85)';
+  ctx.font = canvasFont(18, '600', 'body');
+  ctx.textAlign = 'center';
+  ctx.fillText(heroLabel, w / 2, labelY);
+
+  const heroAccent = stats.isNewBest ? NEON.amber : NEON.teal;
+  fillGradientText(
+    ctx,
+    stats.heroStat ?? '0',
+    w / 2,
+    heroCy,
+    canvasFont(108, '900'),
+    [[0, heroAccent], [0.45, '#ffffff'], [1, NEON.magenta]],
+  );
+
+  if (subline) {
+    ctx.fillStyle = stats.isNewBest ? 'rgba(255, 210, 90, 0.92)' : 'rgba(168, 180, 210, 0.88)';
+    ctx.font = canvasFont(20, '500', 'body');
+    ctx.fillText(subline, w / 2, sublineY);
+  }
+
+  drawInlineStatsRow(ctx, statItems, statRowY, panelX + panelPadX, panelW - panelPadX * 2);
+
+  drawChallengeCaption(ctx, challenge, w / 2, challengeY, panelW - panelPadX * 2);
+
   const primaryPlayFree = !stats.isNewBest;
   if (primaryPlayFree) {
     drawCtaButton(
       ctx,
-      'PLAY FREE  →',
+      'Play free',
       w / 2,
-      ctaY - 42,
-      panelW - 72,
-      { accent: NEON.teal, mid: '#5dffe8', fontSize: 30, height: 60 },
+      primaryCy,
+      btnW,
+      { accent: NEON.teal, mid: '#5dffe8', fontSize: 26, height: primaryH },
     );
-    drawOutlineCta(ctx, 'BEAT MY SCORE', w / 2, ctaY + 28, 300);
+    drawOutlineCta(ctx, 'Beat my score', w / 2, secondaryCy, Math.min(btnW, 340));
   } else {
     drawCtaButton(
       ctx,
-      'BEAT MY SCORE  →',
+      'Beat my score',
       w / 2,
-      ctaY - 42,
-      panelW - 72,
-      { accent: NEON.magenta, mid: '#ff7ab8', fontSize: 28, height: 58 },
+      primaryCy,
+      btnW,
+      { accent: NEON.magenta, mid: '#ff7ab8', fontSize: 24, height: primaryH },
     );
-    drawOutlineCta(ctx, 'PLAY FREE', w / 2, ctaY + 28, 280);
+    drawOutlineCta(ctx, 'Play free', w / 2, secondaryCy, Math.min(btnW, 320));
   }
 
+  const footerTop = panelY + panelH + 28;
   const gemHint = stats.showGemHintOnCard ? (stats.gemHint ?? '') : '';
   if (gemHint) {
     ctx.fillStyle = 'rgba(95, 112, 136, 0.85)';
-    ctx.font = canvasFont(16, '500', 'body');
-    ctx.fillText(gemHint, w / 2, h - 56);
+    ctx.font = canvasFont(15, '500', 'body');
+    ctx.fillText(gemHint, w / 2, footerTop);
   }
 
   ctx.fillStyle = NEON.teal;
-  ctx.font = canvasFont(20, '700');
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillText(displayShareUrl(), w / 2, h - 42);
+  ctx.font = canvasFont(18, '600', 'body');
+  ctx.fillText(displayShareUrl(), w / 2, footerTop + (gemHint ? 26 : 0));
 
-  ctx.fillStyle = 'rgba(95, 112, 136, 0.9)';
-  ctx.font = canvasFont(15, '500', 'body');
-  ctx.fillText('Neon Nexus · Bullet-Time Brick Breaker', w / 2, h - 18);
+  ctx.fillStyle = 'rgba(95, 112, 136, 0.88)';
+  ctx.font = canvasFont(14, '500', 'body');
+  ctx.fillText('Neon Nexus · Bullet-Time Brick Breaker', w / 2, footerTop + (gemHint ? 50 : 24));
 }
 
 /**
@@ -1188,7 +1222,7 @@ function drawShareCard(ctx, stats) {
 
   const w = CARD_W;
   const h = CARD_H;
-  drawChaosField(ctx, w, h);
+  drawChaosField(ctx, w, h, { subtle: true });
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
@@ -1372,6 +1406,19 @@ export async function shareProgressScreenshot(game, stats = {}) {
   downloadShareBlob(blob, kind);
   const copied = await copyShareCaption(shareText);
   return { ok: true, method: copied ? 'download+clipboard' : 'download' };
+}
+
+/** Render share card to a data URL (preview UI — does not open share sheet). */
+export async function renderShareCardDataUrl(stats = {}) {
+  await ensureFontsLoaded();
+  const payload = statsFromPayload({ ...stats });
+  const canvas = document.createElement('canvas');
+  canvas.width = CARD_W;
+  canvas.height = CARD_H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  drawShareCard(ctx, payload);
+  return canvas.toDataURL('image/png');
 }
 
 export { buildShareMessage, getGameUrl };

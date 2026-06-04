@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Version** | 3.0.x |
+| **Version** | 3.1.x |
 | **Engine** | [Phaser 4.1.0](https://phaser.io/v401) (WebGL \| Web Audio) |
 | **Bundler** | Vite 8 |
 | **Platforms** | Web (PWA), Capacitor (iOS/Android) |

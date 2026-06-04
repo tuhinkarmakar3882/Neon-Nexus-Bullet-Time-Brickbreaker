@@ -189,8 +189,8 @@ export const VFX_PRESETS = {
 };
 
 export function normalizeVfxQuality(q) {
-  const key = String(q ?? 'high').toLowerCase();
-  return VFX_LEVELS.includes(key) ? key : 'high';
+  const key = String(q ?? 'ultra').toLowerCase();
+  return VFX_LEVELS.includes(key) ? key : 'ultra';
 }
 
 /** Expand stored settings into runtime flags used by GameScene / MenuScene. */
@@ -217,5 +217,5 @@ export function migrateVfxQuality(raw) {
   if (raw.reducedFx === true && raw.particles === false) return 'low';
   if (raw.reducedFx === true) return 'medium';
   if (raw.scanlines === true) return 'ultra';
-  return 'high';
+  return 'ultra';
 }

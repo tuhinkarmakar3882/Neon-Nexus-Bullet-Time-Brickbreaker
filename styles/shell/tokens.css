@@ -1,0 +1,63 @@
+/* Neon Command — design tokens (shell + play overlays) */
+
+:root {
+  --action: #2fe6c7;
+  --action-dim: rgba(47, 230, 199, 0.14);
+  --action-muted: #1a9e88;
+  --economy: #ffb24d;
+  --lore: #9b8cff;
+  --flourish: #ff4fa3;
+  --accent: var(--action);
+  --accent2: var(--flourish);
+  --accent3: var(--economy);
+  --bg: #05060c;
+  --surface-0: rgba(6, 8, 16, 0.72);
+  --surface-1: rgba(12, 16, 28, 0.92);
+  --surface-2: rgba(18, 24, 40, 0.96);
+  --card: rgba(10, 12, 24, 0.88);
+  --text: #e8eefc;
+  --text-muted: #7a8ba6;
+  --text-dim: #5a6a82;
+  --danger: #ff5a6e;
+  --border-subtle: rgba(122, 139, 166, 0.18);
+  --border-accent: rgba(47, 230, 199, 0.32);
+  --chrome-top: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    transparent 100%
+  );
+  --chrome-panel: linear-gradient(
+    165deg,
+    rgba(16, 20, 36, 0.98) 0%,
+    rgba(8, 10, 20, 0.96) 100%
+  );
+  --chrome-edge: rgba(122, 139, 166, 0.22);
+  --chrome-glow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --ad-banner-h: 50px;
+  --shell-gap: 10px;
+  --shell-pad: 14px;
+  --shell-pad-x: clamp(12px, 4vw, 20px);
+  --shell-pad-y: clamp(8px, 2.5vw, 14px);
+  --shell-content-max: min(720px, 100%);
+  --type-display: 'Chakra Petch', system-ui, sans-serif;
+  --type-body: 'DM Sans', system-ui, sans-serif;
+  --space-page: clamp(12px, 4vw, 20px);
+  --radius-shell: 10px;
+  --radius-cta: 8px;
+  --radius-pill: 999px;
+  --shell-ambient: radial-gradient(ellipse 90% 55% at 18% 8%, rgba(47, 230, 199, 0.08), transparent 50%),
+    radial-gradient(ellipse 70% 45% at 92% 72%, rgba(255, 79, 163, 0.05), transparent 48%),
+    var(--bg);
+  --play-overlay-bg: rgba(4, 6, 14, 0.82);
+  --play-panel: linear-gradient(
+    165deg,
+    rgba(18, 24, 44, 0.97) 0%,
+    rgba(8, 10, 22, 0.96) 55%,
+    rgba(4, 6, 14, 0.98) 100%
+  );
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px rgba(47, 230, 199, 0.45);
+}

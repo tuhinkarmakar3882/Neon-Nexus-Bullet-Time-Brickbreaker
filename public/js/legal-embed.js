@@ -1,7 +1,17 @@
-/** Shared back control for terms/privacy when shown in the game HTML shell (?embed=1). */
+/** Back control for terms/privacy when embedded in the Next route (?embed=1), not in #html-shell. */
 (function () {
   const params = new URLSearchParams(window.location.search);
   const embedded = params.get('embed') === '1';
+
+  function inGameLegalShell() {
+    try {
+      if (window.parent === window) return false;
+      const frame = window.frameElement;
+      return frame && frame.id === 'html-shell-frame';
+    } catch {
+      return false;
+    }
+  }
 
   function goBack() {
     if (window.parent !== window) {
@@ -15,7 +25,7 @@
     window.location.href = new URL('./', window.location.href).href;
   }
 
-  if (embedded) {
+  if (embedded && !inGameLegalShell()) {
     document.body.classList.add('embed');
     const bar = document.createElement('header');
     bar.className = 'embed-bar';

@@ -31,7 +31,8 @@ Art and audio are **generated at runtime** (procedural textures + Web Audio synt
 - **Jardinains** — creatures that lob pots at your paddle
 - **Hybrid level layouts** — stacked pattern zones (wave, emoji, spiral, lattice, …), wall height **65–85%** of arena per level
 - **Save / resume** — mid-run snapshot in `localStorage` (7-day TTL); auto-resume on `/play/` unless you start **New Garden**
-- **Game over** — **Watch video & continue** keeps level, score, and brick layout; Restart / Main menu clears the run
+- **Game over** — **Watch video & continue** or **siege continues** (inventory) keep level, score, and brick layout; Restart / Main menu clears the run
+- **UX shell (v3.1)** — Home FTUE, pause Garden (settings/codex/shop mid-run), share preview, analytics hooks
 - **Share cards** — canvas game-over cards with score-first layout (`ShareProgress.js`)
 - **Mobile-ready** — touch input, safe-area insets, rotation relayout, PWA installable
 - **Monetization hooks** — rewarded continue, interstitials, IAP adapter (`Monetization.js`)

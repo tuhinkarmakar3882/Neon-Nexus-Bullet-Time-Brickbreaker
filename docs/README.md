@@ -8,6 +8,8 @@ Canonical docs for the **Twilight Garden** build. When docs disagree with code, 
 | [**SHELL.md**](./SHELL.md) | Engineers | Next.js shell vs Phaser play loop, routes, play intent, DOM overlays |
 | [**GAME_MECHANICS.md**](./GAME_MECHANICS.md) | Designers & players | Loop, controls, gnomes, powers, goals, save/resume, monetization |
 | [**REDESIGN.md**](./REDESIGN.md) | Product | Implemented roadmap, viewport/HUD notes, monetization map |
+| [**DESIGN_SYSTEM.md**](./DESIGN_SYSTEM.md) | Design / eng | Shell tokens, buttons, new-page checklist |
+| [**UX_IMPLEMENTATION_STATUS.md**](./UX_IMPLEMENTATION_STATUS.md) | Product | UX audit roadmap phases (quick / mid / strategic) |
 | [**ADS.md**](./ADS.md) | Release | Google AdMob / AdSense — config-only provider swap |
 | [**PRODUCTION_PLAN.md**](./PRODUCTION_PLAN.md) | Release | Master checklist — Phases 0–6, status, execution order |
 | [**RELEASE.md**](./RELEASE.md) | Release | Capacitor Android, signing, Play Store listing |
@@ -16,7 +18,7 @@ Canonical docs for the **Twilight Garden** build. When docs disagree with code, 
 | [**NATIVE.md**](./NATIVE.md) | Release | Capacitor workflow, save migrations across app updates |
 | [**MUSIC.md**](./MUSIC.md) | Audio | Pixabay ambient loops per level |
 
-## Quick facts (v3.0.x)
+## Quick facts (v3.1.0)
 
 - **Shell:** Next.js 15 (`app/`, `components/`) + Phaser 4.1 on `/play/` only
 - **Engine:** [Phaser 4.1.0](https://phaser.io/v401) · **Bundler:** Next + Vite (game chunks)

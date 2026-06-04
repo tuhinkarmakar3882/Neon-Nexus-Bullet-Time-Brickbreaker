@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { TitleMenu } from '@/components/shell/TitleMenu';
+import { TutorialOverlay } from '@/components/shell/TutorialOverlay';
+import { SharePreviewModal } from '@/components/shell/SharePreviewModal';
+import { FTUE_HOME_STEPS, hasSeenHomeFtue, markHomeFtueSeen } from '@/lib/shell/ftue';
 import { useGameMeta } from '@/components/shell/useGameMeta';
 import { navigateToPlay } from '@/lib/shell/routes';
-import { triggerProgressShare, shareOutcomeHint } from '@/lib/shell/triggerShare';
 import { SHELL_COPY } from '@/lib/copy/shell';
 import { RunPersistence } from '@/src/systems/RunPersistence.js';
 import {
@@ -20,7 +22,13 @@ export default function HomePage() {
   const { gems, highScore, run } = useGameMeta();
   const [hint, setHint] = useState('');
   const [installReady, setInstallReady] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [showSharePreview, setShowSharePreview] = useState(false);
   const c = SHELL_COPY.home;
+
+  useEffect(() => {
+    if (!hasSeenHomeFtue()) setShowTutorial(true);
+  }, []);
 
   useEffect(() => {
     setInstallReady(canOfferInstall());
@@ -61,21 +69,42 @@ export default function HomePage() {
     else if (outcome === 'unavailable') setHint(c.installManual);
   };
 
-  const onShare = async () => {
-    setHint(SHELL_COPY.share.preparing);
-    const res = await triggerProgressShare({ gems, highScore });
-    setHint(shareOutcomeHint(res));
+  const onShare = () => {
+    setShowSharePreview(true);
+  };
+
+  const closeTutorial = () => {
+    markHomeFtueSeen();
+    setShowTutorial(false);
   };
 
   return (
-    <TitleMenu
-      run={run}
-      hint={hint}
-      installReady={installReady}
-      onPlay={onPlay}
-      onNewGame={onNewGame}
-      onShare={onShare}
-      onInstall={onInstall}
-    />
+    <>
+      {showTutorial ? (
+        <TutorialOverlay
+          steps={FTUE_HOME_STEPS}
+          onComplete={closeTutorial}
+          ariaLabel="How to play"
+          completeLabel="Enter the garden"
+        />
+      ) : null}
+      {showSharePreview ? (
+        <SharePreviewModal
+          gems={gems}
+          highScore={highScore}
+          onClose={() => setShowSharePreview(false)}
+        />
+      ) : null}
+      <TitleMenu
+        run={run}
+        hint={hint}
+        installReady={installReady}
+        onPlay={onPlay}
+        onNewGame={onNewGame}
+        onShare={onShare}
+        onInstall={onInstall}
+        onTutorial={() => setShowTutorial(true)}
+      />
+    </>
   );
 }

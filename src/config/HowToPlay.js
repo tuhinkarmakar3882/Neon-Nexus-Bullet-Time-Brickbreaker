@@ -1,8 +1,8 @@
 // In-game guide copy (Codex) — keep in sync with garden mechanics.
 
 export const HOW_TO_PLAY = {
-  title: 'FIELD MANUAL',
-  subtitle: 'Twilight Garden · Jardinain Siege',
+  title: 'Codex',
+  subtitle: 'Field manual · Twilight Garden siege',
   basics: [
     'Tap, click, or press Space / Enter to launch the ball. Move your pointer, finger, or ← / → keys to slide the paddle.',
     'P or Esc opens pause; press again to resume. Double-tap or double-tap Space to spend Nexus slow-mo when the meter is full.',
@@ -46,9 +46,11 @@ export const HOW_TO_PLAY = {
     },
   ],
   gnomeTiers: [
-    'Standard — Regular flowerpot drops and climb-back timing.',
-    'Heavy — Shrinks paddle width by 15% per stack when anchored.',
-    'Swift — Faster throws and quicker returns to bricks.',
-    'Elite — Tracking shots; may scramble controls or HUD briefly.',
+    'Nain — Standard flowerpot drops and climb-back timing.',
+    'Heavy — Anchor pots; slower, heavier shots.',
+    'Speed — Rapid throws; quick returns to bricks.',
+    'Elite — Tracking phone shots; may scramble HUD briefly.',
+    'Sniper — Slow, precise tracking pots from long range.',
+    'Volley — Rapid weak pots in wide spreads.',
   ],
 };

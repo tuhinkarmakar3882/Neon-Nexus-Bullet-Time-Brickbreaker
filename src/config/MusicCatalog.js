@@ -12,7 +12,6 @@ export const PIXABAY_URLS = [
   'https://cdn.pixabay.com/audio/2024/07/24/audio_5ec636ca14.mp3',
   'https://cdn.pixabay.com/audio/2025/03/18/audio_7d5c12b31a.mp3',
   'https://cdn.pixabay.com/audio/2024/09/16/audio_a10608d6cd.mp3',
-  'https://cdn.pixabay.com/audio/2024/10/17/audio_5c559ab55e.mp3',
   'https://cdn.pixabay.com/audio/2022/03/23/audio_07b2a04be3.mp3',
 ];
 

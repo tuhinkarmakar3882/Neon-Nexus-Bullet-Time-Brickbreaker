@@ -8,9 +8,8 @@ const LINKEDIN = 'https://www.linkedin.com/in/tuhinkarmakar3882/';
 export default function ConnectPage() {
   const c = SHELL_COPY.connect;
   return (
-    <AppShell title={c.title} tone="utility">
-      <h1 className="shell-title shell-title--compact">{c.title}</h1>
-      <p className="shell-subtitle">{c.subtitle}</p>
+    <AppShell title={c.title} subtitle={c.subtitle} tone="utility" badge="">
+      <p className="shell-hint shell-hint--left">{c.externalHint}</p>
       <p className="shell-prose">{c.body}</p>
       <div className="shell-actions shell-actions--centered">
         <NeonButton

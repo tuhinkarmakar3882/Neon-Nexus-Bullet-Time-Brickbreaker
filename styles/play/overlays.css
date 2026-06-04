@@ -1,0 +1,78 @@
+/* Play-route overlays — pause & game over (Neon Command play tone) */
+
+.pause-overlay,
+.game-over-overlay {
+  background: var(--play-overlay-bg);
+  backdrop-filter: blur(8px);
+}
+
+.pause-overlay__card,
+.game-over-overlay__card {
+  background: var(--play-panel);
+  border: 1px solid var(--chrome-edge);
+  box-shadow: var(--chrome-glow);
+}
+
+.pause-overlay__title,
+.game-over-overlay__title {
+  font-family: var(--type-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.game-over-overlay__continue {
+  order: 1;
+}
+
+.game-over-overlay__share {
+  order: 2;
+}
+
+.game-over-overlay__restart {
+  order: 3;
+}
+
+.game-over-overlay__menu {
+  order: 4;
+}
+
+.game-over-overlay__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-over-overlay__confirm {
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.game-over-overlay__confirm-text {
+  font-family: var(--type-body);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.game-over-overlay__confirm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pause-overlay__resume:focus-visible,
+.game-over-overlay__continue:focus-visible,
+.shell-back:focus-visible,
+.neon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-screen__share-cta,
+  .title-screen__share-cta-glow {
+    animation: none;
+  }
+}

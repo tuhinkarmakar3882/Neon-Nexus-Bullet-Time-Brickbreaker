@@ -8,10 +8,13 @@ import { mountPauseAdInContainer, hidePauseAdSlot } from '@/lib/ads/pauseAdSlot'
 import type { PauseOverlayData } from '@/lib/shell/pauseOverlayTypes';
 import { pauseOverlayQuitToMenu, pauseOverlayResume } from '@/lib/shell/pauseOverlayActions';
 import { Monetization } from '@/src/systems/Monetization.js';
+import { PLAY_COPY } from '@/lib/copy/play';
 
 type Props = {
   data: PauseOverlayData;
 };
+
+const C = PLAY_COPY.pause;
 
 export function PauseOverlay({ data }: Props) {
   const adRef = useRef<HTMLDivElement>(null);
@@ -38,19 +41,19 @@ export function PauseOverlay({ data }: Props) {
     >
       <div className="pause-overlay__card">
         <header className="pause-overlay__head">
-          <p className="pause-overlay__eyebrow">Siege halted</p>
+          <p className="pause-overlay__eyebrow">{C.eyebrow}</p>
           <h2 id="pause-overlay-title" className="pause-overlay__title">
-            Game paused
+            {C.title}
           </h2>
         </header>
 
         <div className="pause-overlay__stats" aria-label="Run stats">
           <span className="pause-overlay__chip">
-            <span className="pause-overlay__chip-label">Level</span>
+            <span className="pause-overlay__chip-label">{C.stats.level}</span>
             <span className="pause-overlay__chip-val">{data.level}</span>
           </span>
           <span className="pause-overlay__chip pause-overlay__chip--score">
-            <span className="pause-overlay__chip-label">Score</span>
+            <span className="pause-overlay__chip-label">{C.stats.score}</span>
             <span className="pause-overlay__chip-val">{data.score.toLocaleString()}</span>
           </span>
           <span className="pause-overlay__chip pause-overlay__chip--lives">
@@ -59,7 +62,7 @@ export function PauseOverlay({ data }: Props) {
           </span>
           {(data.combo ?? 0) > 1 ? (
             <span className="pause-overlay__chip pause-overlay__chip--combo">
-              <span className="pause-overlay__chip-label">Combo</span>
+              <span className="pause-overlay__chip-label">{C.stats.combo}</span>
               <span className="pause-overlay__chip-val">×{data.combo}</span>
             </span>
           ) : null}
@@ -73,7 +76,7 @@ export function PauseOverlay({ data }: Props) {
               className="pause-overlay__resume"
               onClick={() => pauseOverlayResume()}
             >
-              Resume
+              {C.resume}
             </NeonButton>
             <NeonButton
               variant="danger"
@@ -81,13 +84,13 @@ export function PauseOverlay({ data }: Props) {
               className="pause-overlay__quit"
               onClick={() => pauseOverlayQuitToMenu()}
             >
-              Quit to menu
+              {C.quit}
             </NeonButton>
           </div>
 
           {showAd ? (
             <div className="pause-overlay__ad-wrap">
-              <span className="pause-overlay__ad-label">Advertisement</span>
+              <span className="pause-overlay__ad-label">{C.adLabel}</span>
               <div
                 ref={adRef}
                 id="pause-ad-slot"
@@ -98,7 +101,7 @@ export function PauseOverlay({ data }: Props) {
           ) : null}
         </div>
 
-        <p className="pause-overlay__hint">Press P or Esc to resume</p>
+        <p className="pause-overlay__hint">{C.hint}</p>
       </div>
     </div>
   );

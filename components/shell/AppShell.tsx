@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import type { IconNode } from 'lucide';
 import { shellBackHref, navigateToPlay } from '@/lib/shell/routes';
 import { WorldBackdrop } from '@/components/shell/WorldBackdrop';
+import { ShellBack } from '@/components/shell/ShellBack';
 import { LucideIcon } from '@/components/shell/LucideIcon';
 
 export type ShellTone = 'hub' | 'codex' | 'forge' | 'utility' | 'plain';
@@ -17,15 +17,17 @@ type AppShellProps = {
   backHref?: string;
   from?: string | null;
   tone?: ShellTone;
-  /** Page identity chip beside back control */
+  /** Page identity chip beside back control; pass "" to hide */
   badge?: string;
+  /** legal = full-height scrollable document area */
+  layout?: 'default' | 'legal';
 };
 
 const TONE_BADGE: Record<ShellTone, string> = {
   hub: 'NEXUS GATE',
-  codex: 'ARCHIVE // TERMINAL',
-  forge: 'MERCHANT FORGE',
-  utility: 'SYSTEM',
+  codex: 'CODEX',
+  forge: 'GARDEN SHOP',
+  utility: 'PREFERENCES',
   plain: '',
 };
 
@@ -37,37 +39,47 @@ export function AppShell({
   from,
   tone = 'plain',
   badge,
+  layout = 'default',
 }: AppShellProps) {
-  const router = useRouter();
   const href = backHref ?? shellBackHref(from);
-  const chip = badge ?? TONE_BADGE[tone];
-
-  const onBack = () => {
-    if (from === 'play') {
-      navigateToPlay({ resume: true });
-      return;
-    }
-    if (href.startsWith('http')) {
-      window.location.href = href;
-      return;
-    }
-    router.push(href);
-  };
+  const chip = badge !== undefined ? badge : TONE_BADGE[tone];
+  const legalLayout = layout === 'legal';
 
   return (
-    <div className={`shell-page shell-page--${tone}`}>
-      <WorldBackdrop variant={tone} />
-      <header className="shell-header">
-        <button type="button" className="shell-back" onClick={onBack} aria-label="Go back">
-          ← BACK
-        </button>
+    <div
+      className={[
+        'shell-page',
+        `shell-page--${tone}`,
+        legalLayout ? 'shell-page--legal-layout' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <WorldBackdrop variant={tone === 'plain' ? 'utility' : tone} />
+      <header className="shell-header shell-header--premium">
+        {from === 'play' ? (
+          <ShellBack onClick={() => navigateToPlay({ resume: true })} />
+        ) : (
+          <ShellBack href={href} />
+        )}
         <div className="shell-header-meta">
           {chip ? <span className="shell-header-badge">{chip}</span> : null}
-          <span className="shell-header-title">{title}</span>
+          <h1 className="shell-header-title shell-header-title--prominent">{title}</h1>
+          {subtitle && subtitle.trim() ? (
+            <p className="shell-header-subtitle">{subtitle}</p>
+          ) : null}
         </div>
       </header>
-      <div className={`shell-card shell-card--${tone}`}>
-        {subtitle ? <p className="shell-subtitle shell-subtitle--left">{subtitle}</p> : null}
+      <div
+        className={[
+          'shell-card',
+          'shell-card--premium',
+          `shell-card--${tone}`,
+          legalLayout ? 'shell-card--legal' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
         {children}
       </div>
     </div>

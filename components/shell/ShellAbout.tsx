@@ -1,25 +1,26 @@
 'use client';
 
+import Link from 'next/link';
 import { APP_VERSION, BUILD_STAMP } from '@/src/config/Version.js';
-import { openLegalPage } from '@/src/utils/LegalLinks.js';
+import { ROUTES } from '@/lib/shell/routes';
 import { SHELL_COPY } from '@/lib/copy/shell';
 
 export function ShellAbout() {
   return (
     <section className="shell-about" aria-labelledby="shell-about-title">
       <h2 id="shell-about-title" className="shell-about__title">
-        ABOUT
+        About
       </h2>
       <p className="shell-about__meta">
         v{APP_VERSION} · build {BUILD_STAMP}
       </p>
       <div className="shell-about__links">
-        <button type="button" className="neon-text-link" onClick={() => openLegalPage('terms.html')}>
+        <Link href={ROUTES.terms} className="neon-text-link" prefetch>
           Terms of Service
-        </button>
-        <button type="button" className="neon-text-link" onClick={() => openLegalPage('privacy.html')}>
+        </Link>
+        <Link href={ROUTES.privacy} className="neon-text-link" prefetch>
           Privacy Policy
-        </button>
+        </Link>
       </div>
       <p className="shell-about__credit">{SHELL_COPY.legal.footerCredit}</p>
     </section>

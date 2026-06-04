@@ -30,15 +30,23 @@ export const SHELL_COPY = {
       installShort: 'INSTALL',
       connect: 'CONNECT',
       connectShort: 'CONNECT',
+      tutorial: 'HOW TO PLAY',
     },
   },
   settings: {
-    title: 'SETTINGS',
-    vfxLabel: 'GRAPHICS',
-    soundFx: 'SOUND EFFECTS',
-    music: 'MUSIC',
-    sfxVolume: 'SFX VOLUME',
-    musicVolume: 'MUSIC VOLUME',
+    title: 'Settings',
+    subtitle: '',
+    sections: {
+      graphics: 'Graphics',
+      audio: 'Audio',
+      purchases: 'Purchases',
+      links: 'More',
+    },
+    vfxLabel: 'Graphics quality',
+    soundFx: 'Sound effects',
+    music: 'Music',
+    sfxVolume: 'SFX volume',
+    musicVolume: 'Music volume',
     adsRemoved: 'Ad-free experience active. Thank you for your support.',
     removeAds: (price: string) => `REMOVE ADS — ${price}`,
     restore: 'RESTORE PURCHASES',
@@ -55,7 +63,7 @@ export const SHELL_COPY = {
     },
   },
   shop: {
-    title: 'GARDEN SHOP',
+    title: 'Garden Shop',
     subtitle: 'Unlock cosmetics with gems earned in battle. Equip to see changes in your next run.',
     balance: (gems: number) => `${gems.toLocaleString()} gems available`,
     equipped: (hull: string, trail: string, theme: string) =>
@@ -77,17 +85,26 @@ export const SHELL_COPY = {
     actions: {
       equip: 'EQUIP',
       active: 'ACTIVE',
+      equipped: 'Equipped',
       premium: 'PREMIUM',
       free: 'FREE',
       gems: (n: number) => `${n} 💎`,
     },
+    confirm: {
+      title: 'Spend gems?',
+      body: (label: string, cost: number) => `Unlock ${label} for ${cost.toLocaleString()} gems?`,
+      balance: (before: number, after: number) =>
+        `${before.toLocaleString()} gems → ${after.toLocaleString()} after purchase`,
+      confirm: 'Confirm purchase',
+      cancel: 'Cancel',
+    },
   },
   codex: {
     tabs: {
-      guide: 'GUIDE',
-      powers: 'POWERS',
-      bestiary: 'BESTIARY',
-      journal: 'JOURNAL',
+      guide: 'Guide',
+      powers: 'Powers',
+      bestiary: 'Bestiary',
+      journal: 'Journal',
     },
     journalEmpty: 'Keep playing to unlock journal milestones.',
     stats: {
@@ -98,8 +115,11 @@ export const SHELL_COPY = {
     },
   },
   share: {
-    title: 'SHARE',
+    title: 'Share progress',
+    subtitle: 'Preview your siege card, then share',
     preparing: 'Forging your siege card…',
+    previewHint: 'Your share card — tap Share when ready',
+    shareCta: 'SHARE',
     retry: 'SHARE AGAIN',
     status: {
       preparing: 'Opening share sheet…',
@@ -111,7 +131,7 @@ export const SHELL_COPY = {
     },
   },
   install: {
-    title: 'INSTALL APP',
+    title: 'Install app',
     subtitle: 'Add Neon Nexus to your home screen for quick access.',
     installed: 'You are running the installed app. Thanks for playing.',
     body: 'Install for a home-screen shortcut, faster launch, and the same progress when you return online.',
@@ -130,14 +150,15 @@ export const SHELL_COPY = {
       'If you installed from a test APK or Play Store build, upload a new release built with target API 35 (pnpm run ship:android after cap:add:android).',
   },
   connect: {
-    title: 'CONNECT',
+    title: 'Connect',
     subtitle: 'Creator · Game developer',
     body: 'Neon Nexus is designed and built by Tuhin Karmakar. Reach out on LinkedIn for feedback, collaboration, or to share how far your siege has gone.',
-    cta: 'MESSAGE ON LINKEDIN',
+    externalHint: 'Opens LinkedIn in a new tab — you can return here with your browser back button.',
+    cta: 'Message on LinkedIn',
   },
   notFound: {
-    title: 'PAGE NOT FOUND',
-    subtitle: 'This path is not part of the garden. Head back to the hub to continue.',
+    title: 'Page not found',
+    subtitle: 'This path is not part of the garden. Return to the hub to continue.',
     cta: 'RETURN HOME',
   },
   loading: {
@@ -157,6 +178,12 @@ export const SHELL_COPY = {
       siege: 'Arming your siege…',
       ready: 'Garden ready — launch when you are',
       stuck: 'Still loading — almost there…',
+    },
+    bootError: {
+      title: 'Could not start the garden',
+      hint: 'Check your connection, then try again. If this keeps happening, return to the hub and start a new run.',
+      retry: 'Try again',
+      home: 'Back to hub',
     },
   },
   legal: {

@@ -49,9 +49,14 @@ export class GameOverScene extends Phaser.Scene {
         adsReady: this.adsReady,
         level: this.gameScene?.level ?? 1,
         lives: this.gameScene?.lives ?? 0,
+        continues: Number(d.continues ?? this.gameScene?.continues ?? 0) || 0,
       });
       this.events.once('shutdown', () => dispatchGameOverOverlayClose());
-      this.input.keyboard.on('keydown-ESC', () => this.handleBack());
+      this.input.keyboard.on('keydown-ESC', () => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('neon:gameover-esc', { cancelable: true }));
+        }
+      });
       return;
     }
 
@@ -84,6 +89,12 @@ export class GameOverScene extends Phaser.Scene {
     }
     audio.blip(220);
     return 'Could not continue — tap again or restart';
+  }
+
+  inventoryContinue() {
+    const gs = this.gameScene;
+    if (!gs || (gs.continues ?? 0) <= 0) return;
+    this.closeOverlay(() => gs.doContinue?.());
   }
 
   restart() {

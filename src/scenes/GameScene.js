@@ -2816,11 +2816,11 @@ export class GameScene extends Phaser.Scene {
     this.playBallLossBeat(() => this.finishBallLossRespawn());
   }
 
-  /** Brief beat: freeze play, stop music, gnomes taunt, then respawn or game over. */
+  /** Brief beat: freeze play, duck music (same level track), gnomes taunt, then respawn or game over. */
   playBallLossBeat(onDone) {
     const ms = JARDINAIN.BALL_LOSS_BEAT_MS ?? JARDINAIN.TAUNT_MS;
     this._ballLossBeat = true;
-    audio.stopMusic();
+    audio.duckMusic(0.38, ms);
     audio.gnomeLaugh?.();
 
     const alive = this.jardinains.filter((j) => !j._destroyed);
@@ -2845,10 +2845,7 @@ export class GameScene extends Phaser.Scene {
       this.gameOver();
       return;
     }
-    audio.setLevelMusic(this.level, this.levelSeed, {
-      biome: this.theme?.biome ?? 'garden',
-      isBoss: !!this.isBoss,
-    });
+    audio.restoreMusic();
     this.flash(pick(GAME_OVER_MESSAGES), '#ff5a6e', 1000, 'high');
     this.balls.push(new Ball(this, this.paddle, 0));
     this.balls.forEach((b) => { this.syncBallSpeed(b, { reset: true }); });
@@ -3939,7 +3936,7 @@ export class GameScene extends Phaser.Scene {
       gm.update(dtSec, ts, this.paddle);
       if (gm.overlapsPaddle(this.paddle)) {
         this.score += gm.value;
-        const walletGain = Math.max(1, Math.round(gm.value / 80));
+        const walletGain = Math.max(1, Math.round(gm.value / 120));
         MetaProgress.addGems(walletGain);
         this.floatText(gm.x, this.paddle.top, `+${gm.value}  +${walletGain}💎`, '#9ff0ff', 26);
         this.burst(gm.x, gm.y, 0x9ff0ff, 8);

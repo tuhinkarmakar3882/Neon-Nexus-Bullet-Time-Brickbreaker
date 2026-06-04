@@ -3,6 +3,7 @@ import type { GameOverShareStats } from '@/lib/shell/gameOverOverlayTypes';
 
 type GameOverSceneLike = {
   videoContinue?: () => Promise<string>;
+  inventoryContinue?: () => void;
   restart?: () => void;
   mainMenu?: () => void;
   shareProgress?: (stats?: GameOverShareStats) => Promise<string>;
@@ -14,6 +15,10 @@ function getGameOverScene(): GameOverSceneLike | undefined {
 
 export function gameOverOverlayWatchContinue(): Promise<string> {
   return getGameOverScene()?.videoContinue?.() ?? Promise.resolve('Unavailable');
+}
+
+export function gameOverOverlayInventoryContinue(): void {
+  getGameOverScene()?.inventoryContinue?.();
 }
 
 export function gameOverOverlayRestart() {

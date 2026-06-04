@@ -1,4 +1,8 @@
-import { shareProgressScreenshot, buildProgressSharePayload } from '@/src/systems/ShareProgress.js';
+import {
+  shareProgressScreenshot,
+  buildProgressSharePayload,
+  renderShareCardDataUrl,
+} from '@/src/systems/ShareProgress.js';
 import { RunPersistence } from '@/src/systems/RunPersistence.js';
 import { SHELL_COPY } from '@/lib/copy/shell';
 
@@ -9,16 +13,23 @@ export type ProgressShareMeta = {
 
 export type ShareOutcome = Awaited<ReturnType<typeof shareProgressScreenshot>>;
 
-/** Open native share / download for the progress card — no intermediate UI. */
-export async function triggerProgressShare(meta: ProgressShareMeta): Promise<ShareOutcome> {
+function progressPayload(meta: ProgressShareMeta) {
   const run = RunPersistence.loadRun();
-  return shareProgressScreenshot(null, buildProgressSharePayload({
+  return buildProgressSharePayload({
     gems: meta.gems,
     highScore: meta.highScore,
-    run: run
-      ? { level: run.level, score: run.score, lives: run.lives }
-      : null,
-  }));
+    run: run ? { level: run.level, score: run.score, lives: run.lives } : null,
+  });
+}
+
+/** PNG data URL for share preview UI. */
+export async function renderProgressSharePreview(meta: ProgressShareMeta): Promise<string | null> {
+  return renderShareCardDataUrl(progressPayload(meta));
+}
+
+/** Open native share / download for the progress card. */
+export async function triggerProgressShare(meta: ProgressShareMeta): Promise<ShareOutcome> {
+  return shareProgressScreenshot(null, progressPayload(meta));
 }
 
 export function shareOutcomeHint(res: ShareOutcome): string {

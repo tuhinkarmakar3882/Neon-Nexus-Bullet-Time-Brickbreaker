@@ -1,0 +1,23 @@
+import type { ReactNode } from 'react';
+import Link from 'next/link';
+import { ROUTES } from '@/lib/shell/routes';
+
+type LegalProseProps = {
+  children: ReactNode;
+  showFooter?: boolean;
+  siblingHref?: string;
+  siblingLabel?: string;
+};
+
+export function LegalProse({ children, showFooter = true, siblingHref, siblingLabel }: LegalProseProps) {
+  return (
+    <article className="legal-prose">
+      {children}
+      {showFooter && siblingHref && siblingLabel ? (
+        <p className="legal-prose__footer">
+          <Link href={siblingHref}>{siblingLabel}</Link>
+        </p>
+      ) : null}
+    </article>
+  );
+}

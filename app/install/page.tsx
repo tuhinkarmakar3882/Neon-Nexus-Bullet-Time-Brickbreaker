@@ -35,14 +35,9 @@ export default function InstallPage() {
   };
 
   return (
-    <AppShell title={c.title} tone="utility">
-      <h1 className="shell-title shell-title--compact">{c.title}</h1>
-      <p className="shell-subtitle">{c.subtitle}</p>
-
+    <AppShell title={c.title} subtitle={c.subtitle} tone="utility">
       {standalone ? (
-        <p className="shell-hint" style={{ marginTop: 20 }}>
-          {c.installed}
-        </p>
+        <p className="shell-hint shell-hint--left">{c.installed}</p>
       ) : (
         <>
           <p className="shell-prose">{c.body}</p>
@@ -52,7 +47,7 @@ export default function InstallPage() {
                 {c.cta}
               </NeonButton>
             ) : (
-              <p className="shell-hint">
+              <p className="shell-hint shell-hint--left">
                 {c.manualIos}
                 <br />
                 {c.manualAndroid}
@@ -61,12 +56,12 @@ export default function InstallPage() {
           </div>
         </>
       )}
-      {hint && <p className="shell-hint" style={{ marginTop: 16 }}>{hint}</p>}
+      {hint ? <p className="shell-hint shell-hint--status">{hint}</p> : null}
 
       {isAndroid && !standalone && (
-        <aside className="shell-hint" style={{ marginTop: 24, textAlign: 'left' }} role="note">
+        <aside className="install-play-protect" role="note">
           <strong>{c.playProtectTitle}</strong>
-          <p style={{ marginTop: 8, marginBottom: 0 }}>{c.playProtectBody}</p>
+          <p>{c.playProtectBody}</p>
         </aside>
       )}
     </AppShell>

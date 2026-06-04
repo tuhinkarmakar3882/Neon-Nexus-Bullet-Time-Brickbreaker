@@ -17,6 +17,7 @@ import { MetaProgress } from '@/src/systems/MetaProgress.js';
 import { cssHex } from '@/src/config/Palette.js';
 import { SHELL_COPY } from '@/lib/copy/shell';
 import { PremiumLoader } from '@/components/shell/PremiumLoader';
+import { SegmentedControl } from '@/components/shell/SegmentedControl';
 import { codexDiscovery } from '@/lib/shell/progression';
 
 const TABS = [
@@ -33,13 +34,10 @@ function CodexContent() {
   const archive = codexDiscovery();
 
   return (
-    <AppShell title="CODEX" from={from} tone="codex">
-      <h1 className="shell-title">{HOW_TO_PLAY.title}</h1>
-      <p className="shell-subtitle shell-subtitle--left">{HOW_TO_PLAY.subtitle}</p>
-
+    <AppShell title={HOW_TO_PLAY.title} subtitle={HOW_TO_PLAY.subtitle} from={from} tone="codex">
       <div className="codex-terminal-bar">
         <span>
-          ARCHIVE SYNC · <strong>{archive.pct}%</strong> DISCOVERED
+          DISCOVERY · <strong>{archive.pct}%</strong> UNLOCKED
         </span>
         <span>
           POWERS {archive.powersFound}/{archive.powerTotal} · GNOMES {archive.gnomesFound}/
@@ -47,20 +45,22 @@ function CodexContent() {
         </span>
       </div>
 
-      <div className="codex-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`codex-tab ${tab === t.id ? 'active' : ''}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        idPrefix="codex"
+        options={TABS.map((t) => t.id)}
+        value={tab}
+        onChange={setTab}
+        formatLabel={(id) => TABS.find((t) => t.id === id)?.label ?? id}
+        ariaLabel="Codex sections"
+      />
 
       <div className="shell-scroll-panel codex-section">
+        <div
+          id="codex-panel-guide"
+          role="tabpanel"
+          aria-labelledby="codex-tab-guide"
+          hidden={tab !== 'guide'}
+        >
         {tab === 'guide' && (
           <>
             <h3>BASICS</h3>
@@ -87,7 +87,14 @@ function CodexContent() {
             </ul>
           </>
         )}
+        </div>
 
+        <div
+          id="codex-panel-powers"
+          role="tabpanel"
+          aria-labelledby="codex-tab-powers"
+          hidden={tab !== 'powers'}
+        >
         {tab === 'powers' && CATEGORY_ORDER.map((catId: string) => {
           const keys = POWER_KEYS.filter((k) => POWERS[k as keyof typeof POWERS].category === catId);
           if (!keys.length) return null;
@@ -109,19 +116,32 @@ function CodexContent() {
             </div>
           );
         })}
+        </div>
 
+        <div
+          id="codex-panel-bestiary"
+          role="tabpanel"
+          aria-labelledby="codex-tab-bestiary"
+          hidden={tab !== 'bestiary'}
+        >
         {tab === 'bestiary' && (
           <>
             {Object.entries(GNOME_TIERS).map(([id, info]) => {
               const unlocked = MetaProgress.getCodex().gnomes?.includes(id);
               return (
-                <div key={id} className="shop-row" style={{ opacity: unlocked ? 1 : 0.55 }}>
+                <div
+                  key={id}
+                  className="shop-row"
+                  style={{ opacity: unlocked ? 1 : 0.55 }}
+                  aria-disabled={!unlocked}
+                  aria-label={unlocked ? undefined : `${info.label ?? id} — locked`}
+                >
                   <div className="shop-row-main">
                     <div className="shop-row-title">{info.label ?? id}</div>
                     <p className="shop-row-desc">
                       {unlocked
                         ? `Projectiles: ${(info.projectiles ?? ['pot']).join(', ')}${info.tracking ? ' · tracking shots' : ''}`
-                        : 'Knock out this tier to unlock the bestiary entry.'}
+                        : 'Locked — defeat this tier to unlock.'}
                     </p>
                   </div>
                 </div>
@@ -129,7 +149,14 @@ function CodexContent() {
             })}
           </>
         )}
+        </div>
 
+        <div
+          id="codex-panel-journal"
+          role="tabpanel"
+          aria-labelledby="codex-tab-journal"
+          hidden={tab !== 'journal'}
+        >
         {tab === 'journal' && (() => {
           const stats = MetaProgress.getStats();
           const achievements = MetaProgress.getJournalAchievements();
@@ -158,6 +185,7 @@ function CodexContent() {
             </>
           );
         })()}
+        </div>
       </div>
     </AppShell>
   );

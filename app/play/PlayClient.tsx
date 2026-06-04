@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import Link from 'next/link';
+import { ROUTES } from '@/lib/shell/routes';
 import { PlayBootSplash } from '@/components/shell/PlayBootSplash';
 import { GameplayHudBridge } from '@/components/play/GameplayHudBridge';
 import { PauseOverlayBridge } from '@/components/play/PauseOverlayBridge';
@@ -18,13 +20,19 @@ import {
 import { syncPlayFrameLayout, syncViewportLayout } from '@/src/systems/LayoutManager.js';
 
 const PHASES = SHELL_COPY.play.phases;
+const BOOT_ERR = SHELL_COPY.play.bootError;
 
 /** Survives React Strict Mode remount — only the latest mount generation may destroy Phaser. */
 let playMountGeneration = 0;
 
 export default function PlayClient() {
   const [bootError, setBootError] = useState<string | null>(null);
+  const [bootAttempt, setBootAttempt] = useState(0);
   const generationRef = useRef(0);
+
+  const retryBoot = useCallback(() => {
+    setBootAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     const generation = ++playMountGeneration;
@@ -82,7 +90,7 @@ export default function PlayClient() {
       if (generationRef.current !== playMountGeneration) return;
       void import('@/src/game/bootstrap.js').then((m) => m.destroyGame());
     };
-  }, []);
+  }, [bootAttempt]);
 
   return (
     <div className="play-stage play-stage--hud">
@@ -93,9 +101,21 @@ export default function PlayClient() {
       <PauseOverlayBridge />
       <GameOverOverlayBridge />
       {bootError ? (
-        <p className="play-boot-error" role="alert">
-          {bootError}
-        </p>
+        <div className="play-boot-error" role="alertdialog" aria-labelledby="play-boot-error-title">
+          <h2 id="play-boot-error-title" className="play-boot-error__title">
+            {BOOT_ERR.title}
+          </h2>
+          <p className="play-boot-error__detail">{bootError}</p>
+          <p className="play-boot-error__hint">{BOOT_ERR.hint}</p>
+          <div className="play-boot-error__actions">
+            <button type="button" className="play-boot-error__btn play-boot-error__btn--primary" onClick={retryBoot}>
+              {BOOT_ERR.retry}
+            </button>
+            <Link href={ROUTES.home} className="play-boot-error__btn play-boot-error__btn--secondary">
+              {BOOT_ERR.home}
+            </Link>
+          </div>
+        </div>
       ) : null}
     </div>
   );

@@ -88,9 +88,29 @@ export function clearGameplayHistory() {
 export function popOverlayHistory() {
   if (skipNextHistorySync) {
     skipNextHistorySync = false;
+    if (historyDepth > 0) historyDepth -= 1;
     return;
   }
   syncHistoryPop();
+}
+
+/** Browser/hardware back closed overlay — depth already adjusted in popstate. */
+export function consumeOverlayHistoryPop() {
+  if (historyDepth > 0) historyDepth -= 1;
+}
+
+/** UI closed an overlay (legal shell back) — sync stack without leaving the app route. */
+export function releaseOverlayHistory() {
+  if (!historyEnabled() || historyDepth <= 0) return;
+  historyDepth -= 1;
+  if (window.history.length > 1) {
+    suppressNextHistoryPop = true;
+    try {
+      window.history.back();
+    } catch {
+      /* private mode */
+    }
+  }
 }
 
 export function markHistorySyncSkipped() {

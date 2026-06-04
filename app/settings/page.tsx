@@ -4,6 +4,11 @@ import { Suspense, useCallback, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AppShell, NeonButton } from '@/components/shell/AppShell';
 import { ShellAbout } from '@/components/shell/ShellAbout';
+import { SettingsSection } from '@/components/shell/SettingsSection';
+import { SettingRow } from '@/components/shell/SettingRow';
+import { SegmentedControl } from '@/components/shell/SegmentedControl';
+import { UiSwitch } from '@/components/shell/UiSwitch';
+import { VolumeControl } from '@/components/shell/VolumeControl';
 import { SaveManager } from '@/src/systems/SaveManager.js';
 import { audio } from '@/src/systems/AudioManager.js';
 import { Monetization } from '@/src/systems/Monetization.js';
@@ -14,9 +19,12 @@ import { isIapEnabled } from '@/src/config/AdsConfig.js';
 import { isWebStripeEnabled, promptUnlockCode } from '@/src/systems/WebUnlock.js';
 import { ROUTES } from '@/lib/shell/routes';
 import Link from 'next/link';
+import { ShoppingBag } from 'lucide';
 import type { GameSettings } from '@/lib/types/settings';
 import { SHELL_COPY } from '@/lib/copy/shell';
+import { SETTINGS_ICONS } from '@/lib/shell/settingsIcons';
 import { PremiumLoader } from '@/components/shell/PremiumLoader';
+import { LucideIcon } from '@/components/shell/LucideIcon';
 
 const COPY = SHELL_COPY.settings;
 
@@ -53,12 +61,12 @@ function SettingsContent() {
   };
 
   const bumpVol = (key: 'sfxVolume' | 'musicVolume', delta: number) => {
+    const step = key === 'musicVolume' ? 5 : 10;
     const base = key === 'musicVolume' ? DEFAULT_MUSIC_VOLUME : DEFAULT_SFX_VOLUME;
-    const next = {
-      ...settings,
-      [key]: Math.max(0, Math.min(100, (settings[key] ?? base) + delta)),
-    };
-    persist(next);
+    const raw = (settings[key] ?? base) + delta;
+    const clamped = Math.max(0, Math.min(100, raw));
+    const nextVal = key === 'musicVolume' ? Math.round(clamped / step) * step : clamped;
+    persist({ ...settings, [key]: nextVal });
     audio.blip(720);
   };
 
@@ -68,6 +76,8 @@ function SettingsContent() {
   };
 
   const adsRemoved = SaveManager.getRemoveAds() || Monetization.removeAds;
+  const showPurchases =
+    adsRemoved || (isIapEnabled() && Monetization.isStoreAvailable());
 
   const buyRemoveAds = async () => {
     setStatus(COPY.status.checkout);
@@ -93,74 +103,61 @@ function SettingsContent() {
     setStatus(res?.success ? COPY.status.unlocked : '');
   };
 
-  const activeTier = settings.vfxQuality ?? 'high';
-  const tierHint = VFX_TIER_COPY[activeTier as keyof typeof VFX_TIER_COPY] ?? VFX_TIER_COPY.high;
+  const activeTier = settings.vfxQuality ?? 'ultra';
+  const tierHint = VFX_TIER_COPY[activeTier as keyof typeof VFX_TIER_COPY] ?? VFX_TIER_COPY.ultra;
+  const sfxVol = settings.sfxVolume ?? DEFAULT_SFX_VOLUME;
+  const musicVol = settings.musicVolume ?? DEFAULT_MUSIC_VOLUME;
 
   return (
-    <AppShell title={COPY.title} from={from} tone="utility">
-      <h1 className="shell-title" style={{ fontSize: '1.25rem' }}>
-        {COPY.title}
-      </h1>
+    <AppShell title={COPY.title} from={from} tone="utility" badge="">
       <div className="shell-scroll-panel settings-panel">
-        <p className="shell-subtitle shell-subtitle--left" style={{ marginBottom: 10, color: 'var(--text-muted)' }}>
-          System preferences
-        </p>
+        <SettingsSection title={COPY.sections.graphics} icon={SETTINGS_ICONS.graphics}>
+          <SettingRow icon={SETTINGS_ICONS.quality} label={COPY.vfxLabel} stacked>
+            <SegmentedControl
+              options={VFX_LEVELS}
+              value={activeTier}
+              onChange={setQuality}
+              ariaLabel={COPY.vfxLabel}
+              formatLabel={(v) => v.charAt(0).toUpperCase() + v.slice(1)}
+            />
+          </SettingRow>
+          <p className="shell-hint shell-hint--left">{tierHint}</p>
+        </SettingsSection>
 
-        <div className="toggle-row">
-          <label>{COPY.vfxLabel}</label>
-          <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {VFX_LEVELS.map((q) => (
-              <button
-                key={q}
-                type="button"
-                className={`toggle-btn ${settings.vfxQuality === q ? 'on' : ''}`}
-                onClick={() => setQuality(q)}
-              >
-                {q.toUpperCase()}
-              </button>
-            ))}
-          </span>
-        </div>
-        <p className="shell-hint" style={{ margin: '0 0 14px', textAlign: 'left', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-          {tierHint}
-        </p>
+        <SettingsSection title={COPY.sections.audio} icon={SETTINGS_ICONS.audio}>
+          <SettingRow icon={SETTINGS_ICONS.sfx} label={COPY.soundFx} controlId="setting-sound">
+            <UiSwitch id="setting-sound" on={settings.sound} onToggle={() => toggle('sound')} />
+          </SettingRow>
+          <SettingRow icon={SETTINGS_ICONS.music} label={COPY.music} controlId="setting-music">
+            <UiSwitch id="setting-music" on={settings.music} onToggle={() => toggle('music')} />
+          </SettingRow>
+          <SettingRow icon={SETTINGS_ICONS.sfx} label={COPY.sfxVolume}>
+            <VolumeControl
+              value={sfxVol}
+              onDecrease={() => bumpVol('sfxVolume', -10)}
+              onIncrease={() => bumpVol('sfxVolume', 10)}
+              decreaseLabel="Decrease SFX volume"
+              increaseLabel="Increase SFX volume"
+            />
+          </SettingRow>
+          <SettingRow icon={SETTINGS_ICONS.music} label={COPY.musicVolume}>
+            <VolumeControl
+              value={musicVol}
+              onDecrease={() => bumpVol('musicVolume', -5)}
+              onIncrease={() => bumpVol('musicVolume', 5)}
+              decreaseLabel="Decrease music volume"
+              increaseLabel="Increase music volume"
+            />
+          </SettingRow>
+        </SettingsSection>
 
-        <div className="toggle-row">
-          <label>{COPY.soundFx}</label>
-          <button type="button" className={`toggle-btn ${settings.sound ? 'on' : ''}`} onClick={() => toggle('sound')}>
-            {settings.sound ? 'ON' : 'OFF'}
-          </button>
-        </div>
-        <div className="toggle-row">
-          <label>{COPY.music}</label>
-          <button type="button" className={`toggle-btn ${settings.music ? 'on' : ''}`} onClick={() => toggle('music')}>
-            {settings.music ? 'ON' : 'OFF'}
-          </button>
-        </div>
-        <div className="toggle-row">
-          <label>{COPY.sfxVolume}</label>
-          <span>
-            <button type="button" className="toggle-btn" onClick={() => bumpVol('sfxVolume', -10)}>−</button>
-            <span style={{ margin: '0 8px' }}>{settings.sfxVolume ?? DEFAULT_SFX_VOLUME}%</span>
-            <button type="button" className="toggle-btn" onClick={() => bumpVol('sfxVolume', 10)}>+</button>
-          </span>
-        </div>
-        <div className="toggle-row">
-          <label>{COPY.musicVolume}</label>
-          <span>
-            <button type="button" className="toggle-btn" onClick={() => bumpVol('musicVolume', -10)}>−</button>
-            <span style={{ margin: '0 8px' }}>{settings.musicVolume ?? DEFAULT_MUSIC_VOLUME}%</span>
-            <button type="button" className="toggle-btn" onClick={() => bumpVol('musicVolume', 10)}>+</button>
-          </span>
-        </div>
-
-        {status && <p className="shell-hint" style={{ margin: '8px 0', color: 'var(--economy)', textAlign: 'left' }}>{status}</p>}
-
-        {adsRemoved ? (
-          <p className="shell-hint" style={{ textAlign: 'left' }}>{COPY.adsRemoved}</p>
-        ) : (
-          isIapEnabled() && Monetization.isStoreAvailable() && (
-            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {showPurchases ? (
+        <SettingsSection title={COPY.sections.purchases} icon={SETTINGS_ICONS.purchases}>
+          {status ? <p className="shell-hint shell-hint--status">{status}</p> : null}
+          {adsRemoved ? (
+            <p className="shell-hint shell-hint--left">{COPY.adsRemoved}</p>
+          ) : (
+            <div className="settings-actions-stack">
               <NeonButton variant="secondary" onClick={buyRemoveAds}>
                 {COPY.removeAds(Monetization.formatPrice('remove_ads') || '$2.99')}
               </NeonButton>
@@ -173,17 +170,20 @@ function SettingsContent() {
                 </NeonButton>
               )}
             </div>
-          )
-        )}
+          )}
+        </SettingsSection>
+        ) : null}
 
-        <Link
-          href={from === 'play' ? `${ROUTES.shop}?from=play` : ROUTES.shop}
-          className="neon-btn neon-btn-secondary shell-block-link"
-        >
-          {COPY.shopLink}
-        </Link>
-
-        <ShellAbout />
+        <SettingsSection title={COPY.sections.links} icon={SETTINGS_ICONS.links}>
+          <Link
+            href={from === 'play' ? `${ROUTES.shop}?from=play` : ROUTES.shop}
+            className="neon-btn neon-btn-secondary shell-block-link"
+          >
+            <LucideIcon icon={ShoppingBag} size={18} className="shell-label__icon" />
+            <span>{COPY.shopLink}</span>
+          </Link>
+          <ShellAbout />
+        </SettingsSection>
       </div>
     </AppShell>
   );

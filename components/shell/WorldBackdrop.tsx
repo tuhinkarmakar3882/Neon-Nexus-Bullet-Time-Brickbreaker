@@ -18,7 +18,7 @@ export function WorldBackdrop({ variant = 'plain' }: WorldBackdropProps) {
           <div className="world-backdrop__crystal" />
           <div className="world-backdrop__scanlines world-backdrop__scanlines--hub" />
           <div className="world-backdrop__spores">
-            {Array.from({ length: 12 }, (_, i) => (
+            {Array.from({ length: 6 }, (_, i) => (
               <span key={i} className="world-backdrop__spore" style={{ '--i': i } as CSSProperties} />
             ))}
           </div>

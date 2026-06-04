@@ -164,7 +164,7 @@ FastBall · LowVisibility (Mist) · DoubleJardinains · NarrowArena · WideArena
 | System | Rule |
 |--------|------|
 | **3-star levels** | 1★ for clear; +1★ par time; +1★ no lives lost; +1★ ≥1 knockout (max 3★) |
-| **Gems** | Earned on level clear; spent in Garden Shop (cosmetics) |
+| **Gems** | Level clear: `2 + floor(level/3) + stars×2`; in-run pickups grant fewer wallet gems; spent in Garden Shop |
 | **Gnome contracts** | Optional per-level bonus — no pot hits, elite knockout, juggle chain (`GnomeContracts.js`) |
 | **Codex journal** | Stats + achievements |
 
@@ -229,7 +229,7 @@ Demo ad provider in dev; swap for AdMob/AdSense in production.
 
 ## 14. Settings (persisted)
 
-Sound, music, volumes, **VFX quality tier** (replaces separate particle/reduced-FX toggles), haptics, **immersive HUD**, remove ads IAP.
+Sound, music, volumes, **VFX quality tier** (default **ultra** for new installs; replaces separate particle/reduced-FX toggles), haptics, **immersive HUD**, remove ads IAP.
 
 ---
 

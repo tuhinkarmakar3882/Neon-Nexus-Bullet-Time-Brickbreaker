@@ -1,5 +1,5 @@
 import { STORAGE, DEFAULT_SFX_VOLUME, DEFAULT_MUSIC_VOLUME } from '../config/Constants.js';
-import { migrateVfxQuality, normalizeVfxQuality, resolveSettings } from '../config/VfxQuality.js';
+import { normalizeVfxQuality, resolveSettings } from '../config/VfxQuality.js';
 
 const mem = {};
 
@@ -61,13 +61,9 @@ export const SaveManager = {
     return resolveSettings({
       sound,
       music,
-      vfxQuality: storedQuality ? normalizeVfxQuality(storedQuality) : migrateVfxQuality(legacy),
+      vfxQuality: storedQuality ? normalizeVfxQuality(storedQuality) : 'ultra',
       sfxVolume: this.getNumber(STORAGE.SFX_VOLUME, DEFAULT_SFX_VOLUME),
-      musicVolume: (() => {
-        const v = this.getNumber(STORAGE.MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME);
-        // Migrate legacy default (3%) that was effectively inaudible
-        return v > 0 && v < 12 ? DEFAULT_MUSIC_VOLUME : v;
-      })(),
+      musicVolume: this.getNumber(STORAGE.MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME),
     });
   },
   saveSettings(s) {

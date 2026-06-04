@@ -6,6 +6,8 @@ export type GameOverOverlayData = {
   adsReady: boolean;
   level: number;
   lives: number;
+  /** Inventory continues (separate from rewarded video continue). */
+  continues: number;
 };
 
 /** Stats passed from React overlay into Phaser share (DOM HUD path). */

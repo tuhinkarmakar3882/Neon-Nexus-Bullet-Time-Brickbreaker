@@ -1,0 +1,143 @@
+import Link from 'next/link';
+import { ROUTES } from '@/lib/shell/routes';
+import { LegalProse } from '@/components/shell/legal/LegalProse';
+
+export function TermsContent({ showFooter = true }: { showFooter?: boolean }) {
+  return (
+    <LegalProse showFooter={showFooter} siblingHref={ROUTES.privacy} siblingLabel="Privacy Policy">
+      <h2 className="legal-prose__doc-title">Terms of Service</h2>
+      <p>
+        <strong>Neon Nexus: Bullet-Time Brick Breaker</strong> · Last updated: June 2026
+      </p>
+
+      <div className="legal-prose__notice">
+        <p>
+          <strong>Entertainment only.</strong> Neon Nexus is a casual video game provided solely for personal
+          entertainment. It is not professional advice, education, gambling, an investment, or a real-world service.{' '}
+          <strong>By downloading, installing, accessing, or playing the game, you agree to these Terms.</strong> If you
+          do not agree, do not use the game.
+        </p>
+      </div>
+
+      <h2>1. Who we are</h2>
+      <p>
+        “We,” “us,” and “our” refer to the developer and rights holder of Neon Nexus (Tuhin Karmakar). “You” means the
+        person using the game.
+      </p>
+
+      <h2>2. License</h2>
+      <p>
+        We grant you a limited, personal, non-exclusive, non-transferable, revocable license to use the game for
+        entertainment on your own devices. You may not copy, sell, rent, sublicense, reverse-engineer, decompile, modify,
+        or exploit the game or its assets except where applicable law expressly allows.
+      </p>
+
+      <h2>3. No warranty</h2>
+      <p>
+        The game and all content are provided <strong>“AS IS”</strong> and <strong>“AS AVAILABLE,”</strong> without
+        warranties of any kind, whether express, implied, or statutory, including but not limited to implied warranties
+        of merchantability, fitness for a particular purpose, title, non-infringement, accuracy, or uninterrupted or
+        error-free operation. We do not warrant that the game will meet your expectations, that progress or purchases
+        will always be preserved, or that defects will be corrected.
+      </p>
+
+      <h2>4. Limitation of liability</h2>
+      <p>
+        <strong>To the fullest extent permitted by applicable law,</strong> we and our affiliates, licensors, and
+        suppliers shall <strong>not be liable</strong> for any indirect, incidental, special, consequential, exemplary,
+        or punitive damages, or for any loss of profits, revenue, data, goodwill, save data, virtual items, device
+        damage, downtime, or business interruption, arising from or related to your use of—or inability to use—the game,
+        even if we have been advised of the possibility of such damages.
+      </p>
+      <p>
+        <strong>Our total aggregate liability</strong> for any claim arising out of these Terms or the game shall not
+        exceed the greater of (a) the amounts you paid to us for the game or in-app purchases in the{' '}
+        <strong>twelve (12) months</strong> before the claim, or (b){' '}
+        <strong>ten United States dollars (USD $10)</strong>, except where liability cannot be limited under mandatory
+        consumer law.
+      </p>
+      <p>
+        Some jurisdictions do not allow certain exclusions or limitations; in those cases, our liability is limited to
+        the maximum extent permitted by law.
+      </p>
+
+      <h2>5. Your responsibility</h2>
+      <ul>
+        <li>You use the game at your own risk and are responsible for your device, network, and account security.</li>
+        <li>
+          Progress is stored locally on your device where possible; we are not responsible for loss of saves after
+          uninstall, cache clear, device failure, or platform updates.
+        </li>
+        <li>You are responsible for complying with applicable laws and platform rules (Google Play, App Store, browser, etc.).</li>
+        <li>
+          The game may include flashing visuals and motion; discontinue use if you experience discomfort, dizziness, or
+          photosensitive symptoms.
+        </li>
+      </ul>
+
+      <h2>6. In-app purchases and virtual items</h2>
+      <p>
+        Digital goods (e.g. Remove Ads, Gem Pack, Premium Pass) are licensed for use in the game only; they have no
+        real-world cash value and are not refundable except where required by law or your platform’s policy (Google Play,
+        Apple App Store, Stripe, etc.). <strong>Platform providers process payments; we are not responsible for billing
+        errors, failed transactions, or refund decisions made by those platforms.</strong> Use “Restore Purchases” in
+        Settings where supported. Chargebacks or abuse may result in revoked entitlements.
+      </p>
+
+      <h2>7. Advertisements</h2>
+      <p>
+        The free version may show ads served by third parties (e.g. Google AdMob, AdSense). Ad content and data practices
+        are governed by those providers. Purchasing “Remove Ads” disables banner and interstitial ads as described
+        in-game; optional rewarded ads may still be offered. We are not responsible for third-party ad content, links, or
+        practices.
+      </p>
+
+      <h2>8. Third-party services</h2>
+      <p>
+        The game may rely on third-party services (advertising, analytics, payment, music CDN, app stores). Your use of
+        those services may be subject to their separate terms and privacy policies.{' '}
+        <strong>We are not responsible for third-party acts, omissions, outages, or policies.</strong>
+      </p>
+
+      <h2>9. Indemnification</h2>
+      <p>
+        To the extent permitted by law, you agree to indemnify, defend, and hold harmless us and our affiliates from
+        claims, damages, losses, and expenses (including reasonable legal fees) arising from your misuse of the game,
+        violation of these Terms, or violation of any law or third-party right.
+      </p>
+
+      <h2>10. Changes and availability</h2>
+      <p>
+        We may update the game, change features, suspend or discontinue the game (temporarily or permanently), or modify
+        these Terms at any time. Material changes will be reflected by updating the “Last updated” date. Continued use
+        after changes constitutes acceptance. We are not liable for any modification, suspension, or discontinuation.
+      </p>
+
+      <h2>11. Termination</h2>
+      <p>
+        We may restrict or terminate your access if we reasonably believe you violated these Terms or harmed the game or
+        other users. Upon termination, your license ends; sections that by nature should survive (including disclaimers,
+        limitation of liability, and indemnity) survive.
+      </p>
+
+      <h2>12. Governing law and disputes</h2>
+      <p>
+        These Terms are governed by the laws applicable in your place of residence or use, without regard to conflict-of-law
+        rules, except where mandatory local consumer protections require otherwise. Courts with competent jurisdiction may
+        hear disputes that cannot be resolved informally. Nothing in these Terms limits non-waivable consumer rights.
+      </p>
+
+      <h2>13. Severability and entire agreement</h2>
+      <p>
+        If any provision is held invalid, the remainder stays in effect. These Terms, together with the{' '}
+        <Link href={ROUTES.privacy}>Privacy Policy</Link>, constitute the entire agreement regarding the game and
+        supersede prior understandings on the same subject.
+      </p>
+
+      <h2>14. Contact</h2>
+      <p>
+        Questions about these Terms: <a href="mailto:support@example.com">support@example.com</a>
+      </p>
+    </LegalProse>
+  );
+}

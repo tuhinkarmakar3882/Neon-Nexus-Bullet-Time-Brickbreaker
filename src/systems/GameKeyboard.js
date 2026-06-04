@@ -1,5 +1,5 @@
 /** Window-level keyboard for /play — works when React HUD or DOM has focus (not only the canvas). */
-import { SCENES } from '../config/Constants.js';
+import { GAME, SCENES } from '../config/Constants.js';
 import { InputRouter } from './InputRouter.js';
 
 const BLOCKING_OVERLAYS = [
@@ -46,9 +46,13 @@ function onKeyDown(e, game) {
   for (const key of BLOCKING_OVERLAYS) {
     if (!scenes.isActive(key)) continue;
     const scene = scenes.getScene(key);
-    if (e.key === 'Escape' && scene?.handleBack) {
+    if (e.key === 'Escape') {
       e.preventDefault();
-      scene.handleBack();
+      if (key === SCENES.GAMEOVER && GAME.USE_DOM_HUD) {
+        window.dispatchEvent(new CustomEvent('neon:gameover-esc', { cancelable: true }));
+        return;
+      }
+      if (scene?.handleBack) scene.handleBack();
       return;
     }
     if ((e.key === ' ' || e.key === 'Enter') && scene?._advance) {

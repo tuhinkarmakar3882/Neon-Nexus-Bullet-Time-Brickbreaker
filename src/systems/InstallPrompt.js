@@ -64,5 +64,12 @@ export function isStandaloneDisplay() {
 }
 
 export function canOfferInstall() {
-  return !isStandaloneDisplay() && !!deferred;
+  return shouldShowInstallOffer();
+}
+
+/** Hide install CTA when already running as installed PWA / home-screen app. */
+export function shouldShowInstallOffer() {
+  if (typeof window === 'undefined') return false;
+  if (isStandaloneDisplay()) return false;
+  return !!deferred;
 }
