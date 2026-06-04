@@ -28,18 +28,64 @@ export function brickPanelInsets(displayW, displayH) {
   return { left, right: left, top, bottom: top };
 }
 
+const PROCEDURAL_KEYS = [
+  'soft', 'fx-glow', 'spark', 'spark-streak', 'spark-shard', 'trail-plasma', 'tile-chip',
+  'ember', 'ring', 'pixel', 'bg-grad', 'panel', 'panel-gold', 'panel-steel', 'panel-hostage',
+  'crack-1', 'crack-2', 'crack-3', 'vaus', 'orb', 'ball-core', 'ball-rim', 'shadow', 'pill',
+  'gem', 'bullet-bolt',
+];
+
+const GLOW_TEXTURE_KEYS = new Set([
+  'soft', 'fx-glow', 'spark', 'trail-plasma', 'ember', 'orb', 'shadow', 'ring',
+]);
+
 function ctxOf(scene, key, w, h) {
+  if (scene.textures.exists(key)) scene.textures.remove(key);
   const canvas = scene.textures.createCanvas(key, w, h);
+  canvas.clear();
   return { canvas, ctx: canvas.getContext() };
 }
 
+function clearCanvas(ctx, w, h) {
+  ctx.clearRect(0, 0, w, h);
+}
+
+/** Zero RGB on fully transparent texels — stops linear-filter dark halos on sprite quads. */
+function sanitizeTransparentRgb(canvasTex) {
+  const ctx = canvasTex.getContext();
+  const w = canvasTex.width;
+  const h = canvasTex.height;
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) {
+      d[i] = 0;
+      d[i + 1] = 0;
+      d[i + 2] = 0;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function fillRadialDisc(ctx, w, h, cx, cy, radius, stops) {
+  clearCanvas(ctx, w, h);
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+  for (const [pos, color] of stops) g.addColorStop(pos, color);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 function finishCanvas(scene, key, canvas) {
+  sanitizeTransparentRgb(canvas);
   canvas.refresh();
   const tex = scene.textures.get(key);
   if (!tex?.setFilter) return;
+  const nearest = Phaser.Textures?.FilterMode?.NEAREST ?? 0;
   const linear = Phaser.Textures?.FilterMode?.LINEAR ?? 1;
   try {
-    tex.setFilter(linear);
+    tex.setFilter(GLOW_TEXTURE_KEYS.has(key) ? nearest : linear);
   } catch {
     /* older Phaser builds */
   }
@@ -67,6 +113,9 @@ export function regenerateBrickPanelTextures(scene) {
 }
 
 export function generateTextures(scene) {
+  for (const key of PROCEDURAL_KEYS) {
+    if (scene.textures.exists(key)) scene.textures.remove(key);
+  }
   makeSoftCircle(scene, 'soft', ts(48));
   makeFxGlow(scene, 'fx-glow', ts(32));
   makeSoftCircle(scene, 'spark', ts(20));
@@ -101,8 +150,8 @@ function roundRectPath(ctx, x, y, w, h, r) {
 }
 
 function makeBgGradient(scene, key, w = 256, h = 256) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, w, h);
+  clearCanvas(ctx, w, h);
   const g = ctx.createLinearGradient(0, 0, 0, h);
   g.addColorStop(0, '#0a0f1e');
   g.addColorStop(0.45, '#0a0d1c');
@@ -114,55 +163,51 @@ function makeBgGradient(scene, key, w = 256, h = 256) {
   rg.addColorStop(1, 'rgba(90,160,255,0)');
   ctx.fillStyle = rg;
   ctx.fillRect(0, 0, w, h);
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }
 
 function makeSoftCircle(scene, key, size) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, size, size);
   const r = size / 2;
-  const grad = ctx.createRadialGradient(r * 0.92, r * 0.88, 0, r, r, r);
-  grad.addColorStop(0, 'rgba(255,252,245,1)');
-  grad.addColorStop(0.35, 'rgba(255,255,255,0.75)');
-  grad.addColorStop(0.7, 'rgba(255,255,255,0.15)');
-  grad.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-  canvas.refresh();
+  fillRadialDisc(ctx, size, size, r, r, r, [
+    [0, 'rgba(255,252,245,1)'],
+    [0.35, 'rgba(255,255,255,0.75)'],
+    [0.7, 'rgba(255,255,255,0.15)'],
+    [1, 'rgba(0,0,0,0)'],
+  ]);
+  finishCanvas(scene, key, canvas);
 }
 
 /** Tint-friendly gameplay glow — less white core than `soft` (avoids blocky bursts). */
 function makeFxGlow(scene, key, size) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, size, size);
   const r = size / 2;
-  const grad = ctx.createRadialGradient(r * 0.88, r * 0.88, 0, r, r, r);
-  grad.addColorStop(0, 'rgba(255,255,255,0.95)');
-  grad.addColorStop(0.45, 'rgba(200,230,255,0.55)');
-  grad.addColorStop(0.75, 'rgba(120,180,255,0.2)');
-  grad.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-  canvas.refresh();
+  fillRadialDisc(ctx, size, size, r, r, r, [
+    [0, 'rgba(255,255,255,0.95)'],
+    [0.45, 'rgba(200,230,255,0.55)'],
+    [0.75, 'rgba(120,180,255,0.2)'],
+    [1, 'rgba(0,0,0,0)'],
+  ]);
+  finishCanvas(scene, key, canvas);
 }
 
 function makeRing(scene, key, size, lineWidth) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, size, size);
+  clearCanvas(ctx, size, size);
   ctx.strokeStyle = 'rgba(255,248,235,0.95)';
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
   ctx.arc(size / 2, size / 2, size / 2 - lineWidth * 1.2, 0, Math.PI * 2);
   ctx.stroke();
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }
 
 function makePixel(scene, key) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, 2, 2);
+  clearCanvas(ctx, 2, 2);
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, 2, 2);
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }
 
 /**
@@ -170,8 +215,8 @@ function makePixel(scene, key) {
  * @param {'normal'|'gold'|'steel'|'hostage'} variant
  */
 function makePanelBrick(scene, key, w, h, variant = 'normal') {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, w, h);
+  clearCanvas(ctx, w, h);
   const pad = Math.max(2, Math.round(h * 0.1));
   const r = Math.min(h * 0.34, w * 0.1, 12);
   const innerW = w - pad * 2;
@@ -258,8 +303,8 @@ function makePanelBrick(scene, key, w, h, variant = 'normal') {
 
 /** Seed capsule — organic pill for power-ups (category-tintable). */
 function makePill(scene, key, w, h) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, w, h);
+  clearCanvas(ctx, w, h);
   const r = h / 2;
   roundRectPath(ctx, 1, 1, w - 2, h - 2, r);
   ctx.save();
@@ -280,13 +325,13 @@ function makePill(scene, key, w, h) {
   ctx.lineWidth = 2;
   ctx.strokeStyle = 'rgba(255,248,235,0.75)';
   ctx.stroke();
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }
 
 /** Carbon paddle with luminous teal accent rail. */
 function makeVaus(scene, key, w, h) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, w, h);
+  clearCanvas(ctx, w, h);
   const r = h / 2;
   roundRectPath(ctx, 1, 1, w - 2, h - 2, r);
   ctx.save();
@@ -328,28 +373,26 @@ function makeVaus(scene, key, w, h) {
   ctx.lineWidth = 1.5;
   ctx.strokeStyle = 'rgba(90,160,255,0.45)';
   ctx.stroke();
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }
 
 /** Ball energy halo — soft plasma bloom for tinting. */
 function makeOrb(scene, key, s) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, s, s);
   const r = s / 2;
-  const g = ctx.createRadialGradient(r * 0.88, r * 0.88, 0, r, r, r);
-  g.addColorStop(0, 'rgba(255,255,255,0.95)');
-  g.addColorStop(0.25, 'rgba(200,240,255,0.65)');
-  g.addColorStop(0.55, 'rgba(120,200,255,0.28)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, s, s);
-  canvas.refresh();
+  fillRadialDisc(ctx, s, s, r, r, r, [
+    [0, 'rgba(255,255,255,0.95)'],
+    [0.25, 'rgba(200,240,255,0.65)'],
+    [0.55, 'rgba(120,200,255,0.28)'],
+    [1, 'rgba(0,0,0,0)'],
+  ]);
+  finishCanvas(scene, key, canvas);
 }
 
 /** Ball solid core — bright plasma sphere. */
 function makeBallCore(scene, key, s) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, s, s);
+  clearCanvas(ctx, s, s);
   const r = s / 2;
   const g = ctx.createRadialGradient(r * 0.68, r * 0.62, 0, r, r, r);
   g.addColorStop(0, '#ffffff');
@@ -367,15 +410,14 @@ function makeBallCore(scene, key, s) {
   ctx.beginPath();
   ctx.arc(r, r, r - 1, 0, Math.PI * 2);
   ctx.fill();
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }
 
 /** Luminous outer ring — keeps ball readable without a heavy dark rim. */
 function makeBallRim(scene, key, s) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, s, s);
   const r = s / 2;
-  ctx.clearRect(0, 0, s, s);
+  clearCanvas(ctx, s, s);
   ctx.strokeStyle = 'rgba(255,255,255,0.75)';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -386,34 +428,32 @@ function makeBallRim(scene, key, s) {
   ctx.beginPath();
   ctx.arc(r, r, r - 1, 0, Math.PI * 2);
   ctx.stroke();
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }
 
 function makeShadow(scene, key, w, h) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, w, h);
-  const g = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
-  g.addColorStop(0, 'rgba(8,5,12,0.6)');
-  g.addColorStop(0.55, 'rgba(8,5,12,0.25)');
+  clearCanvas(ctx, w, h);
+  const cx = w / 2;
+  const cy = h / 2;
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.48);
+  g.addColorStop(0, 'rgba(8,5,12,0.55)');
+  g.addColorStop(0.55, 'rgba(8,5,12,0.2)');
   g.addColorStop(1, 'rgba(8,5,12,0)');
-  ctx.save();
-  ctx.translate(w / 2, h / 2);
-  ctx.scale(1, h / w);
-  ctx.translate(-w / 2, -h / 2);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, h);
-  ctx.restore();
-  canvas.refresh();
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, w * 0.46, h * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
+  finishCanvas(scene, key, canvas);
 }
 
 /** Faceted garden crystal (tintable). */
 function makeGemCrystal(scene, key, s) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, s, s);
   const cx = s / 2;
   const cy = s / 2;
   const r = s * 0.42;
-  ctx.clearRect(0, 0, s, s);
+  clearCanvas(ctx, s, s);
   // base diamond
   const pts = [
     [cx, cy - r],
@@ -447,13 +487,13 @@ function makeGemCrystal(scene, key, s) {
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
   ctx.closePath();
   ctx.stroke();
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }
 
 /** Laser / energy bolt (tintable vertical streak). */
 function makeBulletBolt(scene, key, w, h) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, w, h);
+  clearCanvas(ctx, w, h);
   const cx = w / 2;
   const grad = ctx.createLinearGradient(cx, 0, cx, h);
   grad.addColorStop(0, 'rgba(255,255,255,0.95)');
@@ -468,13 +508,13 @@ function makeBulletBolt(scene, key, w, h) {
   ctx.lineTo(0, h * 0.35);
   ctx.closePath();
   ctx.fill();
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }
 
 /** Soft plasma streak for motion trails. */
 function makeSparkStreak(scene, key, w, h) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, w, h);
+  clearCanvas(ctx, w, h);
   const g = ctx.createLinearGradient(0, h / 2, w, h / 2);
   g.addColorStop(0, 'rgba(255,255,255,0)');
   g.addColorStop(0.3, 'rgba(180,230,255,0.45)');
@@ -485,28 +525,26 @@ function makeSparkStreak(scene, key, w, h) {
   ctx.beginPath();
   ctx.ellipse(w / 2, h / 2, w / 2 - 1, h / 2 - 1, 0, 0, Math.PI * 2);
   ctx.fill();
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }
 
 /** Soft circular plasma blob — primary ball trail particle. */
 function makeTrailPlasma(scene, key, s) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, s, s);
   const r = s / 2;
-  const g = ctx.createRadialGradient(r * 0.85, r * 0.85, 0, r, r, r);
-  g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.35, 'rgba(180,230,255,0.85)');
-  g.addColorStop(0.65, 'rgba(90,160,255,0.35)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, s, s);
-  canvas.refresh();
+  fillRadialDisc(ctx, s, s, r, r, r, [
+    [0, 'rgba(255,255,255,1)'],
+    [0.35, 'rgba(180,230,255,0.85)'],
+    [0.65, 'rgba(90,160,255,0.35)'],
+    [1, 'rgba(0,0,0,0)'],
+  ]);
+  finishCanvas(scene, key, canvas);
 }
 
 /** Angular shard for debris bursts. */
 function makeSparkShard(scene, key, s) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, s, s);
+  clearCanvas(ctx, s, s);
   const cx = s / 2;
   const cy = s / 2;
   ctx.fillStyle = '#fff8ef';
@@ -520,13 +558,13 @@ function makeSparkShard(scene, key, s) {
   ctx.strokeStyle = 'rgba(255,255,255,0.7)';
   ctx.lineWidth = 1;
   ctx.stroke();
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }
 
 /** Ceramic tile chip for brick break debris. */
 function makeTileChip(scene, key, w, h) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, w, h);
+  clearCanvas(ctx, w, h);
   roundRectPath(ctx, 1, 1, w - 2, h - 2, 2);
   const g = ctx.createLinearGradient(0, 0, w, h);
   g.addColorStop(0, '#f0f8ff');
@@ -537,28 +575,25 @@ function makeTileChip(scene, key, w, h) {
   ctx.strokeStyle = 'rgba(255,255,255,0.5)';
   ctx.lineWidth = 1;
   ctx.stroke();
-  canvas.refresh();
+  finishCanvas(scene, key, canvas);
 }
 
 /** Warm plasma ember for golden / fire trails. */
 function makeEmber(scene, key, s) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, s, s);
   const r = s / 2;
-  const g = ctx.createRadialGradient(r * 0.85, r * 0.85, 0, r, r, r);
-  g.addColorStop(0, 'rgba(255,255,240,1)');
-  g.addColorStop(0.3, 'rgba(255,220,120,0.95)');
-  g.addColorStop(0.6, 'rgba(255,140,60,0.5)');
-  g.addColorStop(1, 'rgba(255,80,40,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, s, s);
-  canvas.refresh();
+  fillRadialDisc(ctx, s, s, r, r, r, [
+    [0, 'rgba(255,255,240,1)'],
+    [0.3, 'rgba(255,220,120,0.95)'],
+    [0.6, 'rgba(255,140,60,0.5)'],
+    [1, 'rgba(0,0,0,0)'],
+  ]);
+  finishCanvas(scene, key, canvas);
 }
 
 function makeCrack(scene, key, w, h, stage) {
-  if (scene.textures.exists(key)) return;
   const { canvas, ctx } = ctxOf(scene, key, w, h);
-  ctx.clearRect(0, 0, w, h);
+  clearCanvas(ctx, w, h);
   ctx.strokeStyle = 'rgba(20,8,6,0.7)';
   ctx.lineWidth = 1.5 + stage * 0.6;
   ctx.lineCap = 'round';

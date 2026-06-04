@@ -80,10 +80,10 @@ export class Brick {
     )
       .setDepth(10)
       .setAlpha(0.98);
-    if (useTint && typeof this.panel.setTintFill === 'function') {
-      this.panel.setTintFill(color);
+    if (useTint) {
+      this.panel.setTint(color);
     } else {
-      this.panel.setTint(useTint ? color : 0xffffff);
+      this.panel.setTint(0xffffff);
     }
     if (type === 'gold' || type === 'steel') {
       this.panel.setBlendMode(Phaser.BlendModes.NORMAL);
@@ -149,6 +149,7 @@ export class Brick {
   }
 
   drawFx() {
+    if (this._destroyed || !this.fx?.active) return;
     const g = this.fx;
     g.clear();
     g.x = this.x; g.y = this.y;
@@ -276,32 +277,28 @@ export class Brick {
   }
 
   flash() {
+    if (this._destroyed || !this.panel?.active) return;
     this.scene.tweens.killTweensOf(this.panel);
+    this._flashReset?.remove?.(false);
     const flashTint = (this.type === 'gold' || this.type === 'steel' || this.type === 'hostage')
       ? 0xffffff
       : lerpColor(this.color, 0xffffff, 0.7);
-    if (typeof this.panel.setTintFill === 'function' && !INDESTRUCTIBLE_PANEL[this.type]) {
-      this.panel.setTintFill(flashTint);
-    } else {
-      this.panel.setTint(flashTint);
-    }
-    this.scene.time.delayedCall(60, () => {
-      if (!this.panel.active) return;
+    this.panel.setTint(flashTint);
+    this._flashReset = this.scene.time.delayedCall(60, () => {
+      this._flashReset = null;
+      if (this._destroyed || !this.panel?.active) return;
       if (this.type === 'reinforced' || this.type === 'boss') {
         this.drawFx();
         return;
       }
-      if (typeof this.panel.setTintFill === 'function' && !INDESTRUCTIBLE_PANEL[this.type]) {
-        this.panel.setTintFill(this.color);
-      } else {
-        this.panel.setTint(INDESTRUCTIBLE_PANEL[this.type] ? 0xffffff : this.color);
-      }
+      this.panel.setTint(INDESTRUCTIBLE_PANEL[this.type] ? 0xffffff : this.color);
     });
     this.scene.tweens.add({ targets: this.panel, scaleX: 1.1, scaleY: 1.14, duration: 70, yoyo: true });
     if (this.crackImg) this.scene.tweens.add({ targets: this.crackImg, alpha: { from: 0.4, to: 0.95 }, duration: 90, yoyo: true });
   }
 
   clang() {
+    if (this._destroyed || !this.panel?.active) return;
     this.scene.tweens.add({ targets: this.panel, scaleX: 0.94, scaleY: 0.94, duration: 60, yoyo: true });
     if (this.badge) {
       this.scene.tweens.add({ targets: this.badge, scaleX: 1.15, scaleY: 1.15, duration: 80, yoyo: true });
@@ -348,6 +345,8 @@ export class Brick {
     this._destroyed = true;
     this.alive = false;
     const scene = this.scene;
+    this._flashReset?.remove?.(false);
+    this._flashReset = null;
     if (scene?.tweens) {
       scene.tweens.killTweensOf(this.panel);
       scene.tweens.killTweensOf(this.fx);

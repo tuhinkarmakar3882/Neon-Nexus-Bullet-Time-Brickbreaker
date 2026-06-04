@@ -496,7 +496,7 @@ export class GameScene extends Phaser.Scene {
   releaseBalls() {
     this.balls.forEach((b) => {
       b.release();
-      popScale(this, b.halo, { peak: 1.25, dur: 100 });
+      popScale(this, b.core, { peak: 1.25, dur: 100 });
       launchBurst(this, b.x, b.y, b.tint());
     });
   }
@@ -3723,17 +3723,17 @@ export class GameScene extends Phaser.Scene {
     const pulse = 0.62 + 0.28 * Math.sin(this.frame * 0.16);
     const hits = Math.max(1, this.shieldHitsLeft || 1);
 
-    this.shieldGfx.fillStyle(tint, pulse * 0.18);
-    this.shieldGfx.fillRect(bar.x - 4, bar.y - 5, bar.w + 8, bar.h + 10);
+    this.shieldGfx.fillStyle(tint, pulse * 0.12);
+    this.shieldGfx.fillRoundedRect(bar.x - 3, bar.y - 4, bar.w + 6, bar.h + 8, 6);
 
-    this.shieldGfx.fillStyle(tint, pulse * 0.72);
-    this.shieldGfx.fillRect(bar.x, bar.y, bar.w, bar.h);
+    this.shieldGfx.fillStyle(tint, pulse * 0.62);
+    this.shieldGfx.fillRoundedRect(bar.x, bar.y, bar.w, bar.h, 4);
 
     this.shieldGfx.lineStyle(3, 0xffffff, pulse * 0.95);
-    this.shieldGfx.lineBetween(bar.x + 2, bar.top + 1, bar.x + bar.w - 2, bar.top + 1);
+    this.shieldGfx.lineBetween(bar.x + 4, bar.top + 1, bar.x + bar.w - 4, bar.top + 1);
 
-    this.shieldGfx.lineStyle(2, tint, pulse * 0.9);
-    this.shieldGfx.strokeRect(bar.x + 1, bar.y + 1, bar.w - 2, bar.h - 2);
+    this.shieldGfx.lineStyle(2, tint, pulse * 0.85);
+    this.shieldGfx.strokeRoundedRect(bar.x + 1, bar.y + 1, bar.w - 2, bar.h - 2, 4);
 
     if (hits > 1) {
       const seg = bar.w / hits;
@@ -4075,7 +4075,6 @@ export class GameScene extends Phaser.Scene {
       b.trail.frequency = bt ? 4 : (mod ? 10 : (b._trailId === 'nexus' ? 14 : 18));
       b.trail.setAlpha(bt ? 0.98 : (mod ? 0.82 : 0.95));
       if (bt) {
-        b.halo.setAlpha(0.88 + btRatio * 0.1);
         b.ring.setAlpha(0.28 + btRatio * 0.2);
       } else if (!mod) {
         b.rim?.setAlpha(0.95);

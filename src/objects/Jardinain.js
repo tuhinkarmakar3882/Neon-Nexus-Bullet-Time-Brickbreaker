@@ -57,10 +57,6 @@ export class Jardinain {
     const hat = this.tierDef.hat ?? 0xc84040;
     const g = this.scene.add.graphics();
 
-    // tier outline glow
-    g.lineStyle(2, coat, 0.55);
-    g.strokeEllipse(0, r * 0.35, r * 1.25, r * 1.05);
-
     // shadow
     g.fillStyle(0x08050c, 0.35);
     g.fillEllipse(0, r * 0.95, r * 1.1, r * 0.28);

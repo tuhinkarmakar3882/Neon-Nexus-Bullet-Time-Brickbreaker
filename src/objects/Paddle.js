@@ -1,7 +1,9 @@
+import Phaser from 'phaser';
 import { GAME, paddleSideInset } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
 import { powerFillColor } from '../config/PowerUps.js';
 import { VAUS_SLICE } from '../utils/Textures.js';
+import { drawSoftGlow, makeGlowLayer } from '../utils/GlowFx.js';
 import { clamp } from '../utils/Helpers.js';
 
 const CANNON_COLORS = {
@@ -32,9 +34,7 @@ export class Paddle {
     this._hullTint = 0xffffff;
     this.spikesActive = false;
 
-    this.shadow = scene.add.image(this.x, this.y + this.h * 0.7, 'shadow')
-      .setDepth(18).setAlpha(0.5);
-    this.glow = scene.add.image(this.x, this.y, 'soft').setDepth(19).setBlendMode('ADD').setAlpha(0.0);
+    this.glowGfx = makeGlowLayer(scene, 19);
     this.body = scene.add.nineslice(this.x, this.y, 'vaus', undefined, this.w, this.h,
       VAUS_SLICE.l, VAUS_SLICE.r, VAUS_SLICE.t, VAUS_SLICE.b).setDepth(20);
     this.cannons = scene.add.graphics().setDepth(21);
@@ -138,19 +138,31 @@ export class Paddle {
     this._hullTint = tint;
   }
 
+  _syncHullTint() {
+    this.body.setTint(this.stunned ? 0xff6b7a : 0xffffff);
+    return this.stunned ? 0xff6b7a : this._hullTint;
+  }
+
   sync() {
+    if (!this.scene.tweens.isTweening(this.body)) {
+      this.body.setScale(1);
+    }
     this.body.setAngle(0);
     this.body.setSize(this.w, this.h);
     this.body.setPosition(this.x, this.y);
-    this.body.setTint(this.stunned ? 0xff6b7a : this._hullTint);
-    this.shadow.setPosition(this.x, this.y + this.h * 0.75).setDisplaySize(this.w * 1.05, this.h * 1.55);
+    this.body.setPosition(this.x, this.y);
+    const hullTint = this._syncHullTint();
 
     const gc = this.glowColor();
     const active = this.spikesActive || this.sticky || this.hasCannon || this.magnet || this.stunned;
-    this.glow.setPosition(this.x, this.y)
-      .setDisplaySize(this.w * 1.2, this.h * 3.4)
-      .setTint(active ? gc : 0x5aa0ff)
-      .setAlpha(active ? 0.45 + 0.1 * Math.sin(this.scene.frame * 0.08) : 0.14);
+    const cosmeticGlow = hullTint !== 0xffffff && !this.stunned;
+    if (active || cosmeticGlow) {
+      const pulse = active ? 0.38 + 0.1 * Math.sin(this.scene.frame * 0.08) : 0.22;
+      const tint = active ? gc : hullTint;
+      drawSoftGlow(this.glowGfx, this.x, this.y, this.w * 0.58, this.h * 1.35, tint, pulse);
+    } else {
+      this.glowGfx.clear();
+    }
 
     this.spikesGfx.clear();
     if (this.spikesActive) this.drawSpikes();
@@ -201,8 +213,7 @@ export class Paddle {
 
   destroy() {
     this.body.destroy();
-    this.glow.destroy();
-    this.shadow.destroy();
+    this.glowGfx.destroy();
     this.cannons.destroy();
     this.spikesGfx.destroy();
   }

@@ -1,6 +1,8 @@
+import Phaser from 'phaser';
 import { GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
 import { fxTrailMult, fxParticleScale, fxGlowScale } from '../utils/FxBudget.js';
+import { drawSoftGlow, drawSoftShadow, makeGlowLayer } from '../utils/GlowFx.js';
 import { clamp } from '../utils/Helpers.js';
 
 const TRAIL_PROFILES = {
@@ -51,8 +53,8 @@ export class Ball {
     this.x = paddle.x;
     this.y = paddle.top - this.r;
 
-    this.shadow = scene.add.image(this.x, this.y, 'shadow').setDepth(18).setAlpha(0.55);
-    this.halo = scene.add.image(this.x, this.y, 'orb').setDepth(20).setAlpha(0.88).setBlendMode('ADD');
+    this.shadowGfx = makeGlowLayer(scene, 18, Phaser.BlendModes.NORMAL);
+    this.haloGfx = makeGlowLayer(scene, 20);
     this.ring = scene.add.image(this.x, this.y, 'ring').setDepth(21).setAlpha(0.35).setBlendMode('ADD');
     this.rim = scene.add.image(this.x, this.y, 'ball-rim').setDepth(21.5);
     this.core = scene.add.image(this.x, this.y, 'ball-core').setDepth(22);
@@ -214,18 +216,16 @@ export class Ball {
     const d = this.r * 2.35;
     const idTint = this._identityTint ?? 0xffffff;
 
-    this.shadow.setPosition(this.x, this.y + this.r * 0.35)
-      .setDisplaySize(this.r * 2.8, this.r * 1.35)
-      .setAlpha(mod ? 0.4 : 0.5);
+    drawSoftShadow(this.shadowGfx, this.x, this.y + this.r * 0.35, this.r * 1.05, this.r * 0.42, mod ? 0.28 : 0.34);
 
     this.core.setPosition(this.x, this.y).setDisplaySize(d, d).setTint(c).setAlpha(1)
       .setRotation(missile ? Math.atan2(this.vy, this.vx) + Math.PI / 2 : (chaos ? this._steerPhase * 0.35 : 0));
 
-    const haloScale = (mod ? 4.8 : 4.2) + Math.min(0.6, speed / 900) + (chaos ? 0.35 : 0);
+    const haloScale = (mod ? 2.4 : 2.05) + Math.min(0.35, speed / 1200) + (chaos ? 0.2 : 0);
     const glow = fxGlowScale(this.scene, 1);
-    this.halo.setPosition(this.x, this.y).setTint(mod ? c : idTint)
-      .setDisplaySize(this.r * haloScale, this.r * haloScale)
-      .setAlpha((mod ? 0.82 : 0.52 + Math.min(0.18, speed / 1100)) * glow);
+    const haloTint = mod ? c : idTint;
+    const haloAlpha = (mod ? 0.55 : 0.34 + Math.min(0.12, speed / 1400)) * glow;
+    drawSoftGlow(this.haloGfx, this.x, this.y, this.r * haloScale, this.r * haloScale, haloTint, haloAlpha);
 
     this.ring.setPosition(this.x, this.y).setTint(mod ? c : idTint)
       .setDisplaySize(this.r * (mod ? 3.1 : 2.85), this.r * (mod ? 3.1 : 2.85))
@@ -261,7 +261,11 @@ export class Ball {
       this._echoSprites = null;
     }
     this._echoCd = null;
-    this.core.destroy(); this.halo.destroy(); this.ring.destroy(); this.rim.destroy();
-    this.shadow.destroy(); this.trail.destroy();
+    this.core.destroy();
+    this.haloGfx.destroy();
+    this.shadowGfx.destroy();
+    this.ring.destroy();
+    this.rim.destroy();
+    this.trail.destroy();
   }
 }

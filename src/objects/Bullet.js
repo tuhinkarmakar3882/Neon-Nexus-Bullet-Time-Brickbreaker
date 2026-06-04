@@ -1,6 +1,7 @@
 import { GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
 import { fxParticleSize, fxParticleScale } from '../utils/FxBudget.js';
+import { drawSoftGlow, makeGlowLayer } from '../utils/GlowFx.js';
 
 const TINTS = {
   laser: 0xff7080,
@@ -32,9 +33,8 @@ export class Bullet {
       this.gfx = scene.add.graphics().setDepth(18);
       this.drawBolt();
     }
-    const glowW = fxParticleSize(scene, 8);
-    this.glow = scene.add.image(x, y, 'soft').setDisplaySize(glowW, glowW * 1.5)
-      .setTint(this.tint).setAlpha(0.65).setDepth(17).setBlendMode('ADD');
+    this._glowW = fxParticleSize(scene, 8);
+    this.glowGfx = makeGlowLayer(scene, 17);
     this.trailTarget = { x, y };
     const trailTex = this.type === 'fire' || this.type === 'napalm' ? 'ember' : 'spark-streak';
     const trailScale = fxParticleScale(scene, trailTex, 10);
@@ -96,14 +96,14 @@ export class Bullet {
     if (this.type === 'fire' || this.type === 'napalm' || this.type === 'ice') {
       this.gfx.setRotation(Math.atan2(this.vy, this.vx) + Math.PI / 2);
     }
-    this.glow.setPosition(this.x, this.y);
+    drawSoftGlow(this.glowGfx, this.x, this.y, this._glowW * 0.55, this._glowW * 0.75, this.tint, 0.5);
     this.trailTarget.x = this.x;
     this.trailTarget.y = this.y;
   }
 
   destroy() {
     this.gfx.destroy();
-    this.glow.destroy();
+    this.glowGfx.destroy();
     this.trail.destroy();
   }
 }

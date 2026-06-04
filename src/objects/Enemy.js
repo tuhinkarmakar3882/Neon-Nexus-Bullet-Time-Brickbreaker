@@ -1,5 +1,6 @@
 import { BRICK, GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
+import { drawSoftGlow, makeGlowLayer } from '../utils/GlowFx.js';
 
 // Neon garden pests — crisp silhouettes with glowing outlines.
 const KINDS = ['drifter', 'chaser', 'zigzag'];
@@ -23,8 +24,7 @@ export class Enemy {
     this.vx = (Math.random() < 0.5 ? -1 : 1) * this.vy * 0.7;
     this.swayPhase = Math.random() * Math.PI * 2;
 
-    this.glow = scene.add.image(this.x, this.y, 'soft').setDepth(12).setTint(this.color)
-      .setAlpha(0.38).setBlendMode('ADD').setDisplaySize(this.r * 3.2, this.r * 3.2);
+    this.glowGfx = makeGlowLayer(scene, 12);
     this.gfx = scene.add.graphics().setDepth(13);
     this.draw();
   }
@@ -136,14 +136,15 @@ export class Enemy {
 
   sync() {
     this.gfx.setPosition(this.x, this.y).setRotation(this.kind === 'zigzag' ? this.spin * 0.25 : 0);
-    this.glow.setPosition(this.x, this.y).setAlpha(0.32 + 0.12 * Math.sin(this.wingPhase));
+    drawSoftGlow(this.glowGfx, this.x, this.y, this.r * 1.25, this.r * 1.25, this.color,
+      0.32 + 0.12 * Math.sin(this.wingPhase));
   }
 
   kill() {
     this.alive = false;
     const dir = Math.random() < 0.5 ? -1 : 1;
     this.scene.tweens.add({
-      targets: [this.gfx, this.glow], y: this.y + 120, x: this.x + dir * 120,
+      targets: [this.gfx, this.glowGfx], y: this.y + 120, x: this.x + dir * 120,
       alpha: 0, angle: dir * 360, duration: 450, onComplete: () => this.destroy(),
     });
   }
@@ -152,6 +153,6 @@ export class Enemy {
     if (this._d) return;
     this._d = true;
     this.gfx.destroy();
-    this.glow.destroy();
+    this.glowGfx.destroy();
   }
 }

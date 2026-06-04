@@ -8,13 +8,9 @@ function clearCameraFilters(cam) {
   try { cam.filters.internal.clear(); } catch { /* WebGL unavailable */ }
 }
 
-function applyBloom(cam, amount) {
-  if (amount <= 0 || !cam?.filters?.internal) return;
-  const parallel = cam.filters.internal.addParallelFilters();
-  parallel.top.addThreshold(0.5 + (1 - amount) * 0.1, 1);
-  parallel.top.addBlur(4, 0, 0, 0.6 + amount * 2.4);
-  parallel.blend.blendMode = Phaser.BlendModes.ADD;
-  parallel.blend.amount = amount;
+function applyBloom(_cam, _amount) {
+  // Phaser 4 parallel bloom draws dark sprite-bounds quads on canvas-texture sprites.
+  // Vignette/grain/chroma overlays still apply; bloom stays off until upstream fix.
 }
 
 function applyVignette(cam, strength) {

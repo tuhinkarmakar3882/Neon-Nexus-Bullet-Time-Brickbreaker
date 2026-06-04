@@ -7,6 +7,7 @@ import { PAL } from '../config/Palette.js';
 import { iconTextureKey } from '../utils/IconTextures.js';
 import { rand } from '../utils/Helpers.js';
 import { fitTextWidth, displayStyle } from '../utils/Typography.js';
+import { drawSoftGlow, makeGlowLayer } from '../utils/GlowFx.js';
 
 /** Falling seed capsule — Arkanoid-style letter on a color-coded pill. */
 export class PowerUp {
@@ -35,10 +36,8 @@ export class PowerUp {
 
     this.container = scene.add.container(this.cx, this.cy).setDepth(16);
 
-    this.glow = scene.add.image(0, 0, 'soft')
-      .setTint(this.color).setAlpha(0.38).setBlendMode('ADD')
-      .setDisplaySize(this.w * 1.55, this.h * 2.8);
-    this.container.add(this.glow);
+    this.glowGfx = makeGlowLayer(scene, 15.5);
+    this.container.add(this.glowGfx);
 
     this.pill = scene.add.image(0, 0, 'pill')
       .setDisplaySize(this.w, this.h).setTint(this.color);
@@ -74,33 +73,23 @@ export class PowerUp {
       this.icon = null;
     }
 
+    this._glowTint = this.color;
+    this._glowAlpha = 0.38;
+
     if (this.variant === 'blessed') {
       this.pill.setTint(0xffd23d);
-      this.glow.setTint(0xffe566).setAlpha(0.52);
-      scene.tweens.add({
-        targets: this.glow,
-        alpha: { from: 0.4, to: 0.65 },
-        duration: 700,
-        yoyo: true,
-        repeat: -1,
-      });
+      this._glowTint = 0xffe566;
+      this._glowAlpha = 0.52;
     } else if (this.variant === 'mystery') {
       this.pill.setTint(0x3a3a55);
-      this.glow.setTint(0x8888cc).setAlpha(0.35);
+      this._glowTint = 0x8888cc;
+      this._glowAlpha = 0.35;
       this.letter.setText('?');
       this.letter.setColor('#c8c8ff');
       if (this.icon) this.icon.setAlpha(0.15);
     }
 
     if (this.polarity === 'neg') {
-      scene.tweens.add({
-        targets: this.glow,
-        tint: { from: PAL.powerNeg, to: this.color },
-        alpha: { from: 0.35, to: 0.58 },
-        duration: 550,
-        yoyo: true,
-        repeat: -1,
-      });
       scene.tweens.add({
         targets: this.container,
         angle: { from: -5, to: 5 },
@@ -127,13 +116,6 @@ export class PowerUp {
       alpha: 1,
       duration: 300,
       ease: 'Back.easeOut',
-    });
-    scene.tweens.add({
-      targets: this.glow,
-      alpha: { from: 0.22, to: 0.48 },
-      duration: 900,
-      yoyo: true,
-      repeat: -1,
     });
   }
 
@@ -179,7 +161,6 @@ export class PowerUp {
     if (this.collecting) return;
     this.collecting = true;
     this.scene.tweens.killTweensOf(this.container);
-    this.scene.tweens.killTweensOf(this.glow);
     this.scene.tweens.killTweensOf(this.pill);
     const tx = paddle.x;
     const ty = paddle.top - 4;
@@ -203,12 +184,15 @@ export class PowerUp {
     this.container.setAngle(Math.sin(this.tumble) * 11);
     const pulse = 0.96 + 0.04 * Math.abs(Math.cos(this.tumble * 1.1));
     this.container.setScale(pulse);
-    this.glow.setAlpha(0.3 + 0.14 * Math.abs(Math.sin(this.tumble * 1.3)));
+    const glowAlpha = this._glowAlpha * (0.78 + 0.22 * Math.abs(Math.sin(this.tumble * 1.3)));
+    const negPulse = this.polarity === 'neg'
+      ? 0.85 + 0.15 * Math.abs(Math.sin(this.tumble * 2.4))
+      : 1;
+    drawSoftGlow(this.glowGfx, 0, 0, this.w * 0.72, this.h * 1.25, this._glowTint, glowAlpha * negPulse);
   }
 
   destroy() {
     this.scene.tweens.killTweensOf(this.container);
-    this.scene.tweens.killTweensOf(this.glow);
     this.scene.tweens.killTweensOf(this.pill);
     this.container?.destroy(true);
   }

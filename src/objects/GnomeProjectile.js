@@ -1,5 +1,6 @@
 import { GAME } from '../config/Constants.js';
 import { clamp } from '../utils/Helpers.js';
+import { drawSoftGlow, makeGlowLayer } from '../utils/GlowFx.js';
 
 /** Gnome-thrown hazard: pot, anchor/safe, or smartphone. */
 export class GnomeProjectile {
@@ -24,8 +25,8 @@ export class GnomeProjectile {
     this.vx = clamp(vxBase, -sp * 0.9, sp * 0.9);
     this.vy = Math.abs(Math.sin(ang) * sp) + sp * 0.35;
 
-    this.glow = scene.add.image(x, y, 'soft').setDepth(16).setAlpha(0.25).setBlendMode('ADD')
-      .setDisplaySize(this.r * 3.5, this.r * 3.5);
+    this._glowTint = 0xe8a060;
+    this.glowGfx = makeGlowLayer(scene, 16);
     this.gfx = scene.add.graphics().setDepth(17);
     this.draw();
   }
@@ -79,8 +80,7 @@ export class GnomeProjectile {
       g.fillStyle(0x3a9028, 1);
       g.fillRect(-r * 0.04, -r * 0.35, r * 0.08, r * 0.45);
     }
-    const glowTint = this.type === 'anchor' ? 0xaabbcc : this.type === 'phone' ? 0x66ccff : 0xe8a060;
-    this.glow.setTint(glowTint);
+    this._glowTint = this.type === 'anchor' ? 0xaabbcc : this.type === 'phone' ? 0x66ccff : 0xe8a060;
   }
 
   update(dtSec, timeScale, paddle) {
@@ -104,13 +104,13 @@ export class GnomeProjectile {
 
   sync() {
     this.gfx.setPosition(this.x, this.y).setRotation(this.spin);
-    this.glow.setPosition(this.x, this.y);
+    drawSoftGlow(this.glowGfx, this.x, this.y, this.r * 1.35, this.r * 1.35, this._glowTint, 0.22);
   }
 
   destroy() {
     this._shadowGfx?.destroy?.();
     this.gfx.destroy();
-    this.glow.destroy();
+    this.glowGfx.destroy();
   }
 }
 
