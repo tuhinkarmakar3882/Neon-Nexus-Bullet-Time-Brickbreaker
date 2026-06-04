@@ -71,15 +71,17 @@ export class GameScene extends Phaser.Scene {
     setBootSplash({ progress: 82, label: 'Growing the twilight garden…' });
     this.settings = resolveSettings(SaveManager.loadSettings());
     const musicSettings = SaveManager.loadSettings();
-    audio.setSoundEnabled(musicSettings.sound);
-    audio.setMusicEnabled(musicSettings.music);
-    audio.setSfxVolume(musicSettings.sfxVolume ?? DEFAULT_SFX_VOLUME);
-    audio.setMusicVolume(musicSettings.musicVolume ?? DEFAULT_MUSIC_VOLUME);
-    audio.applyMusicSettings({ musicVolume: musicSettings.musicVolume });
     addCameraFx(this, this.settings);
     initBulletTimeFx(this);
     this.feedback = new FeedbackDirector(this);
     audio.init();
+    audio.applySettings({
+      sound: musicSettings.sound,
+      music: musicSettings.music,
+      sfxVolume: musicSettings.sfxVolume ?? DEFAULT_SFX_VOLUME,
+      musicVolume: musicSettings.musicVolume ?? DEFAULT_MUSIC_VOLUME,
+    });
+    audio.setMusicEnabled(musicSettings.music);
     audio.setSpatialPan(this.settings.spatialPan === true);
 
     this.bg = new Background(this, PAL.accent, { preset: this.settings, gameplay: true });

@@ -16,10 +16,13 @@ export class PreloadScene extends Phaser.Scene {
     setBootSplash({ progress: 62, label: 'Planting the arena…' });
     audio.init();
     const s = SaveManager.loadSettings();
-    audio.setSoundEnabled(s.sound);
+    audio.applySettings({
+      sound: s.sound,
+      music: s.music,
+      sfxVolume: s.sfxVolume ?? DEFAULT_SFX_VOLUME,
+      musicVolume: s.musicVolume ?? DEFAULT_MUSIC_VOLUME,
+    });
     audio.setMusicEnabled(s.music);
-    audio.setSfxVolume(s.sfxVolume ?? DEFAULT_SFX_VOLUME);
-    audio.setMusicVolume(s.musicVolume ?? DEFAULT_MUSIC_VOLUME);
     audio.preloadMusicCatalog();
 
     const fromWindow = typeof window !== 'undefined' ? window.__neonPlayIntent : null;

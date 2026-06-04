@@ -22,14 +22,11 @@ export class AudioManager {
     this._trackB = null;
     this._trackFadeId = null;
     this._musicVolScale = 1;
+    this._sfxVolScale = 1;
     this._tracksReady = false;
     this._currentTrackDef = null;
     this._backgroundPaused = false;
-    this._sfxGainBeforeBg = null;
     this._rateLimitBuckets = {};
-    this._musicFilter = null;
-    this._musicSource = null;
-    this._musicSources = new WeakMap();
     this._musicIntensity = 0;
     this._biomeFilter = null;
     this._ambienceGain = null;
@@ -94,17 +91,6 @@ export class AudioManager {
     }, ms / steps);
   }
 
-  _connectMusicElement(el) {
-    if (!this.ctx || !el || !this._musicFilter || this._musicSources.has(el)) return;
-    try {
-      const src = this.ctx.createMediaElementSource(el);
-      src.connect(this._musicFilter);
-      this._musicSources.set(el, src);
-    } catch {
-      /* element may already be routed — volume-only fallback */
-    }
-  }
-
   async _tryPlayUrl(url, trackDef) {
     const next = this._idleTrackEl();
     const cur = this._activeTrackEl();
@@ -120,7 +106,6 @@ export class AudioManager {
       return false;
     }
 
-    this._connectMusicElement(next);
     this._currentTrackId = trackDef.id;
     this._currentTrackDef = trackDef;
     this._trackSlot = 1 - this._trackSlot;
@@ -164,19 +149,19 @@ export class AudioManager {
       this.ctx = new AC();
 
       this.comp = this.ctx.createDynamicsCompressor();
-      this.comp.threshold.value = -18;
-      this.comp.ratio.value = 3.5;
-      this.comp.attack.value = 0.004;
-      this.comp.release.value = 0.18;
-      this.comp.knee.value = 6;
+      this.comp.threshold.value = -22;
+      this.comp.ratio.value = 2.5;
+      this.comp.attack.value = 0.006;
+      this.comp.release.value = 0.2;
+      this.comp.knee.value = 8;
 
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.92;
+      this.master.gain.value = 0.88;
       this.comp.connect(this.master);
       this.master.connect(this.ctx.destination);
 
       this.sfxGain = this.ctx.createGain();
-      this.sfxGain.gain.value = this.soundOn ? 0.62 : 0;
+      this._applySfxGain();
 
       this._biomeFilter = this.ctx.createBiquadFilter();
       this._biomeFilter.type = 'lowpass';
@@ -187,15 +172,39 @@ export class AudioManager {
       this._ambienceGain = this.ctx.createGain();
       this._ambienceGain.gain.value = 0;
       this._ambienceGain.connect(this.comp);
-
-      this._musicFilter = this.ctx.createBiquadFilter();
-      this._musicFilter.type = 'highshelf';
-      this._musicFilter.frequency.value = 8000;
-      this._musicFilter.gain.value = 0;
-      this._musicFilter.connect(this.comp);
     } catch {
       this.ctx = null;
     }
+  }
+
+  /** Single entry to sync toggles + volume sliders from SaveManager / settings UI. */
+  applySettings({ sound, music, sfxVolume, musicVolume } = {}) {
+    if (sound != null) this.soundOn = !!sound;
+    if (music != null) this.musicOn = !!music;
+    if (sfxVolume != null) this._sfxVolScale = Math.max(0, Math.min(1, sfxVolume / 100));
+    if (musicVolume != null) this._musicVolScale = Math.max(0, Math.min(1, musicVolume / 100));
+    this._applySfxGain();
+    this._syncActiveMusicVolume();
+  }
+
+  _sfxGainTarget() {
+    return this.soundOn ? 0.58 * this._sfxVolScale : 0;
+  }
+
+  _applySfxGain() {
+    if (!this.sfxGain || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.sfxGain.gain.cancelScheduledValues(t);
+    this.sfxGain.gain.setTargetAtTime(this._sfxGainTarget(), t, 0.04);
+  }
+
+  _syncActiveMusicVolume() {
+    const active = this._activeTrackEl();
+    if (!active || active.paused) return;
+    const def = this._currentTrackDef ?? MUSIC_TRACKS.menu;
+    const vol = this._baseTrackVolume(def);
+    const boost = 1 + this._musicIntensity * 0.05;
+    active.volume = Math.min(1, vol * boost);
   }
 
   setSpatialPan(on) {
@@ -230,20 +239,22 @@ export class AudioManager {
 
   _duckMusic(factor = 0.55, ms = 420) {
     const active = this._activeTrackEl();
-    if (active && !active.paused) {
-      const base = active.volume;
-      active.volume = base * factor;
-      setTimeout(() => { if (active && !active.paused) active.volume = base; }, ms);
-    }
+    if (!active || active.paused) return;
+    const base = this._baseTrackVolume(this._currentTrackDef) * (1 + this._musicIntensity * 0.05);
+    active.volume = base * factor;
+    setTimeout(() => {
+      if (active && !active.paused) this._syncActiveMusicVolume();
+    }, ms);
   }
 
   sidechainImpulse() {
     if (!this.sfxGain || !this.ctx) return;
     const t = this.ctx.currentTime;
+    const target = this._sfxGainTarget();
     this.sfxGain.gain.cancelScheduledValues(t);
     this.sfxGain.gain.setValueAtTime(this.sfxGain.gain.value, t);
-    this.sfxGain.gain.linearRampToValueAtTime(0.38, t + 0.02);
-    this.sfxGain.gain.linearRampToValueAtTime(this.soundOn ? 0.62 : 0, t + 0.12);
+    this.sfxGain.gain.linearRampToValueAtTime(target * 0.55, t + 0.02);
+    this.sfxGain.gain.linearRampToValueAtTime(target, t + 0.12);
   }
 
   resume() {
@@ -252,9 +263,7 @@ export class AudioManager {
 
   setSoundEnabled(on) {
     this.soundOn = on;
-    if (this.sfxGain) {
-      this.sfxGain.gain.setTargetAtTime(on ? 0.62 : 0, this.ctx.currentTime, 0.04);
-    }
+    this._applySfxGain();
   }
 
   setMusicEnabled(on) {
@@ -275,6 +284,7 @@ export class AudioManager {
 
   applyMusicSettings({ musicVolume } = {}) {
     if (musicVolume != null) this.setMusicVolume(musicVolume);
+    else this._syncActiveMusicVolume();
     if (!this.musicOn) return;
     if (this._isMenu) this.setMenuMusic();
     else this.setLevelMusic(this._level, this._musicSeed, { biome: this._biome, isBoss: this._isBoss });
@@ -315,7 +325,6 @@ export class AudioManager {
     this.stopMusic();
     this.stopAmbience();
     if (this.sfxGain) {
-      this._sfxGainBeforeBg = this.sfxGain.gain.value;
       this.sfxGain.gain.value = 0;
     }
     if (this.ctx?.state === 'running') {
@@ -333,9 +342,8 @@ export class AudioManager {
     if (this.ctx?.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
-    if (this.sfxGain && this._sfxGainBeforeBg != null) {
-      this.sfxGain.gain.value = this.soundOn ? this._sfxGainBeforeBg : 0;
-      this._sfxGainBeforeBg = null;
+    if (this.sfxGain) {
+      this._applySfxGain();
     }
     if (!this.musicOn || !game?.scene) return;
 
@@ -666,19 +674,13 @@ export class AudioManager {
   }
 
   setSfxVolume(pct) {
-    const v = Math.max(0, Math.min(100, pct)) / 100;
-    if (this.sfxGain) {
-      this.sfxGain.gain.setTargetAtTime(this.soundOn ? 0.62 * v : 0, this.ctx?.currentTime ?? 0, 0.04);
-    }
+    this._sfxVolScale = Math.max(0, Math.min(1, pct / 100));
+    this._applySfxGain();
   }
 
   setMusicVolume(pct) {
-    const v = Math.max(0, Math.min(100, pct)) / 100;
-    this._musicVolScale = v;
-    const active = this._activeTrackEl();
-    if (active && !active.paused) {
-      active.volume = this._baseTrackVolume(this._currentTrackDef);
-    }
+    this._musicVolScale = Math.max(0, Math.min(1, pct / 100));
+    this._syncActiveMusicVolume();
   }
 
   powerNegative(opts = {}) {
@@ -701,27 +703,22 @@ export class AudioManager {
 
   setMusicIntensity(intensity = 0) {
     this._musicIntensity = Math.max(0, Math.min(1, intensity));
-    if (this._musicFilter) {
-      this._musicFilter.frequency.value = 8000 + this._musicIntensity * 4000;
-      this._musicFilter.gain.value = this._musicIntensity * 4;
-    }
-    const active = this._activeTrackEl();
-    if (active && !active.paused && this._currentTrackDef) {
-      const boost = 1 + this._musicIntensity * 0.08;
-      active.volume = this._baseTrackVolume(this._currentTrackDef) * boost;
-    }
+    this._syncActiveMusicVolume();
   }
 
   startAmbience(biome = 'garden') {
-    if (!this.ctx || !this._ambienceGain || this._ambienceOn) return;
-    this._ambienceOn = true;
+    if (!this.ctx || !this._ambienceGain) return;
     this.stopAmbience();
+    this._ambienceOn = true;
     const t = this.ctx.currentTime;
-    const dur = 4;
+    const dur = 6;
     const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * dur, this.ctx.sampleRate);
     const d = buf.getChannelData(0);
+    let pink = 0;
     for (let i = 0; i < d.length; i++) {
-      d[i] = (Math.random() * 2 - 1) * 0.3;
+      const white = Math.random() * 2 - 1;
+      pink = pink * 0.92 + white * 0.08;
+      d[i] = pink * 0.22;
     }
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
@@ -729,18 +726,18 @@ export class AudioManager {
     const f = this.ctx.createBiquadFilter();
     if (biome === 'frost') {
       f.type = 'highpass';
-      f.frequency.value = 2000;
+      f.frequency.value = 1200;
     } else if (biome === 'ember') {
       f.type = 'bandpass';
-      f.frequency.value = 600;
-      f.Q.value = 1.2;
+      f.frequency.value = 420;
+      f.Q.value = 0.6;
     } else {
       f.type = 'lowpass';
-      f.frequency.value = 400;
+      f.frequency.value = 280;
     }
     src.connect(f);
     f.connect(this._ambienceGain);
-    this._ambienceGain.gain.setTargetAtTime(0.04, t, 0.8);
+    this._ambienceGain.gain.setTargetAtTime(0.012 * this._sfxVolScale, t, 0.8);
     src.start(t);
     this._ambienceNodes.push(src);
   }

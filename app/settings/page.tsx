@@ -36,11 +36,13 @@ function SettingsContent() {
     setSettings(resolved as GameSettings);
     SaveManager.saveSettings(resolved as GameSettings);
     audio.init();
-    audio.setSoundEnabled(resolved.sound);
+    audio.applySettings({
+      sound: resolved.sound,
+      music: resolved.music,
+      sfxVolume: resolved.sfxVolume ?? DEFAULT_SFX_VOLUME,
+      musicVolume: resolved.musicVolume ?? DEFAULT_MUSIC_VOLUME,
+    });
     audio.setMusicEnabled(resolved.music);
-    audio.setSfxVolume(resolved.sfxVolume ?? DEFAULT_SFX_VOLUME);
-    audio.setMusicVolume(resolved.musicVolume ?? DEFAULT_MUSIC_VOLUME);
-    if (resolved.music) audio.applyMusicSettings({ musicVolume: resolved.musicVolume });
     notifyVfxChange(resolved);
   }, []);
 

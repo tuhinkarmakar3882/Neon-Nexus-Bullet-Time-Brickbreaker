@@ -63,7 +63,11 @@ export const SaveManager = {
       music,
       vfxQuality: storedQuality ? normalizeVfxQuality(storedQuality) : migrateVfxQuality(legacy),
       sfxVolume: this.getNumber(STORAGE.SFX_VOLUME, DEFAULT_SFX_VOLUME),
-      musicVolume: this.getNumber(STORAGE.MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME),
+      musicVolume: (() => {
+        const v = this.getNumber(STORAGE.MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME);
+        // Migrate legacy default (3%) that was effectively inaudible
+        return v > 0 && v < 12 ? DEFAULT_MUSIC_VOLUME : v;
+      })(),
     });
   },
   saveSettings(s) {
