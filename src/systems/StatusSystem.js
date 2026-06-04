@@ -137,6 +137,16 @@ export class StatusSystem {
     }
   }
 
+  /** Drop status tracking when a brick leaves the board. */
+  releaseBrick(brick) {
+    if (!brick) return;
+    this.brickStatus.delete(brick);
+    this.burnTiles.delete(brick);
+    brick.burning = false;
+    brick.frozen = false;
+    brick.frostMarked = false;
+  }
+
   clear() {
     this.brickStatus.clear();
     this.jardinainStatus.clear();

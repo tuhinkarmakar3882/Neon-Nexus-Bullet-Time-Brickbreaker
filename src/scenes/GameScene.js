@@ -668,14 +668,14 @@ export class GameScene extends Phaser.Scene {
 
   /** Pop garden gnomes during the level intro (even before the ball is launched). */
   scheduleIntroGnomes() {
-    const delays = [1200, 2600];
-    for (const ms of delays) {
-      this.time.delayedCall(ms, () => {
-        if (this.over || this.transitioning || this._completingLevel) return;
-        const alive = this.jardinains.filter((j) => !j._destroyed).length;
-        if (alive < JARDINAIN.MAX_ALIVE) this.tryPopupJardinain();
-      });
-    }
+    if (this.level < 4) return;
+    const maxAlive = this.difficulty?.gnomeMaxAlive ?? JARDINAIN.MAX_ALIVE;
+    if (maxAlive < 1) return;
+    this.time.delayedCall(2200, () => {
+      if (this.over || this.transitioning || this._completingLevel) return;
+      const alive = this.jardinains.filter((j) => !j._destroyed).length;
+      if (alive < maxAlive) this.tryPopupJardinain();
+    });
   }
 
   brickOccupiedByGnome(brick) {
@@ -1805,10 +1805,8 @@ export class GameScene extends Phaser.Scene {
     for (const b of this.bricks) {
       if (!b.alive || b.indestructible) continue;
       b.alive = false;
-      b.panel?.destroy();
-      b.fx?.destroy();
-      b.badge?.destroy();
-      b.crackImg?.destroy();
+      this.statusSys.releaseBrick(b);
+      b.teardown();
     }
     this.bricks = this.bricks.filter((b) => b.alive);
     this.emitStats();
@@ -2250,6 +2248,65 @@ export class GameScene extends Phaser.Scene {
       if (!b.alive || b.indestructible) continue;
       if (Math.hypot(b.cx - x, b.cy - y) < R && b.hit(99)) this.destroyBrick(b, false);
     }
+    this.destroyHazardsInRadius(x, y, R);
+  }
+
+  /** Clear pots, gnomes, and enemies within a blast radius (fire cannon). */
+  destroyHazardsInRadius(x, y, radius) {
+    for (let pi = this.pots.length - 1; pi >= 0; pi--) {
+      const p = this.pots[pi];
+      if (Math.hypot(p.x - x, p.y - y) < radius + p.r) this.destroyPotAt(pi, p.x, p.y);
+    }
+    for (const j of this.jardinains) {
+      if (!j._destroyed && Math.hypot(j.x - x, j.y - y) < radius + j.r) {
+        j.knockout();
+        this.score += GAME.SCORE_JARDINAIN;
+        this.floatText(j.x, j.y, `+${GAME.SCORE_JARDINAIN}`, '#86e6b0', 28);
+      }
+    }
+    for (const e of this.enemies) {
+      if (e.alive && Math.hypot(e.x - x, e.y - y) < radius + 14) this.killEnemy(e);
+    }
+  }
+
+  destroyPotAt(index, x, y) {
+    const p = this.pots[index];
+    if (!p) return;
+    p._shadowGfx?.destroy?.();
+    p.destroy();
+    this.pots.splice(index, 1);
+    if (this.settings.particles) this.burst(x, y, 0xe8a060, 6);
+    audio.blip(180);
+  }
+
+  /** Paddle cannon vs pots / gnomes / enemies (after brick pass). */
+  projectileHitHazards(b) {
+    const hitR = (b.hitW ?? 4) + 2;
+    for (let pi = this.pots.length - 1; pi >= 0; pi--) {
+      const p = this.pots[pi];
+      if (Math.hypot(b.x - p.x, b.y - p.y) < p.r + hitR) {
+        this.destroyPotAt(pi, p.x, p.y);
+        if (b.type === 'shock' && b.bouncesLeft > 0) return false;
+        return true;
+      }
+    }
+    for (const j of this.jardinains) {
+      if (!j._destroyed && Math.hypot(b.x - j.x, b.y - j.y) < j.r + hitR) {
+        j.knockout();
+        this.score += GAME.SCORE_JARDINAIN;
+        this.floatText(j.x, j.y, `+${GAME.SCORE_JARDINAIN}`, '#86e6b0', 28);
+        if (b.type === 'shock' && b.bouncesLeft > 0) return false;
+        return true;
+      }
+    }
+    for (const e of this.enemies) {
+      if (e.hitBy(b.x, b.y, hitR)) {
+        this.killEnemy(e);
+        if (b.type === 'shock' && b.bouncesLeft > 0) return false;
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Electric ball / shock — one-hit any brick type. */
@@ -2715,17 +2772,6 @@ export class GameScene extends Phaser.Scene {
     if (fromBall) {
       this.checkComboWow();
     }
-    if (brick.panel?.active) {
-      this.tweens.add({
-        targets: brick.panel,
-        scaleX: 0.2,
-        scaleY: 0.2,
-        alpha: 0,
-        angle: rand(-18, 18),
-        duration: 160,
-        ease: 'Cubic.easeIn',
-      });
-    }
     if (exploded) {
       this.explodeAt(brick);
       this.chainExplosiveProximity(brick);
@@ -2757,6 +2803,8 @@ export class GameScene extends Phaser.Scene {
       this.gems.push(gm);
     }
     this.tryBrickPowerDrop(brick);
+    this.statusSys.releaseBrick(brick);
+    brick.teardown();
   }
 
   /**
@@ -3375,7 +3423,14 @@ export class GameScene extends Phaser.Scene {
     this.updateGems(dtSec, ts);
 
     const before = this.bricks.length;
-    this.bricks = this.bricks.filter((b) => { if (!b.alive) { b.destroy(); return false; } return true; });
+    this.bricks = this.bricks.filter((b) => {
+      if (!b.alive) {
+        this.statusSys.releaseBrick(b);
+        if (!b._destroyed) b.teardown();
+        return false;
+      }
+      return true;
+    });
     if (this.bricks.length !== before) this.emitStats();
 
     this.paddle.sync();
@@ -3435,11 +3490,12 @@ export class GameScene extends Phaser.Scene {
       if (j.state === JSTATE.IDLE && j.brick?.alive && Math.random() < 0.002) {
         audio.gnomeIdleClink?.({ pan: j.x });
       }
-      if (throwResult === 'throw' && !this._nexusSlowMo && this.pots.length < 8) {
+      if (throwResult === 'throw' && !this._nexusSlowMo && this.pots.length < JARDINAIN.MAX_POTS) {
         const payload = j.createThrowPayload(this.paddle.x);
+        const potCap = JARDINAIN.MAX_POTS;
         const spawnThrow = (vxBias = 0, speedMult = 1, delayMs = 0) => {
           this.time.delayedCall(delayMs, () => {
-            if (j._destroyed || this.over || this.pots.length >= 8) return;
+            if (j._destroyed || this.over || this.pots.length >= potCap) return;
             this.pots.push(new GnomeProjectile(this, j.x, j.y, this.paddle.x, {
               ...payload,
               type: payload.type,
@@ -3451,11 +3507,10 @@ export class GameScene extends Phaser.Scene {
         };
         if (j.tier === GNOME_TIER.VOLLEY) {
           const spread = j.tierDef?.throwVxSpread ?? 180;
-          spawnThrow(-spread * 0.4, 0.72, 0);
-          spawnThrow(0, 0.68, 90);
-          spawnThrow(spread * 0.4, 0.72, 180);
+          spawnThrow(-spread * 0.35, 0.78, 0);
+          spawnThrow(spread * 0.35, 0.78, 140);
         } else {
-          spawnThrow(0, j.tier === GNOME_TIER.SNIPER ? 1.08 : 1, 0);
+          spawnThrow(0, j.tier === GNOME_TIER.SNIPER ? 1.05 : 1, 0);
         }
         wobble(this, j.c, { angle: 10, dur: 160, repeat: 0 });
         hitSpark(this, j.x, j.y - j.r, { tint: 0xc84040, count: 4, spread: 16 });
@@ -3916,21 +3971,7 @@ export class GameScene extends Phaser.Scene {
       b.update(dtSec, ts);
       let remove = this.projectileHitBrick(b);
 
-      if (!remove) {
-        for (const j of this.jardinains) {
-          if (!j._destroyed && Math.hypot(b.x - j.x, b.y - j.y) < j.r) {
-            j.knockout(); this.score += GAME.SCORE_JARDINAIN;
-            this.floatText(j.x, j.y, `+${GAME.SCORE_JARDINAIN}`, '#86e6b0', 28);
-            remove = b.type !== 'shock' || b.bouncesLeft <= 0;
-            if (!remove) break;
-          }
-        }
-      }
-      if (!remove) {
-        for (const e of this.enemies) {
-          if (e.hitBy(b.x, b.y, 6)) { this.killEnemy(e); remove = true; break; }
-        }
-      }
+      if (!remove) remove = this.projectileHitHazards(b);
       if (!remove && b.y < -20) remove = true;
       if (remove) { b.destroy(); this.bullets.splice(i, 1); }
     }

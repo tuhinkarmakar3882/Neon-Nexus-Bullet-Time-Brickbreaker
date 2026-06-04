@@ -20,7 +20,7 @@ export class Jardinain {
     this.r = Math.max(
       14,
       Math.min(brick.h * 0.78, brick.w * 0.42, GAME.HEIGHT * 0.024),
-    );
+    ) * (this.tierDef.scale ?? 1);
     this.bob = rand(0, Math.PI * 2);
     this.juggleCount = 0;
     this.vy = 0;
@@ -53,86 +53,119 @@ export class Jardinain {
 
   draw() {
     const r = this.r;
-    const body = this.tierDef.tint ?? 0x7eb87a;
+    const coat = this.tierDef.coat ?? this.tierDef.tint ?? 0x7eb87a;
+    const hat = this.tierDef.hat ?? 0xc84040;
     const g = this.scene.add.graphics();
+
+    // tier outline glow
+    g.lineStyle(2, coat, 0.55);
+    g.strokeEllipse(0, r * 0.35, r * 1.25, r * 1.05);
 
     // shadow
     g.fillStyle(0x08050c, 0.35);
     g.fillEllipse(0, r * 0.95, r * 1.1, r * 0.28);
 
-    // boots
-    g.fillStyle(0x3d2818, 1);
+    // boots — heavy has steel toe caps
+    g.fillStyle(this.tier === GNOME_TIER.HEAVY ? 0x2a2838 : 0x3d2818, 1);
     g.fillRoundedRect(-r * 0.55, r * 0.62, r * 0.45, r * 0.38, 3);
     g.fillRoundedRect(r * 0.1, r * 0.62, r * 0.45, r * 0.38, 3);
+    if (this.tier === GNOME_TIER.HEAVY) {
+      g.fillStyle(0x99aabb, 0.9);
+      g.fillRect(-r * 0.52, r * 0.88, r * 0.38, r * 0.1);
+      g.fillRect(r * 0.14, r * 0.88, r * 0.38, r * 0.1);
+    }
 
     // coat / body
-    g.fillStyle(body, 1);
+    g.fillStyle(coat, 1);
     g.fillRoundedRect(-r * 0.55, r * 0.05, r * 1.1, r * 0.65, 6);
-    g.fillStyle(0xffffff, 0.15);
-    g.fillRect(-r * 0.08, r * 0.1, r * 0.16, r * 0.5);
+    if (this.tier === GNOME_TIER.SPEED) {
+      g.lineStyle(2, 0xffffff, 0.35);
+      g.lineBetween(-r * 0.45, r * 0.15, r * 0.45, r * 0.55);
+    }
+    if (this.tier === GNOME_TIER.ELITE) {
+      g.fillStyle(0xffd23d, 0.85);
+      g.fillRect(-r * 0.55, r * 0.05, r * 1.1, r * 0.12);
+      g.fillStyle(0xffffff, 0.25);
+      g.fillRect(-r * 0.08, r * 0.18, r * 0.16, r * 0.42);
+    } else {
+      g.fillStyle(0xffffff, 0.15);
+      g.fillRect(-r * 0.08, r * 0.1, r * 0.16, r * 0.5);
+    }
+    if (this.tier === GNOME_TIER.VOLLEY) {
+      g.fillStyle(0xff7744, 0.9);
+      for (let i = -1; i <= 1; i++) g.fillCircle(i * r * 0.28, r * 0.38, r * 0.09);
+    }
 
-    // beard
+    // beard — speed has shorter beard
     g.fillStyle(0xf5ebe0, 0.95);
-    g.fillEllipse(0, r * 0.28, r * 0.72, r * 0.55);
+    const beardH = this.tier === GNOME_TIER.SPEED ? 0.42 : 0.55;
+    g.fillEllipse(0, r * 0.28, r * 0.72, r * beardH);
 
     // face
-    g.fillStyle(0xffd4c0, 1);
+    g.fillStyle(this.tier === GNOME_TIER.SNIPER ? 0xffd4c0 : 0xffd4c0, 1);
     g.fillCircle(0, r * 0.02, r * 0.38);
-    // cheeks
     g.fillStyle(0xff9a8a, 0.45);
     g.fillCircle(-r * 0.28, r * 0.08, r * 0.12);
     g.fillCircle(r * 0.28, r * 0.08, r * 0.12);
-    // eyes
     g.fillStyle(0xffffff, 1);
     g.fillCircle(-r * 0.18, -r * 0.06, r * 0.11);
     g.fillCircle(r * 0.18, -r * 0.06, r * 0.11);
     g.fillStyle(0x1a1020, 1);
     g.fillCircle(-r * 0.16, -r * 0.04, r * 0.06);
     g.fillCircle(r * 0.2, -r * 0.04, r * 0.06);
-    // nose
+    if (this.tier === GNOME_TIER.SNIPER) {
+      g.lineStyle(2, 0x44ffaa, 0.9);
+      g.strokeCircle(r * 0.22, -r * 0.04, r * 0.14);
+      g.fillStyle(0x1a5040, 1);
+      g.fillRect(-r * 0.38, -r * 0.12, r * 0.76, r * 0.08);
+    }
     g.fillStyle(0xffb0a0, 1);
     g.fillCircle(0, r * 0.06, r * 0.09);
 
-    // hat
-    const hatColor = this.tier === GNOME_TIER.HEAVY ? 0x8899aa : this.tier === GNOME_TIER.ELITE ? 0xd45d8c : 0xc84040;
-    g.fillStyle(hatColor, 1);
-    g.fillTriangle(-r * 0.65, r * 0.02, r * 0.65, r * 0.02, 0, -r * 1.35);
-    g.fillStyle(0xffffff, 0.2);
-    g.fillRect(-r * 0.7, r * 0.0, r * 1.4, r * 0.14);
+    // hat — shape per tier
+    g.fillStyle(hat, 1);
+    if (this.tier === GNOME_TIER.HEAVY) {
+      g.fillRoundedRect(-r * 0.72, -r * 0.55, r * 1.44, r * 0.55, 4);
+      g.fillRect(-r * 0.82, -r * 0.05, r * 1.64, r * 0.18);
+    } else if (this.tier === GNOME_TIER.SPEED) {
+      g.fillTriangle(-r * 0.35, r * 0.02, r * 0.35, r * 0.02, 0, -r * 1.55);
+      g.lineStyle(2, 0xffffff, 0.7);
+      g.lineBetween(-r * 0.55, -r * 0.55, r * 0.15, -r * 0.85);
+    } else if (this.tier === GNOME_TIER.ELITE) {
+      g.fillTriangle(-r * 0.65, r * 0.02, r * 0.65, r * 0.02, 0, -r * 1.35);
+      g.fillStyle(0xffd23d, 1);
+      for (let i = -1; i <= 1; i++) {
+        g.fillTriangle(i * r * 0.22, -r * 1.35, i * r * 0.22 + r * 0.08, -r * 1.58, i * r * 0.22 - r * 0.08, -r * 1.58);
+      }
+      g.fillStyle(0xffffff, 0.35);
+      g.fillRect(-r * 0.7, r * 0.0, r * 1.4, r * 0.14);
+    } else if (this.tier === GNOME_TIER.SNIPER) {
+      g.fillRoundedRect(-r * 0.55, -r * 0.35, r * 1.1, r * 0.38, 3);
+      g.fillTriangle(-r * 0.25, -r * 0.35, r * 0.25, -r * 0.35, 0, -r * 0.95);
+    } else if (this.tier === GNOME_TIER.VOLLEY) {
+      g.fillTriangle(-r * 0.75, r * 0.02, r * 0.75, r * 0.02, 0, -r * 1.2);
+      g.fillStyle(0xffaa66, 1);
+      g.fillCircle(-r * 0.42, -r * 1.05, r * 0.12);
+      g.fillCircle(r * 0.42, -r * 1.05, r * 0.12);
+    } else {
+      g.fillTriangle(-r * 0.65, r * 0.02, r * 0.65, r * 0.02, 0, -r * 1.35);
+      g.fillStyle(0xffffff, 0.2);
+      g.fillRect(-r * 0.7, r * 0.0, r * 1.4, r * 0.14);
+    }
     g.fillStyle(0x2a1810, 0.5);
-    g.fillRect(-r * 0.72, r * 0.1, r * 1.44, r * 0.1);
+    g.fillRect(-r * 0.72, r * 0.08, r * 1.44, r * 0.1);
 
     if (this.tier === GNOME_TIER.HEAVY) {
       g.lineStyle(3, 0xccddee, 0.85);
       g.strokeCircle(0, r * 0.15, r * 0.85);
-      g.fillStyle(0x8899aa, 0.4);
-      g.fillCircle(0, -r * 0.55, r * 0.2);
-    }
-    if (this.tier === GNOME_TIER.SPEED) {
-      g.lineStyle(2, 0xffd23d, 0.8);
-      g.lineBetween(-r * 0.5, -r * 0.3, r * 0.5, -r * 0.3);
-    }
-    if (this.tier === GNOME_TIER.ELITE) {
-      g.fillStyle(0xffd23d, 1);
-      for (let i = -1; i <= 1; i++) {
-        g.fillTriangle(i * r * 0.22, -r * 1.35, i * r * 0.22 + r * 0.08, -r * 1.55, i * r * 0.22 - r * 0.08, -r * 1.55);
-      }
     }
     if (this.tier === GNOME_TIER.SNIPER) {
       g.lineStyle(2, 0x44ffaa, 0.85);
-      g.strokeCircle(0, -r * 0.15, r * 0.55);
-      g.fillStyle(0x44ffaa, 0.9);
-      g.fillCircle(0, -r * 0.15, r * 0.12);
-    }
-    if (this.tier === GNOME_TIER.VOLLEY) {
-      g.fillStyle(0xff7744, 0.85);
-      g.fillCircle(-r * 0.42, -r * 1.05, r * 0.11);
-      g.fillCircle(0, -r * 1.12, r * 0.11);
-      g.fillCircle(r * 0.42, -r * 1.05, r * 0.11);
+      g.strokeCircle(0, -r * 0.55, r * 0.35);
     }
 
     this.c.add(g);
-    this.tip = this.scene.add.image(0, -r * 1.45, 'soft').setTint(hatColor)
+    this.tip = this.scene.add.image(0, -r * 1.45, 'soft').setTint(hat)
       .setBlendMode('ADD').setDisplaySize(r * 0.7, r * 0.7).setAlpha(0.45);
     this.c.add(this.tip);
     this.gfx = g;
@@ -281,7 +314,7 @@ export class Jardinain {
       this.syncPosition();
 
       const throwRate = (this.scene.potThrowRateMult ?? this.scene.difficulty?.potThrowRateMult ?? 1)
-        * (this.tier === GNOME_TIER.VOLLEY ? 1.35 : 1);
+        * (this.tier === GNOME_TIER.VOLLEY ? 1.08 : 1);
       this.throwTimer -= dtMs * envMult * throwRate * throwScale;
       if (this.throwTimer <= 0) {
         const intervalMult = 1 / Math.max(0.35, throwRate);

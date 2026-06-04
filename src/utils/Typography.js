@@ -122,14 +122,15 @@ export function canvasFont(sizePx, weight = '700', variant = 'display') {
 /** Wait for web fonts before first Phaser text render (avoids fallback flash). */
 export async function ensureFontsLoaded() {
   if (typeof document === 'undefined' || !document.fonts?.load) return;
+  const timeout = new Promise((resolve) => setTimeout(resolve, 2500));
+  const loads = Promise.all([
+    document.fonts.load('600 16px Chakra Petch'),
+    document.fonts.load('700 16px Chakra Petch'),
+    document.fonts.load('500 16px "DM Sans"'),
+    document.fonts.load('600 16px "DM Sans"'),
+  ]).then(() => document.fonts.ready);
   try {
-    await Promise.all([
-      document.fonts.load('600 16px Chakra Petch'),
-      document.fonts.load('700 16px Chakra Petch'),
-      document.fonts.load('500 16px "DM Sans"'),
-      document.fonts.load('600 16px "DM Sans"'),
-    ]);
-    await document.fonts.ready;
+    await Promise.race([loads, timeout]);
   } catch {
     /* offline / blocked CDN — fall back to system-ui */
   }

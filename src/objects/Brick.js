@@ -249,6 +249,7 @@ export class Brick {
   }
 
   update(dtSec) {
+    if (this._destroyed) return;
     this.t += dtSec * (this.sizePulse ? this.moveSpeed * 0.85 : this.moveSpeed);
     if (this.moving && this.alive && !this.frozen) {
       const prevCx = this.cx;
@@ -315,6 +316,7 @@ export class Brick {
   }
 
   sync() {
+    if (this._destroyed || !this.panel?.active) return;
     let pulse = 1;
     if (this.sizePulse && this.alive) {
       pulse = 1 + 0.04 * Math.sin(this.t * 2.1 + this.movePhase);
@@ -340,11 +342,29 @@ export class Brick {
     }
   }
 
-  destroy() {
-    this.scene.tweens.killTweensOf(this.panel);
+  /** Remove all canvas visuals — safe to call more than once. */
+  teardown() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    this.alive = false;
+    const scene = this.scene;
+    if (scene?.tweens) {
+      scene.tweens.killTweensOf(this.panel);
+      scene.tweens.killTweensOf(this.fx);
+      scene.tweens.killTweensOf(this.crackImg);
+      scene.tweens.killTweensOf(this.badge);
+    }
     this.crackImg?.destroy();
     this.badge?.destroy();
-    this.panel.destroy();
-    this.fx.destroy();
+    this.panel?.destroy();
+    this.fx?.destroy();
+    this.crackImg = null;
+    this.badge = null;
+    this.panel = null;
+    this.fx = null;
+  }
+
+  destroy() {
+    this.teardown();
   }
 }

@@ -22,25 +22,27 @@ export async function initAppShell({ showBanner = true } = {}) {
   establishMenuHistory();
 
   const adProvider = createAdProvider(null);
-  await Monetization.register({
-    ...adProvider,
-    init: async () => {
-      Monetization.applyConfig();
-      Monetization.removeAds = SaveManager.getRemoveAds();
-      try {
-        await adProvider.init?.();
-        if (!Capacitor.isNativePlatform()) {
-          await syncPendingEntitlements();
-        } else {
-          await initNativeBridge(null);
-          await Monetization.syncStoreEntitlements();
-          await syncPendingEntitlements();
-        }
-      } catch (e) {
-        console.warn('[Shell] monetization init skipped', e);
+  const initMonetization = async () => {
+    Monetization.applyConfig();
+    Monetization.removeAds = SaveManager.getRemoveAds();
+    try {
+      await adProvider.init?.();
+      if (!Capacitor.isNativePlatform()) {
+        await syncPendingEntitlements();
+      } else {
+        await initNativeBridge(null);
+        await Monetization.syncStoreEntitlements();
+        await syncPendingEntitlements();
       }
-    },
-  }, null);
+    } catch (e) {
+      console.warn('[Shell] monetization init skipped', e);
+    }
+  };
+
+  await Promise.race([
+    Monetization.register({ ...adProvider, init: initMonetization }, null),
+    new Promise((r) => setTimeout(r, 3500)),
+  ]);
 
   shellReady = true;
   if (showBanner) Monetization.showBanner();

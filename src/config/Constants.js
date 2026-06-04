@@ -178,7 +178,9 @@ export const JARDINAIN = {
   GRAVITY: 980,
   LAUNCH_SPEED: 920,
   DISLODGE_SPEED: 520,
-  MAX_ALIVE: 6,
+  MAX_ALIVE: 4,
+  /** Max gnome pots in flight at once — keeps the arena readable. */
+  MAX_POTS: 4,
   SIZE: 26,
   TAUNT_MS: 1400,
   /** Freeze + gnome taunt after the last ball is lost (before respawn). */

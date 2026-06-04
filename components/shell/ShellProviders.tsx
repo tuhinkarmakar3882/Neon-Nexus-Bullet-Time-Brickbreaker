@@ -15,6 +15,7 @@ import {
 } from '@/src/systems/Navigation.js';
 import { AdBanner } from '@/components/ads/AdBanner';
 import { trackScreenView } from '@/lib/analytics/shellAnalytics';
+import { registerServiceWorker } from '@/lib/shell/registerServiceWorker';
 
 type ShellProvidersProps = {
   children: ReactNode;
@@ -26,6 +27,7 @@ export function ShellProviders({ children }: ShellProvidersProps) {
 
   useEffect(() => {
     audio.attachDocumentLifecycle(() => window.__NEON);
+    registerServiceWorker();
   }, []);
 
   /** Shell routes play menu music; /play level music is owned by GameScene. */

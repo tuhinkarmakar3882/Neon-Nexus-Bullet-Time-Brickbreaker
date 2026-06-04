@@ -37,17 +37,17 @@ export function difficultyFor(level) {
     sparsePatternBoost: compact
       ? clamp(0.94 + t * 0.004, 0.94, 1.04)
       : clamp(1.06 + t * 0.005, 1.06, 1.16),
-    /** Gnome pot cadence — slow early, ramps to full pressure (~level 22+). */
-    potThrowRateMult: clamp(0.42 + t * 0.028, 0.42, 1.05),
-    potSpeedMult: clamp(0.5 + t * 0.026, 0.5, 1.12),
+    /** Gnome pot cadence — slow early, ramps gently (beatable late game). */
+    potThrowRateMult: clamp(0.28 + t * 0.016, 0.28, 0.72),
+    potSpeedMult: clamp(0.46 + t * 0.018, 0.46, 0.95),
     movingBoost: clamp(t * 0.008, 0, 0.28),
     moveSpeedMult: clamp(1 + t * 0.01, 1, 1.45),
 
-    gnomePopupMult: clamp(0.9 + t * 0.016, 0.9, 1.85),
-    gnomeSpawnChance: clamp(0.42 + t * 0.018, 0.42, 0.88),
-    gnomeMaxAlive: clamp(2 + Math.floor(t / 1.6), 2, JARDINAIN.MAX_ALIVE),
-    gnomeThrowMult: clamp(1 - t * 0.012, 0.38, 1),
-    gnomePressure: clamp(0.95 + t * 0.018, 0.95, 2.1),
+    gnomePopupMult: clamp(0.72 + t * 0.01, 0.72, 1.32),
+    gnomeSpawnChance: clamp(0.32 + t * 0.012, 0.32, 0.72),
+    gnomeMaxAlive: clamp(1 + Math.floor(t / 2.4), 1, JARDINAIN.MAX_ALIVE),
+    gnomeThrowMult: clamp(1 - t * 0.008, 0.55, 1),
+    gnomePressure: clamp(0.68 + t * 0.011, 0.68, 1.38),
     nestBudget: clamp(2 + Math.floor(level / 2), 2, JARDINAIN.MAX_ALIVE),
 
     enemyCountBonus: Math.floor(t / 2),
