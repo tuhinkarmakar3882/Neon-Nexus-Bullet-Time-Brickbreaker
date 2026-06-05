@@ -92,4 +92,11 @@ writeFileSync(outPath, json);
 const digest = createHash('sha256').update(json).digest('hex').slice(0, 12);
 writeFileSync(join(outDir, 'sw-version.txt'), manifest.version);
 
+const swPath = join(outDir, 'sw.js');
+if (existsSync(swPath)) {
+  const sw = readFileSync(swPath, 'utf8');
+  const stamped = sw.replace(/const BUILD_STAMP = '[^']*';/, `const BUILD_STAMP = '${manifest.version}';`);
+  if (stamped !== sw) writeFileSync(swPath, stamped);
+}
+
 console.log(`[sw-precache] ${urls.length} urls · cache ${manifest.version} · ${digest}`);

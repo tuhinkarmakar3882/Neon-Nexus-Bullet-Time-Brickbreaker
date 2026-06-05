@@ -1,13 +1,13 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/shell/AppShell';
 import { ShellBack } from '@/components/shell/ShellBack';
-import { PremiumLoader } from '@/components/shell/PremiumLoader';
 import { TermsContent } from '@/components/shell/legal/TermsContent';
 import { PrivacyContent } from '@/components/shell/legal/PrivacyContent';
 import { resolveShellBackHref, type LegalNavContext } from '@/lib/shell/routes';
+import { performShellBack } from '@/lib/shell/shellBack';
+import { useShellSearchParams } from '@/lib/hooks/useShellSearchParams';
 import { closeLegalShell } from '@/src/shell/LegalShell.js';
 
 type LegalDoc = 'terms' | 'privacy';
@@ -18,10 +18,10 @@ const TITLES: Record<LegalDoc, string> = {
 };
 
 function useLegalNav(): LegalNavContext {
-  const searchParams = useSearchParams();
+  const { params } = useShellSearchParams();
   return {
-    from: searchParams.get('from'),
-    returnTo: searchParams.get('return'),
+    from: params.get('from'),
+    returnTo: params.get('return'),
   };
 }
 
@@ -35,7 +35,9 @@ function LegalEmbedView({ doc, inShell }: { doc: LegalDoc; inShell: boolean }) {
       return;
     }
     if (closeLegalShell()) return;
-    router.push(resolveShellBackHref(nav.from, nav.returnTo));
+    performShellBack(router, {
+      fallbackHref: resolveShellBackHref(nav.from, nav.returnTo),
+    });
   };
 
   return (
@@ -72,22 +74,14 @@ function LegalStandaloneView({ doc }: { doc: LegalDoc }) {
   );
 }
 
-function LegalFrame({ doc }: { doc: LegalDoc }) {
-  const searchParams = useSearchParams();
-  const embed = searchParams.get('embed') === '1';
-  const inShell = searchParams.get('shell') === '1';
+export function LegalDocumentPage({ doc }: { doc: LegalDoc }) {
+  const { params } = useShellSearchParams();
+  const embed = params.get('embed') === '1';
+  const inShell = params.get('shell') === '1';
 
   if (embed) {
     return <LegalEmbedView doc={doc} inShell={inShell} />;
   }
 
   return <LegalStandaloneView doc={doc} />;
-}
-
-export function LegalDocumentPage({ doc }: { doc: LegalDoc }) {
-  return (
-    <Suspense fallback={<PremiumLoader title={TITLES[doc]} />}>
-      <LegalFrame doc={doc} />
-    </Suspense>
-  );
 }

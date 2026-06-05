@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { IconNode } from 'lucide';
-import { ROUTES, armPlayIntent, shellBackHref } from '@/lib/shell/routes';
+import { shellBackHref } from '@/lib/shell/routes';
 import { WorldBackdrop } from '@/components/shell/WorldBackdrop';
 import { ShellBack } from '@/components/shell/ShellBack';
 import { LucideIcon } from '@/components/shell/LucideIcon';
@@ -41,7 +41,7 @@ export function AppShell({
   badge,
   layout = 'default',
 }: AppShellProps) {
-  const href = backHref ?? shellBackHref(from);
+  const fallbackHref = backHref ?? shellBackHref(from);
   const chip = badge !== undefined ? badge : TONE_BADGE[tone];
   const legalLayout = layout === 'legal';
 
@@ -57,11 +57,10 @@ export function AppShell({
     >
       <WorldBackdrop variant={tone === 'plain' ? 'utility' : tone} />
       <header className="shell-header shell-header--premium">
-        {from === 'play' ? (
-          <ShellBack href={ROUTES.play} onClick={() => armPlayIntent({ resume: true })} />
-        ) : (
-          <ShellBack href={href} />
-        )}
+        <ShellBack
+          fallbackHref={fallbackHref}
+          playResume={from === 'play'}
+        />
         <div className="shell-header-meta">
           {chip ? <span className="shell-header-badge">{chip}</span> : null}
           <h1 className="shell-header-title shell-header-title--prominent">{title}</h1>

@@ -66,12 +66,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 window.__neonInstallPrompt = e;
                 window.dispatchEvent(new Event('neon-install-ready'));
               });
-              (function () {
-                var h = location.hostname;
-                if (h === 'localhost' || h === '127.0.0.1') return;
-                if (!('serviceWorker' in navigator)) return;
-                navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
-              })();
             `,
           }}
         />

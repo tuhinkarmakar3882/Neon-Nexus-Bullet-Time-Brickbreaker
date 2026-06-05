@@ -23,6 +23,7 @@ import { registerServiceWorker } from '@/lib/shell/registerServiceWorker';
 import { wireHubLinkPrefetch } from '@/lib/shell/warmHubCache';
 import { prefetchBeforeNavigate, prefetchHubRoutes } from '@/lib/shell/hubRoutePrefetch';
 import { registerShellRouter, unregisterShellRouter } from '@/lib/shell/shellRouter';
+import { recordShellNavigation, syncShellStackOnPop } from '@/lib/shell/shellNavStack';
 
 type ShellProvidersProps = {
   children: ReactNode;
@@ -99,6 +100,22 @@ export function ShellProviders({ children }: ShellProvidersProps) {
   useEffect(() => {
     if (pathname) trackScreenView(pathname);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!pathname || isPlay) return;
+    const search = typeof window !== 'undefined' ? window.location.search : '';
+    recordShellNavigation(pathname, search);
+  }, [pathname, isPlay]);
+
+  useEffect(() => {
+    if (isPlay) return;
+    const onPop = () => {
+      const search = typeof window !== 'undefined' ? window.location.search : '';
+      syncShellStackOnPop(window.location.pathname, search);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [isPlay]);
 
   useEffect(() => {
     if (isPlay) {

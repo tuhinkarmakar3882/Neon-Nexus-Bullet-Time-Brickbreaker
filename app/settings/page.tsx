@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, useCallback, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useCallback, useState } from 'react';
+import { useShellSearchParams } from '@/lib/hooks/useShellSearchParams';
 import { AppShell, NeonButton } from '@/components/shell/AppShell';
 import { ShellAbout } from '@/components/shell/ShellAbout';
 import { SettingsSection } from '@/components/shell/SettingsSection';
@@ -23,7 +23,6 @@ import { BookOpen, ShoppingBag } from 'lucide';
 import type { GameSettings } from '@/lib/types/settings';
 import { SHELL_COPY } from '@/lib/copy/shell';
 import { SETTINGS_ICONS } from '@/lib/shell/settingsIcons';
-import { PremiumLoader } from '@/components/shell/PremiumLoader';
 import { LucideIcon } from '@/components/shell/LucideIcon';
 import { SettingsBackupPanel } from '@/components/shell/SettingsBackupPanel';
 
@@ -34,9 +33,9 @@ function notifyVfxChange(resolved: ReturnType<typeof resolveSettings>) {
   window.__NEON?.events?.emit('settings:vfx', resolved);
 }
 
-function SettingsContent() {
-  const searchParams = useSearchParams();
-  const from = searchParams.get('from') ?? '';
+export default function SettingsPage() {
+  const { params } = useShellSearchParams();
+  const from = params.get('from') ?? '';
   const [settings, setSettings] = useState<GameSettings>(() => SaveManager.loadSettings() as GameSettings);
   const [status, setStatus] = useState('');
 
@@ -213,13 +212,5 @@ function SettingsContent() {
         </SettingsSection>
       </div>
     </AppShell>
-  );
-}
-
-export default function SettingsPage() {
-  return (
-    <Suspense fallback={<PremiumLoader compact />}>
-      <SettingsContent />
-    </Suspense>
   );
 }

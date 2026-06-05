@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, useCallback, useState, type CSSProperties } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useCallback, useState, type CSSProperties } from 'react';
+import { useShellSearchParams } from '@/lib/hooks/useShellSearchParams';
 import { Check } from 'lucide';
 import { AppShell } from '@/components/shell/AppShell';
 import { GemSpendConfirm, type GemSpendPreview } from '@/components/shell/GemSpendConfirm';
@@ -21,7 +21,6 @@ import { isIapEnabled } from '@/src/config/AdsConfig.js';
 import { audio } from '@/src/systems/AudioManager.js';
 import { cssHex } from '@/src/config/Palette.js';
 import { SHELL_COPY } from '@/lib/copy/shell';
-import { PremiumLoader } from '@/components/shell/PremiumLoader';
 import { SegmentedControl } from '@/components/shell/SegmentedControl';
 import { countCosmetics } from '@/lib/shell/progression';
 import { Gem } from 'lucide';
@@ -65,9 +64,9 @@ function buildEquipPreview(
   };
 }
 
-function ShopContent() {
-  const searchParams = useSearchParams();
-  const from = searchParams.get('from') ?? '';
+export default function ShopPage() {
+  const { params } = useShellSearchParams();
+  const from = params.get('from') ?? '';
   const { gems, refresh } = useGameMeta();
   const [status, setStatus] = useState('');
   const [pending, setPending] = useState<PendingPurchase | null>(null);
@@ -272,13 +271,5 @@ function ShopContent() {
         )}
       </div>
     </AppShell>
-  );
-}
-
-export default function ShopPage() {
-  return (
-    <Suspense fallback={<PremiumLoader compact />}>
-      <ShopContent />
-    </Suspense>
   );
 }

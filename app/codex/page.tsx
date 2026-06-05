@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { AppShell } from '@/components/shell/AppShell';
 import { HOW_TO_PLAY } from '@/src/config/HowToPlay.js';
 import {
@@ -16,9 +16,9 @@ import { GNOME_TIERS } from '@/src/config/GnomeTiers.js';
 import { MetaProgress } from '@/src/systems/MetaProgress.js';
 import { cssHex } from '@/src/config/Palette.js';
 import { SHELL_COPY } from '@/lib/copy/shell';
-import { PremiumLoader } from '@/components/shell/PremiumLoader';
 import { SegmentedControl } from '@/components/shell/SegmentedControl';
 import { codexDiscovery } from '@/lib/shell/progression';
+import { useShellSearchParams } from '@/lib/hooks/useShellSearchParams';
 
 const TABS = [
   { id: 'guide', label: SHELL_COPY.codex.tabs.guide },
@@ -36,11 +36,12 @@ function parseTab(raw: string | null): CodexTab {
   return 'guide';
 }
 
-function CodexContent() {
+export default function CodexPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const from = searchParams.get('from') ?? '';
-  const tabParam = searchParams.get('tab');
+  const pathname = usePathname();
+  const { params, syncSearch } = useShellSearchParams();
+  const from = params.get('from') ?? '';
+  const tabParam = params.get('tab');
   const [tab, setTab] = useState<CodexTab>(() => parseTab(tabParam));
   const archive = codexDiscovery();
   const codex = useMemo(() => MetaProgress.getCodex(), [tab, archive.found]);
@@ -53,11 +54,15 @@ function CodexContent() {
     (next: string) => {
       const id = parseTab(next);
       setTab(id);
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('tab', id);
-      router.replace(`/codex/?${params.toString()}`, { scroll: false });
+      const nextParams = new URLSearchParams(
+        typeof window !== 'undefined' ? window.location.search : '',
+      );
+      nextParams.set('tab', id);
+      const q = nextParams.toString();
+      router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+      syncSearch();
     },
-    [router, searchParams],
+    [router, pathname, syncSearch],
   );
 
   const unlockedPowers = new Set(codex.powers ?? []);
@@ -226,13 +231,5 @@ function CodexContent() {
         </div>
       </div>
     </AppShell>
-  );
-}
-
-export default function CodexPage() {
-  return (
-    <Suspense fallback={<PremiumLoader compact />}>
-      <CodexContent />
-    </Suspense>
   );
 }

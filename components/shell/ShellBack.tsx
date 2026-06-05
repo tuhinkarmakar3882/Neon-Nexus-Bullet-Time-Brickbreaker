@@ -1,42 +1,39 @@
 'use client';
 
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ChevronLeft } from 'lucide';
 import { LucideIcon } from '@/components/shell/LucideIcon';
+import { performShellBack } from '@/lib/shell/shellBack';
+import { ROUTES } from '@/lib/shell/routes';
 
 type ShellBackProps = {
-  href?: string;
+  /** Fallback when there is no prior hub screen in this session. */
+  fallbackHref?: string;
+  playResume?: boolean;
   onClick?: () => void;
   label?: string;
 };
 
-export function ShellBack({ href, onClick, label = 'Back' }: ShellBackProps) {
-  const inner = (
-    <>
-      <LucideIcon icon={ChevronLeft} size={20} className="shell-back__icon" />
-      <span>{label}</span>
-    </>
-  );
+export function ShellBack({
+  fallbackHref = ROUTES.home,
+  playResume,
+  onClick,
+  label = 'Back',
+}: ShellBackProps) {
+  const router = useRouter();
 
-  if (onClick && !href) {
-    return (
-      <button type="button" className="shell-back" onClick={onClick} aria-label={label}>
-        {inner}
-      </button>
-    );
-  }
-
-  if (href?.startsWith('http')) {
-    return (
-      <a href={href} className="shell-back" aria-label={label}>
-        {inner}
-      </a>
-    );
-  }
+  const handleBack = () => {
+    if (onClick) {
+      onClick();
+      return;
+    }
+    performShellBack(router, { fallbackHref, playResume });
+  };
 
   return (
-    <Link href={href ?? '/'} className="shell-back" aria-label={label} prefetch onClick={onClick}>
-      {inner}
-    </Link>
+    <button type="button" className="shell-back" onClick={handleBack} aria-label={label}>
+      <LucideIcon icon={ChevronLeft} size={20} className="shell-back__icon" />
+      <span>{label}</span>
+    </button>
   );
 }

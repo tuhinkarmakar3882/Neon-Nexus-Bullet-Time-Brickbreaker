@@ -1,8 +1,11 @@
-/** Stale-while-revalidate shell cache + navigation preload for faster document loads. */
+/** Stale-while-revalidate asset cache + network-first shell documents. */
+const BUILD_STAMP = '__SW_BUILD__';
 const FALLBACK_CACHE = 'neon-nexus-fallback-v1';
 const PRECACHE_MANIFEST = '/sw-precache.json';
+const MANIFEST_CHECK_MS = 5 * 60 * 1000;
 
 let activeCache = FALLBACK_CACHE;
+let lastManifestCheck = 0;
 const MIN_SHELL = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -10,10 +13,10 @@ self.addEventListener('install', (event) => {
     (async () => {
       const cache = await caches.open(FALLBACK_CACHE);
       await cache.addAll(MIN_SHELL).catch(() => {});
-      await precacheFromManifest();
+      await refreshPrecache();
+      await self.skipWaiting();
     })(),
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -26,9 +29,9 @@ self.addEventListener('activate', (event) => {
           /* unsupported or disabled */
         }
       }
-      await precacheFromManifest();
+      await refreshPrecache();
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== activeCache && k !== FALLBACK_CACHE).map((k) => caches.delete(k)));
+      await Promise.all(keys.filter((k) => k !== activeCache).map((k) => caches.delete(k)));
       await self.clients.claim();
     })(),
   );
@@ -40,6 +43,9 @@ self.addEventListener('message', (event) => {
   if (data.type === 'neon-warm-cache' && Array.isArray(data.urls)) {
     event.waitUntil(warmUrls(data.urls));
   }
+  if (data.type === 'neon-check-precache') {
+    event.waitUntil(refreshPrecache(true));
+  }
 });
 
 self.addEventListener('fetch', (event) => {
@@ -50,8 +56,10 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (shouldBypass(request, url)) return;
 
-  if (request.mode === 'navigate') {
-    event.respondWith(handleNavigate(request, event));
+  event.waitUntil(maybeRefreshPrecache());
+
+  if (request.mode === 'navigate' || isShellDocument(request, url)) {
+    event.respondWith(handleDocument(request, event));
     return;
   }
 
@@ -70,15 +78,35 @@ self.addEventListener('sync', (event) => {
 
 function shouldBypass(request, url) {
   if (url.pathname.startsWith('/api/')) return true;
+  if (url.pathname === '/sw.js' || url.pathname === '/sw-precache.json') return true;
   if (request.cache === 'only-if-cached' && request.mode !== 'same-origin') return true;
   return false;
+}
+
+function isShellDocument(request, url) {
+  const path = url.pathname;
+  if (path.startsWith('/_next/') || path.startsWith('/api/')) return false;
+  if (path.includes('.')) return false;
+
+  const accept = request.headers.get('accept') || '';
+  if (accept.includes('text/html')) return true;
+
+  // Hub prefetch uses fetch() with Accept: */* — still shell HTML.
+  return path === '/' || path.endsWith('/');
 }
 
 async function openActiveCache() {
   return caches.open(activeCache);
 }
 
-async function precacheFromManifest() {
+async function maybeRefreshPrecache() {
+  const now = Date.now();
+  if (now - lastManifestCheck < MANIFEST_CHECK_MS) return;
+  lastManifestCheck = now;
+  await refreshPrecache();
+}
+
+async function refreshPrecache(force = false) {
   try {
     const res = await fetch(PRECACHE_MANIFEST, { cache: 'no-store' });
     if (!res.ok) return;
@@ -86,7 +114,7 @@ async function precacheFromManifest() {
     if (!manifest?.version || !Array.isArray(manifest.urls)) return;
 
     const nextCache = `neon-nexus-${manifest.version}`;
-    if (nextCache === activeCache) {
+    if (!force && nextCache === activeCache) {
       const existing = await caches.has(nextCache);
       if (existing) return;
     }
@@ -140,28 +168,21 @@ async function networkFromPreloadOrFetch(request, event) {
   }
 }
 
-/** Navigation preload + SWR — cached pages instant; cold loads start fetch during SW boot. */
-async function handleNavigate(request, event) {
+/** Network-first for shell HTML — fresh deploys win; cache is offline fallback only. */
+async function handleDocument(request, event) {
   const cache = await openActiveCache();
-  const cached = await matchCached(cache, request);
-  const networkPromise = networkFromPreloadOrFetch(request, event);
 
-  if (cached) {
-    event.waitUntil(
-      networkPromise.then(async (response) => {
-        if (response) await cache.put(request, response.clone());
-      }),
-    );
-    return cached;
-  }
-
-  const fresh = await networkPromise;
+  const fresh = await networkFromPreloadOrFetch(request, event);
   if (fresh) {
     await cache.put(request, fresh.clone());
     return fresh;
   }
 
+  const cached = await matchCached(cache, request);
+  if (cached) return cached;
+
   return (
+    (await matchCached(cache, '/index.html')) ??
     (await caches.match('/index.html')) ??
     (await caches.match('/')) ??
     Response.error()
@@ -196,7 +217,7 @@ async function matchCached(cache, request) {
   const direct = await cache.match(request);
   if (direct) return direct;
 
-  const url = new URL(request.url);
+  const url = new URL(typeof request === 'string' ? request : request.url);
   let path = url.pathname;
   if (!path.endsWith('/')) path = `${path}/`;
 
