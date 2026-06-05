@@ -77,6 +77,7 @@ export function ShellProviders({ children }: ShellProvidersProps) {
       hideShellBanner();
       return () => {
         document.body.classList.remove('shell-play');
+        document.body.classList.add('shell-scroll');
       };
     }
 

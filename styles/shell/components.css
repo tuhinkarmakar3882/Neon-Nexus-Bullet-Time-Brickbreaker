@@ -133,6 +133,8 @@
   border-radius: var(--radius-cta);
   box-shadow: none;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   box-sizing: border-box;
 }
 
@@ -507,6 +509,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45em;
+  min-height: 44px;
   padding: 8px 12px 8px 10px;
   border-radius: var(--radius-cta);
   border: 1px solid var(--border-subtle);
@@ -520,6 +523,9 @@
   color: var(--text-muted);
   text-decoration: none;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
   transition:
     color 0.15s ease,
     border-color 0.15s ease,

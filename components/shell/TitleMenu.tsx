@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { IconNode } from 'lucide';
 import { ChevronRight } from 'lucide';
@@ -72,9 +71,9 @@ function MenuEntry({
 
   if (href) {
     return (
-      <Link href={href} className={cls} prefetch>
+      <a href={href} className={cls}>
         {inner}
-      </Link>
+      </a>
     );
   }
 
@@ -125,15 +124,14 @@ export function TitleMenu({
         <span className="title-corner-btn__label">{c.nav.tutorial}</span>
       </button>
 
-      <Link
+      <a
         href={ROUTES.settings}
         className="title-corner-btn title-corner-btn--settings"
-        prefetch
         aria-label={settings.label}
       >
         <LucideIcon icon={settings.icon} size={18} className="title-corner-btn__icon" />
         <span className="title-corner-btn__label">{settings.label}</span>
-      </Link>
+      </a>
 
       <div className="title-screen" role="group" aria-label="Game main menu">
         <header className="title-screen__brand">
@@ -223,28 +221,28 @@ export function TitleMenu({
                   <span>{c.nav.installShort}</span>
                 </button>
               ) : (
-                <Link href={ROUTES.install} className="title-screen__utility-pill" prefetch>
+                <a href={ROUTES.install} className="title-screen__utility-pill">
                   <LucideIcon icon={HOME_ICONS.install} size={15} />
                   <span>{c.nav.installShort}</span>
-                </Link>
+                </a>
               )
             ) : null}
-            <Link href={ROUTES.connect} className="title-screen__utility-pill" prefetch>
+            <a href={ROUTES.connect} className="title-screen__utility-pill">
               <LucideIcon icon={HOME_ICONS.connect} size={15} />
               <span>{c.nav.connectShort}</span>
-            </Link>
+            </a>
           </div>
 
           <div className="title-screen__legal">
-            <Link href={ROUTES.terms} className="title-screen__legal-link" prefetch>
+            <a href={ROUTES.terms} className="title-screen__legal-link">
               Terms
-            </Link>
+            </a>
             <span className="title-screen__legal-sep" aria-hidden>
               ·
             </span>
-            <Link href={ROUTES.privacy} className="title-screen__legal-link" prefetch>
+            <a href={ROUTES.privacy} className="title-screen__legal-link">
               Privacy
-            </Link>
+            </a>
           </div>
 
           <p className="title-screen__version" aria-label={`Version ${APP_VERSION}`}>

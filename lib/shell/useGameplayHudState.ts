@@ -265,22 +265,48 @@ export function useGameplayHudState() {
       if (g) requestHudSync(g, patch);
     };
 
+    const onViewport = () => onHudSync();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') onHudSync();
+    };
+
     window.addEventListener('neon:game-ready', onReady);
     window.addEventListener('neon:hud-sync', onHudSync);
+    window.visualViewport?.addEventListener('resize', onViewport);
+    window.visualViewport?.addEventListener('scroll', onViewport);
+    window.addEventListener('orientationchange', onViewport);
+    window.addEventListener('pageshow', onViewport);
+    document.addEventListener('visibilitychange', onVisible);
+
     if (!tryAttach()) {
       poll = setInterval(() => {
         if (!isCurrentPlayMount(mountGen)) {
           clearInterval(poll);
           return;
         }
-        if (tryAttach()) clearInterval(poll);
+        if (tryAttach()) {
+          onHudSync();
+          clearInterval(poll);
+        }
       }, 80);
     }
+
+    const hudKeepAlive = window.setInterval(() => {
+      if (!isCurrentPlayMount(mountGen)) return;
+      const gs = window.__NEON?.scene?.getScene(SCENES.GAME) as { scene?: { isActive?: () => boolean } } | undefined;
+      if (gs?.scene?.isActive?.()) onHudSync();
+    }, 2000);
 
     return () => {
       window.removeEventListener('neon:game-ready', onReady);
       window.removeEventListener('neon:hud-sync', onHudSync);
+      window.visualViewport?.removeEventListener('resize', onViewport);
+      window.visualViewport?.removeEventListener('scroll', onViewport);
+      window.removeEventListener('orientationchange', onViewport);
+      window.removeEventListener('pageshow', onViewport);
+      document.removeEventListener('visibilitychange', onVisible);
       if (poll) clearInterval(poll);
+      window.clearInterval(hudKeepAlive);
       detach?.();
     };
   }, [patch]);

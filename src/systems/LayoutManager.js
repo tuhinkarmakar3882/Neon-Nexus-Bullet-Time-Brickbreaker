@@ -17,13 +17,16 @@ export function isGameplayLocked(game) {
 /** Size of the Phaser parent element (actual drawable area). */
 export function getViewportSize() {
   const root = document.getElementById('game-root');
+  const stage = document.querySelector('.play-stage--hud') ?? document.querySelector('.play-stage');
   const vv = window.visualViewport;
-  const rw = root?.clientWidth ?? 0;
-  const rh = root?.clientHeight ?? 0;
+  const rect = root?.getBoundingClientRect?.();
+  const rw = rect?.width > 0 ? rect.width : (root?.clientWidth ?? 0);
+  const rh = rect?.height > 0 ? rect.height : (root?.clientHeight ?? 0);
   const vw = vv?.width ?? window.innerWidth ?? 390;
   const vh = vv?.height ?? window.innerHeight ?? 844;
-  const w = rw > 32 ? rw : vw;
-  const h = rh > 32 ? rh : vh;
+  const stageRect = stage?.getBoundingClientRect?.();
+  const w = rw > 32 ? rw : (stageRect?.width > 32 ? stageRect.width : vw);
+  const h = rh > 32 ? rh : (stageRect?.height > 32 ? stageRect.height : vh);
   return { w: Math.max(320, Math.round(w)), h: Math.max(400, Math.round(h)) };
 }
 

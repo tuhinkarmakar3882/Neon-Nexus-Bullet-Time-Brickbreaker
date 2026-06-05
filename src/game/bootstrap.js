@@ -154,6 +154,9 @@ function handleViewportChangeInner() {
   } else {
     refreshDisplayScale(game);
   }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('neon:hud-sync'));
+  }
 }
 
 function scheduleViewportChange() {
@@ -310,6 +313,12 @@ export async function bootPlayGame() {
     requestAnimationFrame(() => {
       syncPlayFrameLayout(game);
       scheduleViewportChange();
+      requestAnimationFrame(() => {
+        syncPlayFrameLayout(game);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('neon:hud-sync'));
+        }
+      });
     });
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('neon:game-ready', { detail: { game } }));
