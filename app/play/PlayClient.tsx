@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ROUTES } from '@/lib/shell/routes';
 import { PlayBootSplash } from '@/components/shell/PlayBootSplash';
@@ -22,6 +22,7 @@ import {
 } from '@/src/shell/BootSplash.js';
 import { syncPlayFrameLayout, syncViewportLayout } from '@/src/systems/LayoutManager.js';
 import { closeLegalShell } from '@/src/shell/LegalShell.js';
+import { GAME } from '@/src/config/Constants.js';
 
 const PHASES = SHELL_COPY.play.phases;
 const BOOT_ERR = SHELL_COPY.play.bootError;
@@ -29,15 +30,17 @@ const BOOT_ERR = SHELL_COPY.play.bootError;
 export default function PlayClient() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [bootAttempt, setBootAttempt] = useState(0);
-  const generationRef = useRef(0);
+  /** Bump during render so child HUD effects see the current generation (child useEffect runs before parent). */
+  const mountGen = useMemo(() => bumpPlayMountGeneration(), [bootAttempt]);
+  const generationRef = useRef(mountGen);
+  generationRef.current = mountGen;
 
   const retryBoot = useCallback(() => {
     setBootAttempt((n) => n + 1);
   }, []);
 
   useEffect(() => {
-    const generation = bumpPlayMountGeneration();
-    generationRef.current = generation;
+    const generation = mountGen;
     let cancelled = false;
 
     resetBootSplashState();
@@ -73,6 +76,7 @@ export default function PlayClient() {
         requestAnimationFrame(() => syncViewportLayout());
 
         setBootSplash({ progress: 8, label: PHASES.bundle });
+        GAME.USE_DOM_HUD = true;
         const { bootPlayGame } = await import('@/src/game/bootstrap.js');
         if (cancelled || !isCurrentPlayMount(generation)) return;
 
@@ -82,7 +86,10 @@ export default function PlayClient() {
 
         requestAnimationFrame(() => {
           syncPlayFrameLayout(g);
-          requestAnimationFrame(() => syncPlayFrameLayout(g));
+          requestAnimationFrame(() => {
+            syncPlayFrameLayout(g);
+            window.dispatchEvent(new CustomEvent('neon:hud-sync'));
+          });
         });
       } catch (e) {
         console.error('[Neon Nexus] boot failed', e);
@@ -99,11 +106,11 @@ export default function PlayClient() {
       if (!isCurrentPlayMount(generationRef.current)) return;
       void import('@/src/game/bootstrap.js').then((m) => m.destroyGame());
     };
-  }, [bootAttempt]);
+  }, [bootAttempt, mountGen]);
 
   return (
     <div className="play-stage play-stage--hud">
-      <GameplayHudBridge />
+      <GameplayHudBridge mountGen={mountGen} />
       <main id="game-root" aria-label="Neon Nexus game canvas" />
       <PlayBootSplash />
       <WebAdBridge />

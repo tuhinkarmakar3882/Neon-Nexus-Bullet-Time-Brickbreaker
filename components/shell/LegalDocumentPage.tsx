@@ -7,7 +7,7 @@ import { ShellBack } from '@/components/shell/ShellBack';
 import { PremiumLoader } from '@/components/shell/PremiumLoader';
 import { TermsContent } from '@/components/shell/legal/TermsContent';
 import { PrivacyContent } from '@/components/shell/legal/PrivacyContent';
-import { ROUTES } from '@/lib/shell/routes';
+import { resolveShellBackHref, type LegalNavContext } from '@/lib/shell/routes';
 import { closeLegalShell } from '@/src/shell/LegalShell.js';
 
 type LegalDoc = 'terms' | 'privacy';
@@ -17,8 +17,17 @@ const TITLES: Record<LegalDoc, string> = {
   privacy: 'Privacy Policy',
 };
 
+function useLegalNav(): LegalNavContext {
+  const searchParams = useSearchParams();
+  return {
+    from: searchParams.get('from'),
+    returnTo: searchParams.get('return'),
+  };
+}
+
 function LegalEmbedView({ doc, inShell }: { doc: LegalDoc; inShell: boolean }) {
   const router = useRouter();
+  const nav = useLegalNav();
 
   const onBack = () => {
     if (typeof window !== 'undefined' && window.parent !== window) {
@@ -26,7 +35,7 @@ function LegalEmbedView({ doc, inShell }: { doc: LegalDoc; inShell: boolean }) {
       return;
     }
     if (closeLegalShell()) return;
-    router.push(ROUTES.home);
+    router.push(resolveShellBackHref(nav.from, nav.returnTo));
   };
 
   return (
@@ -41,9 +50,9 @@ function LegalEmbedView({ doc, inShell }: { doc: LegalDoc; inShell: boolean }) {
       ) : null}
       <div className="legal-embed-scroll">
         {doc === 'terms' ? (
-          <TermsContent showFooter={!inShell} />
+          <TermsContent showFooter={!inShell} nav={nav} />
         ) : (
-          <PrivacyContent showFooter={!inShell} />
+          <PrivacyContent showFooter={!inShell} nav={nav} />
         )}
       </div>
     </div>
@@ -51,10 +60,13 @@ function LegalEmbedView({ doc, inShell }: { doc: LegalDoc; inShell: boolean }) {
 }
 
 function LegalStandaloneView({ doc }: { doc: LegalDoc }) {
+  const nav = useLegalNav();
+  const backHref = resolveShellBackHref(nav.from, nav.returnTo);
+
   return (
-    <AppShell title={TITLES[doc]} tone="plain" badge="" layout="legal">
+    <AppShell title={TITLES[doc]} tone="plain" badge="" layout="legal" backHref={backHref} from={nav.from}>
       <div className="legal-standalone-scroll">
-        {doc === 'terms' ? <TermsContent showFooter /> : <PrivacyContent showFooter />}
+        {doc === 'terms' ? <TermsContent showFooter nav={nav} /> : <PrivacyContent showFooter nav={nav} />}
       </div>
     </AppShell>
   );

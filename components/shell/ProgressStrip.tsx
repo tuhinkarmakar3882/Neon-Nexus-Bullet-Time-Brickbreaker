@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { codexDiscovery, countCosmetics, journalProgress, nextCosmeticGoal } from '@/lib/shell/progression';
 import { LucideIcon } from '@/components/shell/LucideIcon';
 import { HOME_ICONS } from '@/lib/shell/homeIcons';
@@ -33,10 +32,7 @@ export function ProgressStrip({
   compact,
   hydrated = false,
 }: ProgressStripProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  const live = hydrated && mounted;
+  const live = hydrated;
 
   const hubMode = totalStars !== undefined || dailyBest !== undefined || returnStreak !== undefined;
   const cosmetics = live ? countCosmetics() : { owned: 0, total: 0 };

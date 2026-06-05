@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type Phaser from 'phaser';
 import { GAME, SCENES } from '@/src/config/Constants.js';
-import { MetaProgress } from '@/src/systems/MetaProgress.js';
-import { getPlayMountGeneration, isCurrentPlayMount } from '@/lib/shell/playMount';
+import { RunEconomy } from '@/src/systems/RunEconomy.js';
+import { isCurrentPlayMount } from '@/lib/shell/playMount';
 import {
   INITIAL_GAMEPLAY_HUD,
   type GameplayHudState,
@@ -59,15 +59,15 @@ function syncHudFromGameScene(
   const gnomeMax = GAME.GNOME_STREAK_MAX;
   const nexusMax = GAME.BT_METER_MAX;
 
-  patch(() => ({
-    ...INITIAL_GAMEPLAY_HUD,
+  patch((prev) => ({
+    ...prev,
     score: gs.score ?? 0,
-    lives: gs.lives ?? INITIAL_GAMEPLAY_HUD.lives,
+    lives: gs.lives ?? prev.lives,
     level: gs.level ?? 1,
     bricksLeft,
     combo,
-    gems: MetaProgress.getGems(),
-    goalText: '',
+    gems: RunEconomy.getDisplayGems(),
+    goalText: prev.goalText,
     mutators: formatMutators(gs.challengeSys?.mutators ?? []),
     gnomeRatio: Math.min(1, (gs.gnomeStreak ?? 0) / gnomeMax),
     gnomeReady: (gs.gnomeStreak ?? 0) >= gnomeMax,
@@ -75,7 +75,6 @@ function syncHudFromGameScene(
     nexusReady: (gs.btMeter ?? 0) >= nexusMax,
     gambitReady: combo >= GAME.COMBO_GAMBIT_MIN,
     immersive: true,
-    activePowers: [],
   }));
 
   return true;
@@ -88,7 +87,6 @@ function requestHudSync(
   const gs = game.scene?.getScene(SCENES.GAME) as GameSceneHud | undefined;
   if (gs?.refreshDomHud) {
     gs.refreshDomHud();
-    return;
   }
   syncHudFromGameScene(game, patch);
 }
@@ -115,14 +113,14 @@ function attachHudListeners(
   const onTreasury = () => {
     patch((prev) => ({
       ...prev,
-      gems: MetaProgress.getGems(),
+      gems: RunEconomy.getDisplayGems(),
     }));
   };
 
   const onStorage = () => {
     patch((prev) => ({
       ...prev,
-      gems: MetaProgress.getGems(),
+      gems: RunEconomy.getDisplayGems(),
     }));
   };
 
@@ -231,7 +229,7 @@ function attachHudListeners(
   };
 }
 
-export function useGameplayHudState() {
+export function useGameplayHudState(mountGen: number) {
   const [state, setState] = useState<GameplayHudState>(INITIAL_GAMEPLAY_HUD);
 
   const patch = useCallback(
@@ -240,7 +238,6 @@ export function useGameplayHudState() {
   );
 
   useEffect(() => {
-    const mountGen = getPlayMountGeneration();
     let detach: (() => void) | undefined;
     let poll: ReturnType<typeof setInterval> | undefined;
 
@@ -259,6 +256,13 @@ export function useGameplayHudState() {
       tryAttach(game);
     };
 
+    const onHudPatch = (e: Event) => {
+      if (!isCurrentPlayMount(mountGen)) return;
+      const detail = (e as CustomEvent<Partial<GameplayHudState>>).detail;
+      if (!detail || typeof detail !== 'object') return;
+      patch((prev) => ({ ...prev, ...detail }));
+    };
+
     const onHudSync = () => {
       if (!isCurrentPlayMount(mountGen)) return;
       const g = window.__NEON;
@@ -271,6 +275,7 @@ export function useGameplayHudState() {
     };
 
     window.addEventListener('neon:game-ready', onReady);
+    window.addEventListener('neon:hud-patch', onHudPatch);
     window.addEventListener('neon:hud-sync', onHudSync);
     window.visualViewport?.addEventListener('resize', onViewport);
     window.visualViewport?.addEventListener('scroll', onViewport);
@@ -295,10 +300,11 @@ export function useGameplayHudState() {
       if (!isCurrentPlayMount(mountGen)) return;
       const gs = window.__NEON?.scene?.getScene(SCENES.GAME) as { scene?: { isActive?: () => boolean } } | undefined;
       if (gs?.scene?.isActive?.()) onHudSync();
-    }, 2000);
+    }, 400);
 
     return () => {
       window.removeEventListener('neon:game-ready', onReady);
+      window.removeEventListener('neon:hud-patch', onHudPatch);
       window.removeEventListener('neon:hud-sync', onHudSync);
       window.visualViewport?.removeEventListener('resize', onViewport);
       window.visualViewport?.removeEventListener('scroll', onViewport);
@@ -309,7 +315,7 @@ export function useGameplayHudState() {
       window.clearInterval(hudKeepAlive);
       detach?.();
     };
-  }, [patch]);
+  }, [patch, mountGen]);
 
   return state;
 }

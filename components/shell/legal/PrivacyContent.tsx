@@ -1,10 +1,17 @@
 import Link from 'next/link';
-import { ROUTES } from '@/lib/shell/routes';
+import { legalSiblingHref, type LegalNavContext } from '@/lib/shell/routes';
 import { LegalProse } from '@/components/shell/legal/LegalProse';
 
-export function PrivacyContent({ showFooter = true }: { showFooter?: boolean }) {
+type PrivacyContentProps = {
+  showFooter?: boolean;
+  nav?: LegalNavContext;
+};
+
+export function PrivacyContent({ showFooter = true, nav }: PrivacyContentProps) {
+  const termsHref = legalSiblingHref('terms', 'privacy', nav);
+
   return (
-    <LegalProse showFooter={showFooter} siblingHref={ROUTES.terms} siblingLabel="Terms of Service">
+    <LegalProse showFooter={showFooter} siblingHref={termsHref} siblingLabel="Terms of Service">
       <h2 className="legal-prose__doc-title">Privacy Policy</h2>
       <p>
         <strong>Neon Nexus: Bullet-Time Brick Breaker</strong> · Last updated: June 2026
@@ -13,7 +20,11 @@ export function PrivacyContent({ showFooter = true }: { showFooter?: boolean }) 
       <div className="legal-prose__notice">
         <p>
           <strong>Entertainment only.</strong> This policy describes how the casual game Neon Nexus handles information.
-          Use of the game is also governed by our <Link href={ROUTES.terms}>Terms of Service</Link>, including disclaimers
+          Use of the game is also governed by our{' '}
+          <Link href={termsHref} prefetch>
+            Terms of Service
+          </Link>
+          , including disclaimers
           and limitations of liability. <strong>We are not responsible for third-party services</strong> (ads, payments,
           app stores) beyond describing them here.
         </p>

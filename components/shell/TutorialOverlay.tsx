@@ -50,11 +50,13 @@ export function TutorialOverlay({
   return (
     <div className="ftue-overlay" role="dialog" aria-modal="true" aria-label={ariaLabel}>
       <div className="ftue-overlay__card" ref={cardRef}>
-        <p className="ftue-overlay__step">
-          {index + 1} / {steps.length}
-        </p>
-        <h2 className="ftue-overlay__title">{step.title}</h2>
-        <p className="ftue-overlay__body">{step.body}</p>
+        <div key={index} className="ftue-overlay__step-content">
+          <p className="ftue-overlay__step">
+            {index + 1} / {steps.length}
+          </p>
+          <h2 className="ftue-overlay__title">{step.title}</h2>
+          <p className="ftue-overlay__body">{step.body}</p>
+        </div>
         <div className="ftue-overlay__actions">
           <NeonButton variant="primary" onClick={advance}>
             {last ? completeLabel : 'Next'}

@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { ROUTES } from '@/lib/shell/routes';
 
 type LegalProseProps = {
   children: ReactNode;
@@ -15,7 +14,9 @@ export function LegalProse({ children, showFooter = true, siblingHref, siblingLa
       {children}
       {showFooter && siblingHref && siblingLabel ? (
         <p className="legal-prose__footer">
-          <Link href={siblingHref}>{siblingLabel}</Link>
+          <Link href={siblingHref} prefetch>
+            {siblingLabel}
+          </Link>
         </p>
       ) : null}
     </article>

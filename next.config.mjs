@@ -10,6 +10,7 @@ function viteEnv() {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
+  allowedDevOrigins: ['192.168.29.15'],
   trailingSlash: true,
   images: { unoptimized: true },
   // Phaser is a singleton; Strict Mode's mount→unmount→remount breaks WebGL in dev.

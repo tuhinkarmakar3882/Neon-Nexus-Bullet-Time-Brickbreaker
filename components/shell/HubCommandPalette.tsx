@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useFocusTrap } from '@/lib/hooks/useFocusTrap';
 import { HUB_NAV_ENTRIES, HUB_UTILITY_ENTRIES, type HubNavEntry } from '@/lib/shell/navConfig';
+import { isExternalHref } from '@/lib/shell/routes';
 import { LucideIcon } from '@/components/shell/LucideIcon';
 
 type HubCommandPaletteProps = {
@@ -105,7 +106,18 @@ export function HubCommandPalette({
         <ul id="hub-palette-list" className="hub-palette__list" role="listbox">
           {filtered.map((entry) => (
             <li key={entry.id} role="option">
-              {entry.href ? (
+              {entry.href && isExternalHref(entry.href) ? (
+                <a
+                  href={entry.href}
+                  className="hub-palette__item"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={close}
+                >
+                  <LucideIcon icon={entry.icon} size={18} />
+                  <span>{entry.label}</span>
+                </a>
+              ) : entry.href ? (
                 <Link href={entry.href} className="hub-palette__item" prefetch onClick={close}>
                   <LucideIcon icon={entry.icon} size={18} />
                   <span>{entry.label}</span>

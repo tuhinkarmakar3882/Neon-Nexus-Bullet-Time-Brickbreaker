@@ -5,6 +5,7 @@ import { closeLegalShell, isLegalShellOpen, wireLegalShellNavigation } from '../
 import { exitToHome } from '../shell/routes.js';
 import { handlePlayEscape } from './GameKeyboard.js';
 import { recordHubExitFromPlay } from '../shell/hubExit.js';
+import { RunEconomy } from './RunEconomy.js';
 
 export const NAV = {
   MENU: 'menu',
@@ -153,6 +154,7 @@ export function quitGameToMenu(game = gameRef) {
     return;
   }
   const gs = scenes.getScene(SCENES.GAME);
+  RunEconomy.discardRunEconomy();
   recordHubExitFromPlay(gs, 'quit');
   for (const key of [SCENES.PAUSE, ...PAUSE_CHILD_OVERLAYS, SCENES.GAMEOVER, SCENES.LEVEL_COMPLETE]) {
     if (scenes.isActive(key)) scenes.stop(key);

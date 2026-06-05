@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { ChevronLeft } from 'lucide';
 import { LucideIcon } from '@/components/shell/LucideIcon';
 
@@ -17,7 +18,7 @@ export function ShellBack({ href, onClick, label = 'Back' }: ShellBackProps) {
     </>
   );
 
-  if (onClick) {
+  if (onClick && !href) {
     return (
       <button type="button" className="shell-back" onClick={onClick} aria-label={label}>
         {inner}
@@ -34,8 +35,8 @@ export function ShellBack({ href, onClick, label = 'Back' }: ShellBackProps) {
   }
 
   return (
-    <a href={href ?? '/'} className="shell-back" aria-label={label}>
+    <Link href={href ?? '/'} className="shell-back" aria-label={label} prefetch onClick={onClick}>
       {inner}
-    </a>
+    </Link>
   );
 }

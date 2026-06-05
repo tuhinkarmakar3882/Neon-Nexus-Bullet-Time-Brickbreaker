@@ -4,9 +4,16 @@ import { Suspense, useCallback, useState, type CSSProperties } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Check } from 'lucide';
 import { AppShell } from '@/components/shell/AppShell';
-import { GemSpendConfirm } from '@/components/shell/GemSpendConfirm';
+import { GemSpendConfirm, type GemSpendPreview } from '@/components/shell/GemSpendConfirm';
 import { useGameMeta } from '@/components/shell/useGameMeta';
-import { COSMETIC_SECTIONS, cosmeticLabel } from '@/src/config/Cosmetics.js';
+import {
+  BALL_TRAILS,
+  COSMETIC_SECTIONS,
+  GARDEN_THEMES,
+  PADDLE_HULLS,
+  cosmeticById,
+  cosmeticLabel,
+} from '@/src/config/Cosmetics.js';
 import { MetaProgress } from '@/src/systems/MetaProgress.js';
 import { emitCosmeticsChanged } from '@/src/systems/CosmeticsBridge.js';
 import { Monetization } from '@/src/systems/Monetization.js';
@@ -34,10 +41,29 @@ const SHOP_CATEGORY_LABELS: Record<ShopCategory, string> = {
 
 type PendingPurchase = {
   id: string;
-  kind: string;
+  kind: ShopCategory;
   label: string;
   cost: number;
 };
+
+function buildEquipPreview(
+  kind: ShopCategory,
+  id: string,
+  equipped: ReturnType<typeof MetaProgress.getEquipped>,
+): GemSpendPreview {
+  const hull = cosmeticById(PADDLE_HULLS, kind === 'hull' ? id : equipped.hull);
+  const trail = cosmeticById(BALL_TRAILS, kind === 'trail' ? id : equipped.trail);
+  const theme = cosmeticById(GARDEN_THEMES, kind === 'theme' ? id : equipped.theme);
+  return {
+    kind,
+    hullColor: cssHex(hull.tint ?? 0xffffff),
+    trailColor: cssHex(trail.tint ?? 0xffffff),
+    themeColor: cssHex(theme.accent ?? 0x2fe6c7),
+    hullLabel: hull.label,
+    trailLabel: trail.label,
+    themeLabel: theme.label,
+  };
+}
 
 function ShopContent() {
   const searchParams = useSearchParams();
@@ -101,7 +127,7 @@ function ShopContent() {
         return;
       }
       if (c.cost > 0) {
-        setPending({ id: c.id, kind, label: c.label, cost: c.cost });
+        setPending({ id: c.id, kind: kind as ShopCategory, label: c.label, cost: c.cost });
         return;
       }
       MetaProgress.unlockCosmetic(kind, c.id);
@@ -138,8 +164,10 @@ function ShopContent() {
           itemLabel={pending.label}
           cost={pending.cost}
           balance={gems}
+          preview={buildEquipPreview(pending.kind, pending.id, eq)}
           onCancel={() => setPending(null)}
           onConfirm={() => {
+            if (gems < pending.cost) return;
             const p = pending;
             setPending(null);
             completePurchase({ id: p.id, cost: p.cost, label: p.label }, p.kind);
@@ -194,6 +222,7 @@ function ShopContent() {
                 <div
                   key={c.id}
                   className={`forge-item forge-item--${section.kind}${equipped ? ' equipped' : ''}${glowId === `${section.kind}:${c.id}` ? ' forge-item--unlock-glow' : ''}`}
+                  style={{ marginBottom: '10px' }}
                 >
                   {equipped ? (
                     <span className="forge-item__badge">
@@ -209,14 +238,15 @@ function ShopContent() {
                     <div className="forge-item-title">{c.label}</div>
                     <div className="forge-item-desc">{c.effect ?? c.desc}</div>
                   </div>
-                  <button
+
+                  {!equipped && <button
                     type="button"
                     className={`neon-btn neon-btn-${equipped ? 'primary' : owned ? 'secondary' : 'economy'} forge-item-action`}
                     onClick={() => onSelect(c, section.kind)}
                     aria-pressed={equipped}
                   >
                     {actionLabel}
-                  </button>
+                  </button>}
                 </div>
               );
             })}

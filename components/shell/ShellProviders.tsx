@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, type ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { initAppShell, hideShellBanner } from '@/src/shell/initAppShell.js';
 import { audio } from '@/src/systems/AudioManager.js';
 import { SaveManager } from '@/src/systems/SaveManager.js';
@@ -20,6 +20,9 @@ import { initPersistence } from '@/lib/persistence/Persistence';
 import { startPeriodicSync, syncIfSignedIn, attachSyncLifecycle } from '@/lib/persistence/SyncEngine';
 import { AuthProvider } from '@/lib/auth/AuthProvider';
 import { registerServiceWorker } from '@/lib/shell/registerServiceWorker';
+import { wireHubLinkPrefetch } from '@/lib/shell/warmHubCache';
+import { prefetchBeforeNavigate, prefetchHubRoutes } from '@/lib/shell/hubRoutePrefetch';
+import { registerShellRouter, unregisterShellRouter } from '@/lib/shell/shellRouter';
 
 type ShellProvidersProps = {
   children: ReactNode;
@@ -27,11 +30,37 @@ type ShellProvidersProps = {
 
 export function ShellProviders({ children }: ShellProvidersProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const isPlay = pathname?.startsWith('/play');
+
+  useEffect(() => {
+    registerShellRouter((href) => {
+      prefetchBeforeNavigate(router, href);
+      router.push(href);
+    });
+    return () => unregisterShellRouter();
+  }, [router]);
+
+  useEffect(() => {
+    if (isPlay) return;
+    const prefetch = () => prefetchHubRoutes(router, { includePlay: pathname === '/' });
+    let idleId: number | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    if (typeof requestIdleCallback === 'function') {
+      idleId = requestIdleCallback(prefetch, { timeout: 3000 });
+    } else {
+      timeoutId = setTimeout(prefetch, 800);
+    }
+    return () => {
+      if (idleId != null && typeof cancelIdleCallback === 'function') cancelIdleCallback(idleId);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [router, isPlay, pathname]);
 
   useEffect(() => {
     audio.attachDocumentLifecycle(() => window.__NEON);
     registerServiceWorker();
+    const offPrefetch = wireHubLinkPrefetch(document, router);
     installProductionAnalyticsSink();
 
     const onSwPush = (e: MessageEvent) => {
@@ -47,8 +76,11 @@ export function ShellProviders({ children }: ShellProvidersProps) {
       void syncIfSignedIn();
     });
 
-    return () => navigator.serviceWorker?.removeEventListener('message', onSwPush);
-  }, []);
+    return () => {
+      offPrefetch();
+      navigator.serviceWorker?.removeEventListener('message', onSwPush);
+    };
+  }, [router]);
 
   /** Shell routes play menu music; /play level music is owned by GameScene. */
   useEffect(() => {

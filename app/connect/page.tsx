@@ -1,24 +1,13 @@
 'use client';
 
-import { AppShell, NeonButton } from '@/components/shell/AppShell';
-import { SHELL_COPY } from '@/lib/copy/shell';
+import { useEffect } from 'react';
+import { EXTERNAL_LINKS } from '@/lib/shell/routes';
 
-const LINKEDIN = 'https://www.linkedin.com/in/tuhinkarmakar3882/';
-
+/** Legacy /connect/ URL — forward straight to LinkedIn. */
 export default function ConnectPage() {
-  const c = SHELL_COPY.connect;
-  return (
-    <AppShell title={c.title} subtitle={c.subtitle} tone="utility" badge="">
-      <p className="shell-hint shell-hint--left">{c.externalHint}</p>
-      <p className="shell-prose">{c.body}</p>
-      <div className="shell-actions shell-actions--centered">
-        <NeonButton
-          variant="primary"
-          onClick={() => window.open(LINKEDIN, '_blank', 'noopener,noreferrer')}
-        >
-          {c.cta}
-        </NeonButton>
-      </div>
-    </AppShell>
-  );
+  useEffect(() => {
+    window.location.replace(EXTERNAL_LINKS.linkedIn);
+  }, []);
+
+  return null;
 }

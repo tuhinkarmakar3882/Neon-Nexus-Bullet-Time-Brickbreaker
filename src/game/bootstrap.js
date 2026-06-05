@@ -14,6 +14,7 @@ import { AdBreakScene } from '../scenes/AdBreakScene.js';
 import { PurchaseScene } from '../scenes/PurchaseScene.js';
 import { InputRouter } from '../systems/InputRouter.js';
 import { RunPersistence } from '../systems/RunPersistence.js';
+import { RunEconomy } from '../systems/RunEconomy.js';
 import { isIapEnabled } from '../config/AdsConfig.js';
 import { Monetization } from '../systems/Monetization.js';
 import { createAdProvider } from '../systems/createAdProvider.js';
@@ -267,7 +268,10 @@ export function destroyGame() {
       RunPersistence.clearRun();
     } else {
       const gs = game.scene?.getScene(SCENES.GAME);
-      if (gs?.scene?.isActive?.() && !gs.over) RunPersistence.saveRun(gs);
+      if (gs && !gs.over) {
+        RunEconomy.discardRunEconomy();
+        if (gs.scene?.isActive?.()) RunPersistence.saveRun(gs);
+      }
     }
   } catch { /* ignore */ }
   try {

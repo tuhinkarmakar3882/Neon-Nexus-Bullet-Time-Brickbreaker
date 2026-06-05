@@ -6,9 +6,13 @@ import { GameplayHudLiveRegion } from '@/components/play/GameplayHudLiveRegion';
 import { useGameplayHudState } from '@/lib/shell/useGameplayHudState';
 import { syncPlayFrameLayout } from '@/src/systems/LayoutManager.js';
 
+type GameplayHudBridgeProps = {
+  mountGen: number;
+};
+
 /** React HUD frame for /play — listens to Phaser `hud:*` events. */
-export function GameplayHudBridge() {
-  const state = useGameplayHudState();
+export function GameplayHudBridge({ mountGen }: GameplayHudBridgeProps) {
+  const state = useGameplayHudState(mountGen);
 
   useEffect(() => {
     const stage = document.querySelector('.play-stage--hud');

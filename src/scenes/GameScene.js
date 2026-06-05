@@ -54,6 +54,7 @@ import {
 import { fitTextWidth, orbitronStyle, uiPx, wrapWidth } from '../utils/Typography.js';
 import { applyReducedMotionOverride, resolveSettings } from '../config/VfxQuality.js';
 import { gemsForLevelClear } from '../config/GemRewards.js';
+import { RunEconomy } from '../systems/RunEconomy.js';
 import { dismissBootSplash, setBootSplash } from '../shell/BootSplash.js';
 import { clearTransitionFlags } from '../systems/GameGuard.js';
 
@@ -74,10 +75,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
+    RunEconomy.resetRunEconomy();
     setBootSplash({ progress: 82, label: 'Growing the twilight garden…' });
     this.settings = window.__neonBootVfx
       ?? applyReducedMotionOverride(resolveSettings(SaveManager.loadSettings()));
     this._statsSig = '';
+    this._domHudSig = '';
     this._reachableCacheAt = 0;
     this._reachableCache = true;
     const musicSettings = SaveManager.loadSettings();
@@ -784,6 +787,7 @@ export class GameScene extends Phaser.Scene {
 
   emitBtMeter() {
     this.bus?.emit('hud:btMeter', { value: this.btMeter, max: GAME.BT_METER_MAX });
+    this._pushDomHudSnapshot();
   }
 
   addBtMeter(amount, opts = {}) {
@@ -910,9 +914,10 @@ export class GameScene extends Phaser.Scene {
     if (this.combo < GAME.COMBO_BANK_STEP || this.combo === this.gambitAtCombo) return;
     if (this.combo % GAME.COMBO_BANK_STEP !== 0) return;
     const payout = GAME.COMBO_BANK_PAYOUT * this.comboScoreMult();
-    MetaProgress.addTreasury(payout);
+    RunEconomy.creditRunTreasury(payout);
     this.floatText(GAME.WIDTH / 2, GAME.HEIGHT * 0.35, `TREASURY +${payout}`, '#ffd23d', 24);
-    this.bus?.emit('hud:treasury', { value: MetaProgress.getTreasury() });
+    this.bus?.emit('hud:treasury', { value: RunEconomy.getDisplayTreasury() });
+    this._pushDomHudSnapshot();
     if (this.combo >= GAME.COMBO_GAMBIT_MIN && this.combo !== this.gambitAtCombo) {
       this.gambitAtCombo = this.combo;
       this.bus?.emit('hud:gambit', { combo: this.combo, mult: this.comboScoreMult() });
@@ -977,6 +982,7 @@ export class GameScene extends Phaser.Scene {
       value: this.gnomeStreak,
       max: GAME.GNOME_STREAK_MAX,
     });
+    this._pushDomHudSnapshot();
   }
 
   addGnomeStreak(amount, opts = {}) {
@@ -3013,6 +3019,7 @@ export class GameScene extends Phaser.Scene {
   gameOver() {
     this.over = true;
     audio.gameOverSting?.();
+    RunEconomy.commitRunEconomy();
     MetaProgress.saveLastRunPath(this._runPath);
     MetaProgress.recordDailyScore(this.score);
     RunPersistence.saveRun(this, { pendingGameOver: true });
@@ -3066,6 +3073,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   doRestart() {
+    RunEconomy.discardRunEconomy();
     RunPersistence.clearRun();
     this.scene.stop(SCENES.UI);
     this.scene.start(SCENES.GAME, { newGame: true, forceNew: true });
@@ -3145,6 +3153,7 @@ export class GameScene extends Phaser.Scene {
 
   async _completeLevelCore() {
     // Meter fill — queue draft picks until after the level-clear overlay (never block on draft here).
+    RunEconomy.commitRunEconomy();
     this.addGnomeStreak(GAME.GNOME_STREAK_LEVEL_BONUS, { deferDraft: true });
     this.addBtMeter(GAME.BT_METER_LEVEL_FILL, { deferDraft: true });
     if (this.draftOpen) {
@@ -3290,6 +3299,79 @@ export class GameScene extends Phaser.Scene {
     this.flushPendingDrafts();
   }
 
+  _formatDomHudMutators(ids = []) {
+    return ids
+      .map((id) => id.replace(/([A-Z])/g, ' $1').trim())
+      .join(' · ')
+      .toUpperCase();
+  }
+
+  _buildDomHudPowerChips() {
+    const chips = [];
+    if (!this.powerSys) return chips;
+    for (const key of this.powerSys.keys()) {
+      const def = POWERS[key];
+      if (!def || def.kind !== 'timed') continue;
+      chips.push({
+        key,
+        ratio: this.powerSys.ratio(key),
+        color: powerFillColor(key),
+        letter: def.short ?? powerPillLabel(key).slice(0, 2),
+        polarity: def.polarity ?? 'pos',
+        icon: def.icon,
+        label: powerPillLabel(key),
+      });
+    }
+    return chips;
+  }
+
+  /** Snapshot for React DOM HUD — bypasses Phaser bus timing races. */
+  _buildDomHudSnapshot() {
+    const nestsLeft = this.bricks.filter((b) => b.alive && b.type === 'nest').length;
+    const bricksLeft = this.destructiblesLeft();
+    const gnomeMax = GAME.GNOME_STREAK_MAX;
+    const nexusMax = GAME.BT_METER_MAX;
+    const gnomeRatio = Math.min(1, (this.gnomeStreak ?? 0) / gnomeMax);
+    const nexusRatio = Math.min(1, (this.btMeter ?? 0) / nexusMax);
+    const combo = this.combo ?? 0;
+    return {
+      score: this.score ?? 0,
+      lives: this.lives ?? 3,
+      level: this.level ?? 1,
+      bricksLeft,
+      combo,
+      gems: RunEconomy.getDisplayGems(),
+      goalText: goalProgressText(this.goal, {
+        knockouts: this.levelKnockouts,
+        potHit: this.potHitLevel,
+        nestsLeft,
+        escortLost: this.goalFail && this.goal?.type === 'escort',
+      }),
+      mutators: this._formatDomHudMutators(this.challengeSys?.mutators ?? []),
+      gnomeRatio,
+      gnomeReady: gnomeRatio >= 1,
+      nexusRatio,
+      nexusReady: nexusRatio >= 1,
+      gambitReady: combo >= GAME.COMBO_GAMBIT_MIN,
+      immersive: true,
+      activePowers: this._buildDomHudPowerChips(),
+    };
+  }
+
+  _pushDomHudSnapshot(force = false) {
+    if (!GAME.USE_DOM_HUD || typeof window === 'undefined') return;
+    const snapshot = this._buildDomHudSnapshot();
+    const sig = [
+      snapshot.score, snapshot.lives, snapshot.level, snapshot.combo,
+      snapshot.bricksLeft, snapshot.goalText, snapshot.mutators,
+      snapshot.gnomeRatio, snapshot.nexusRatio, snapshot.gems,
+      snapshot.activePowers.map((c) => `${c.key}:${Math.round(c.ratio * 100)}`).join(','),
+    ].join('|');
+    if (!force && sig === this._domHudSig) return;
+    this._domHudSig = sig;
+    window.dispatchEvent(new CustomEvent('neon:hud-patch', { detail: snapshot }));
+  }
+
   /** Force-push all DOM HUD fields (React bridge may attach after first emit). */
   refreshDomHud() {
     if (!this.bus) return;
@@ -3298,8 +3380,9 @@ export class GameScene extends Phaser.Scene {
     this.emitGnomeStreak();
     this.emitBtMeter();
     this.bus.emit('hud:mutators', this.challengeSys?.mutators ?? []);
-    this.bus.emit('hud:treasury', { value: MetaProgress.getTreasury() });
+    this.bus.emit('hud:treasury', { value: RunEconomy.getDisplayTreasury() });
     this.bus.emit('hud:immersive', { on: true });
+    this._pushDomHudSnapshot(true);
   }
 
   /** Push lives to DOM/canvas HUD immediately (stats + life pulse). */
@@ -3334,6 +3417,7 @@ export class GameScene extends Phaser.Scene {
       band: this.difficulty?.label ?? '',
       goalText,
     });
+    this._pushDomHudSnapshot();
   }
 
   emitPowers() {
@@ -3353,6 +3437,7 @@ export class GameScene extends Phaser.Scene {
       });
     }
     this.bus.emit('hud:powers', chips);
+    this._pushDomHudSnapshot();
   }
 
   toast(text, ms = 1600) {
@@ -4167,11 +4252,12 @@ export class GameScene extends Phaser.Scene {
       if (gm.overlapsPaddle(this.paddle)) {
         this.score += gm.value;
         const walletGain = Math.max(1, Math.round(gm.value / 120));
-        MetaProgress.addGems(walletGain);
+        RunEconomy.creditRunGems(walletGain);
         this.floatText(gm.x, this.paddle.top, `+${gm.value}  +${walletGain}💎`, '#9ff0ff', 26);
         this.burst(gm.x, gm.y, 0x9ff0ff, 8);
         audio.gemPickup?.();
-        this.bus?.emit('hud:treasury', { value: MetaProgress.getTreasury() });
+        this.bus?.emit('hud:treasury', { value: RunEconomy.getDisplayTreasury() });
+        this._pushDomHudSnapshot();
         gm.destroy();
         this.gems.splice(i, 1);
         continue;

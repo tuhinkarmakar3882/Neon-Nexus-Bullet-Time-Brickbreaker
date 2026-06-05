@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { ShellProviders } from '@/components/shell/ShellProviders';
+import { HubSpeculationRules } from '@/components/shell/HubSpeculationRules';
 import { LegalShellMount } from '@/components/shell/LegalShellMount';
 
 const siteUrl = (process.env.VITE_GAME_URL || 'https://example.com').replace(/\/$/, '');
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap"
           rel="stylesheet"
         />
+        <HubSpeculationRules />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -64,6 +66,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 window.__neonInstallPrompt = e;
                 window.dispatchEvent(new Event('neon-install-ready'));
               });
+              (function () {
+                var h = location.hostname;
+                if (h === 'localhost' || h === '127.0.0.1') return;
+                if (!('serviceWorker' in navigator)) return;
+                navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+              })();
             `,
           }}
         />

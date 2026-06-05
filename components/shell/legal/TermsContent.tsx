@@ -1,10 +1,17 @@
 import Link from 'next/link';
-import { ROUTES } from '@/lib/shell/routes';
+import { legalSiblingHref, type LegalNavContext } from '@/lib/shell/routes';
 import { LegalProse } from '@/components/shell/legal/LegalProse';
 
-export function TermsContent({ showFooter = true }: { showFooter?: boolean }) {
+type TermsContentProps = {
+  showFooter?: boolean;
+  nav?: LegalNavContext;
+};
+
+export function TermsContent({ showFooter = true, nav }: TermsContentProps) {
+  const privacyHref = legalSiblingHref('privacy', 'terms', nav);
+
   return (
-    <LegalProse showFooter={showFooter} siblingHref={ROUTES.privacy} siblingLabel="Privacy Policy">
+    <LegalProse showFooter={showFooter} siblingHref={privacyHref} siblingLabel="Privacy Policy">
       <h2 className="legal-prose__doc-title">Terms of Service</h2>
       <p>
         <strong>Neon Nexus: Bullet-Time Brick Breaker</strong> · Last updated: June 2026
@@ -130,7 +137,10 @@ export function TermsContent({ showFooter = true }: { showFooter?: boolean }) {
       <h2>13. Severability and entire agreement</h2>
       <p>
         If any provision is held invalid, the remainder stays in effect. These Terms, together with the{' '}
-        <Link href={ROUTES.privacy}>Privacy Policy</Link>, constitute the entire agreement regarding the game and
+        <Link href={privacyHref} prefetch>
+          Privacy Policy
+        </Link>
+        , constitute the entire agreement regarding the game and
         supersede prior understandings on the same subject.
       </p>
 

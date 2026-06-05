@@ -1,5 +1,6 @@
 @import url('../styles/shell/tokens.css');
 @import url('../styles/shell/components.css');
+@import url('../styles/shell/motion.css');
 @import url('../styles/play/overlays.css');
 
 * {
@@ -55,22 +56,6 @@ a {
   flex-direction: column;
   width: 100%;
   min-height: 100dvh;
-  animation: shell-fade-in 0.16s ease-out;
-}
-
-@keyframes shell-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .shell-route-enter {
-    animation: none;
-  }
 }
 
 /* ── Premium loaders (routes + play boot) ── */
@@ -496,7 +481,8 @@ body.shell-play .shell-route-enter {
 /* —— Thin single-row play header —— */
 .play-hud-bar {
   --play-hud-gap: 20px;
-  padding: 0 2px 4px;
+  --play-hud-bar-h: 44px;
+  padding: 0 2px;
   min-width: 0;
 }
 
@@ -505,9 +491,9 @@ body.shell-play .shell-route-enter {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   column-gap: var(--play-hud-gap);
-  height: 38px;
-  min-height: 38px;
-  padding: 0 12px;
+  height: var(--play-hud-bar-h);
+  min-height: var(--play-hud-bar-h);
+  padding: 0 10px;
   border: 1px solid var(--play-frame-border);
   border-radius: 10px;
   background: var(--play-frame-bg);
@@ -521,20 +507,28 @@ body.shell-play .shell-route-enter {
 .play-hud-bar__left {
   grid-column: 1;
   justify-self: start;
+  align-self: center;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
+  height: 100%;
 }
 
 .play-hud-bar__right {
   grid-column: 3;
   justify-self: end;
+  align-self: center;
   display: flex;
   align-items: center;
   gap: var(--play-hud-gap);
   min-width: 0;
-  padding-right: 4px;
+  height: 100%;
+}
+
+.play-hud-bar svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .play-hud-bar--scramble .play-hud-bar__inner {
@@ -600,14 +594,16 @@ body.shell-play .shell-route-enter {
 .play-hud-main {
   grid-column: 2;
   justify-self: center;
+  align-self: center;
   min-width: 0;
   max-width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 1px;
   line-height: 1;
+  height: 100%;
 }
 
 .play-hud-main__row {
@@ -870,14 +866,14 @@ body.shell-play .shell-route-enter {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: auto;
-  height: auto;
-  min-width: 44px;
-  min-height: 44px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   margin: 0;
-  padding: 2px;
+  padding: 0;
   border: none;
-  border-radius: 0;
+  border-radius: 8px;
   background: transparent;
   color: #ffffff;
   cursor: pointer;
@@ -2909,32 +2905,13 @@ body.shell-scroll:has(.ad-banner-slot--visible) .shell-page--title {
 }
 
 .title-menu__item {
-  opacity: 1;
   display: block;
-  animation: title-menu-item-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-.title-menu__item--delay-1 {
-  animation-delay: 0.12s;
-}
-
-.title-menu__item--delay-2 {
-  animation-delay: 0.18s;
-}
-
-.title-menu__item--delay-3 {
-  animation-delay: 0.24s;
-}
-
-.title-menu__item--delay-4 {
-  animation-delay: 0.3s;
 }
 
 .title-menu__rule {
   height: 1px;
   margin: 8px 4px;
   background: linear-gradient(90deg, transparent, rgba(47, 230, 199, 0.35), transparent);
-  animation: title-menu-item-in 0.4s ease both 0.2s;
 }
 
 .title-menu__entry {
@@ -2979,7 +2956,7 @@ body.shell-scroll:has(.ad-banner-slot--visible) .shell-page--title {
   transform: translateX(2px);
 }
 
-/* Let taps reach the <a> on Android Chrome (icons/labels must not steal touches). */
+/* Let taps reach hub links on Android Chrome (icons/labels must not steal touches). */
 .title-menu__entry .title-menu__icon,
 .title-menu__entry .title-menu__chevron,
 .title-menu__entry .title-menu__label-block,
@@ -2987,7 +2964,8 @@ body.shell-scroll:has(.ad-banner-slot--visible) .shell-page--title {
 .title-corner-btn .title-corner-btn__label,
 .title-screen__utility-pill svg,
 .title-screen__utility-pill span,
-.title-screen__legal-link {
+.shell-back .shell-back__icon,
+.shell-back span {
   pointer-events: none;
 }
 
@@ -3165,15 +3143,13 @@ body.shell-scroll:has(.ad-banner-slot--visible) .shell-page--title {
 
 .title-screen__legal-link {
   padding: 4px 6px;
-  border: none;
-  background: none;
   font-family: inherit;
   font-size: 0.56rem;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(139, 155, 180, 0.8);
-  cursor: pointer;
+  text-decoration: none;
   transition: color 0.15s ease;
 }
 

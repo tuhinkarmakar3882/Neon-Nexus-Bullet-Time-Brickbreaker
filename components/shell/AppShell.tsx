@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { IconNode } from 'lucide';
-import { shellBackHref, navigateToPlay } from '@/lib/shell/routes';
+import { ROUTES, armPlayIntent, shellBackHref } from '@/lib/shell/routes';
 import { WorldBackdrop } from '@/components/shell/WorldBackdrop';
 import { ShellBack } from '@/components/shell/ShellBack';
 import { LucideIcon } from '@/components/shell/LucideIcon';
@@ -58,7 +58,7 @@ export function AppShell({
       <WorldBackdrop variant={tone === 'plain' ? 'utility' : tone} />
       <header className="shell-header shell-header--premium">
         {from === 'play' ? (
-          <ShellBack onClick={() => navigateToPlay({ resume: true })} />
+          <ShellBack href={ROUTES.play} onClick={() => armPlayIntent({ resume: true })} />
         ) : (
           <ShellBack href={href} />
         )}

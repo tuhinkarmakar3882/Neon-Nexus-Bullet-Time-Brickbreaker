@@ -3,10 +3,15 @@
 import Link from 'next/link';
 import { APP_VERSION, BUILD_STAMP } from '@/src/config/Version.js';
 import { MUSIC_CREDITS } from '@/src/config/MusicCatalog.js';
-import { ROUTES } from '@/lib/shell/routes';
+import { ROUTES, legalEntryHref } from '@/lib/shell/routes';
 import { SHELL_COPY } from '@/lib/copy/shell';
 
-export function ShellAbout() {
+type ShellAboutProps = {
+  /** Where the legal pages should return when opened from this screen. */
+  parentReturnTo?: string;
+};
+
+export function ShellAbout({ parentReturnTo = ROUTES.settings }: ShellAboutProps) {
   return (
     <section className="shell-about" aria-labelledby="shell-about-title">
       <h2 id="shell-about-title" className="shell-about__title">
@@ -16,10 +21,10 @@ export function ShellAbout() {
         v{APP_VERSION} · build {BUILD_STAMP}
       </p>
       <div className="shell-about__links">
-        <Link href={ROUTES.terms} className="neon-text-link" prefetch>
+        <Link href={legalEntryHref('terms', parentReturnTo)} className="neon-text-link" prefetch>
           Terms of Service
         </Link>
-        <Link href={ROUTES.privacy} className="neon-text-link" prefetch>
+        <Link href={legalEntryHref('privacy', parentReturnTo)} className="neon-text-link" prefetch>
           Privacy Policy
         </Link>
       </div>

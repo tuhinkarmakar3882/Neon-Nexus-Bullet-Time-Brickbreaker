@@ -17,7 +17,7 @@ import { VFX_LEVELS, VFX_TIER_COPY, resolveSettings } from '@/src/config/VfxQual
 import { DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '@/src/config/Constants.js';
 import { isIapEnabled } from '@/src/config/AdsConfig.js';
 import { isWebStripeEnabled, promptUnlockCode } from '@/src/systems/WebUnlock.js';
-import { ROUTES } from '@/lib/shell/routes';
+import { ROUTES, shellRouteHref } from '@/lib/shell/routes';
 import Link from 'next/link';
 import { BookOpen, ShoppingBag } from 'lucide';
 import type { GameSettings } from '@/lib/types/settings';
@@ -104,6 +104,9 @@ function SettingsContent() {
     setStatus(res?.success ? COPY.status.unlocked : '');
   };
 
+  const settingsReturnTo =
+    from === 'play' ? shellRouteHref(ROUTES.settings, { from: 'play' }) : ROUTES.settings;
+
   const activeTier = settings.vfxQuality ?? 'ultra';
   const tierHint = VFX_TIER_COPY[activeTier as keyof typeof VFX_TIER_COPY] ?? VFX_TIER_COPY.ultra;
   const sfxVol = settings.sfxVolume ?? DEFAULT_SFX_VOLUME;
@@ -111,7 +114,8 @@ function SettingsContent() {
 
   return (
     <AppShell title={COPY.title} from={from} tone="utility" badge="">
-      <div className="shell-scroll-panel settings-panel">
+        
+      <div className="shell-scroll-panel settings-panel" style={{ overflowX: 'hidden' }}>
         <SettingsBackupPanel />
 
         <SettingsSection title={COPY.sections.graphics} icon={SETTINGS_ICONS.graphics}>
@@ -123,8 +127,8 @@ function SettingsContent() {
               ariaLabel={COPY.vfxLabel}
               formatLabel={(v) => v.charAt(0).toUpperCase() + v.slice(1)}
             />
+          <p className="shell-hint shell-hint--left" style={{ marginTop: '8px', marginBottom: '-16px' }}>{tierHint}</p>
           </SettingRow>
-          <p className="shell-hint shell-hint--left">{tierHint}</p>
         </SettingsSection>
 
         <SettingsSection title={COPY.sections.audio} icon={SETTINGS_ICONS.audio}>
@@ -205,7 +209,7 @@ function SettingsContent() {
             <LucideIcon icon={BookOpen} size={18} className="shell-label__icon" />
             <span>{COPY.codexLink}</span>
           </Link>
-          <ShellAbout />
+          <ShellAbout parentReturnTo={settingsReturnTo} />
         </SettingsSection>
       </div>
     </AppShell>

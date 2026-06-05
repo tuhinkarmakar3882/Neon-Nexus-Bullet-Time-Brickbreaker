@@ -114,7 +114,7 @@ export const SHELL_COPY = {
     },
     actions: {
       equip: 'EQUIP',
-      active: 'ACTIVE',
+      active: 'Equipped',
       equipped: 'Equipped',
       premium: 'PREMIUM',
       free: 'FREE',
@@ -125,7 +125,13 @@ export const SHELL_COPY = {
       body: (label: string, cost: number) => `Unlock ${label} for ${cost.toLocaleString()} gems?`,
       balance: (before: number, after: number) =>
         `${before.toLocaleString()} gems → ${after.toLocaleString()} after purchase`,
+      balanceInsufficient: (balance: number, cost: number) =>
+        `You have ${balance.toLocaleString()} gems · costs ${cost.toLocaleString()}`,
+      insufficient: (shortfall: number) =>
+        `Not enough gems — you need ${shortfall.toLocaleString()} more to purchase.`,
+      previewLabel: 'Equipped preview',
       confirm: 'Confirm purchase',
+      confirmDisabled: 'Not enough gems',
       cancel: 'Cancel',
     },
   },

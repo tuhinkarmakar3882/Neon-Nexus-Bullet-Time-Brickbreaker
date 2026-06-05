@@ -9,7 +9,7 @@ import { TutorialOverlay } from '@/components/shell/TutorialOverlay';
 import { SharePreviewModal } from '@/components/shell/SharePreviewModal';
 import { FTUE_HOME_STEPS, markHomeFtueSeen, shouldShowHomeFtue } from '@/lib/shell/ftue';
 import { useGameMeta } from '@/components/shell/useGameMeta';
-import { navigateToPlay } from '@/lib/shell/routes';
+import { armPlayIntent, navigateToPlay } from '@/lib/shell/routes';
 import { SHELL_COPY } from '@/lib/copy/shell';
 import { RunPersistence } from '@/src/systems/RunPersistence.js';
 import {
@@ -83,15 +83,19 @@ export default function HomePage() {
     if (s.music) audio.setMenuMusic();
   };
 
+  const onPreparePlay = (resume: boolean) => {
+    unlockAudio();
+    armPlayIntent({ resume });
+  };
+
+  const onPrepareNewGame = () => {
+    unlockAudio();
+    armPlayIntent({ resume: false });
+  };
+
   const onPlay = (resume: boolean) => {
     unlockAudio();
     navigateToPlay({ resume });
-  };
-
-  const onNewGame = () => {
-    unlockAudio();
-    RunPersistence.clearRun();
-    navigateToPlay({ resume: false });
   };
 
   const onInstall = async () => {
@@ -147,8 +151,8 @@ export default function HomePage() {
         hint={hint}
         showInstall={showInstall}
         installPromptReady={installPromptReady}
-        onPlay={onPlay}
-        onNewGame={onNewGame}
+        onPreparePlay={onPreparePlay}
+        onPrepareNewGame={onPrepareNewGame}
         onShare={onShare}
         onInstall={onInstall}
         onTutorial={() => setShowTutorial(true)}

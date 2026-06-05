@@ -9,6 +9,7 @@ import { hidePauseAdSlot, showPauseAdSlot } from '../systems/PauseAdSlot.js';
 import { dispatchPauseOverlayClose, dispatchPauseOverlayOpen } from '../shell/pauseOverlayDom.js';
 import { exitToHome } from '../shell/routes.js';
 import { recordHubExitFromPlay } from '../shell/hubExit.js';
+import { RunEconomy } from '../systems/RunEconomy.js';
 import { getGameScene } from '../utils/SceneRefs.js';
 import { audio } from '../systems/AudioManager.js';
 import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
@@ -163,6 +164,7 @@ export class PauseScene extends Phaser.Scene {
   }
 
   exitToHub() {
+    RunEconomy.discardRunEconomy();
     recordHubExitFromPlay(getGameScene(this), 'quit');
     this._teardown();
     InputRouter.onOverlayClose(SCENES.PAUSE, false, false);

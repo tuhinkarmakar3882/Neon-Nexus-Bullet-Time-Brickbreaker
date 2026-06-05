@@ -2,10 +2,11 @@
 
 import type { ReactNode } from 'react';
 import type { IconNode } from 'lucide';
+import Link from 'next/link';
 import { ChevronRight } from 'lucide';
 import { LucideIcon } from '@/components/shell/LucideIcon';
 import { WorldBackdrop } from '@/components/shell/WorldBackdrop';
-import { ROUTES } from '@/lib/shell/routes';
+import { EXTERNAL_LINKS, ROUTES } from '@/lib/shell/routes';
 import { SHELL_COPY } from '@/lib/copy/shell';
 import { HOME_ICONS } from '@/lib/shell/homeIcons';
 import { hubFeaturedEntries, hubPrimaryEntry, hubSettingsEntry } from '@/lib/shell/navConfig';
@@ -32,8 +33,8 @@ type TitleMenuProps = {
   hint: string;
   showInstall: boolean;
   installPromptReady: boolean;
-  onPlay: (resume: boolean) => void;
-  onNewGame: () => void;
+  onPreparePlay: (resume: boolean) => void;
+  onPrepareNewGame: () => void;
   onShare: () => void;
   onInstall: () => void;
   onTutorial: () => void;
@@ -71,9 +72,9 @@ function MenuEntry({
 
   if (href) {
     return (
-      <a href={href} className={cls}>
+      <Link href={href} className={cls} prefetch onClick={onClick}>
         {inner}
-      </a>
+      </Link>
     );
   }
 
@@ -96,8 +97,8 @@ export function TitleMenu({
   hint,
   showInstall,
   installPromptReady,
-  onPlay,
-  onNewGame,
+  onPreparePlay,
+  onPrepareNewGame,
   onShare,
   onInstall,
   onTutorial,
@@ -124,14 +125,15 @@ export function TitleMenu({
         <span className="title-corner-btn__label">{c.nav.tutorial}</span>
       </button>
 
-      <a
+      <Link
         href={ROUTES.settings}
         className="title-corner-btn title-corner-btn--settings"
         aria-label={settings.label}
+        prefetch
       >
         <LucideIcon icon={settings.icon} size={18} className="title-corner-btn__icon" />
         <span className="title-corner-btn__label">{settings.label}</span>
-      </a>
+      </Link>
 
       <div className="title-screen" role="group" aria-label="Game main menu">
         <header className="title-screen__brand">
@@ -178,19 +180,20 @@ export function TitleMenu({
         <nav className="title-menu title-menu--premium" aria-label={c.menuLabel}>
           <span className="title-menu__badge">{c.menuLabel}</span>
           <ul className="title-menu__list">
-            <li className="title-menu__item title-menu__item--delay-1">
+            <li className="title-menu__item">
               <MenuEntry
                 icon={primary.icon}
                 variant="primary"
-                onClick={() => onPlay(!!savedRun)}
-                className={`title-menu__entry--hero${savedRun ? '' : ' title-menu__entry--pulse'}`}
+                href={ROUTES.play}
+                onClick={() => onPreparePlay(!!savedRun)}
+                className={`title-menu__entry--hero${hydrated && !savedRun ? ' title-menu__entry--pulse' : ''}`}
                 subtitle={savedRun ? c.savedRun(savedRun.level, savedRun.score, savedRun.lives) : undefined}
               >
                 {primary.label}
               </MenuEntry>
             </li>
             {featured.map((entry, i) => (
-              <li key={entry.id} className={`title-menu__item title-menu__item--delay-${i + 3}`}>
+              <li key={entry.id} className="title-menu__item">
                 <MenuEntry icon={entry.icon} variant="featured" href={entry.href}>
                   {entry.label}
                 </MenuEntry>
@@ -198,9 +201,14 @@ export function TitleMenu({
             ))}
           </ul>
           {savedRun ? (
-            <button type="button" className="title-menu__secondary-link" onClick={onNewGame}>
+            <Link
+              href={ROUTES.play}
+              className="title-menu__secondary-link"
+              prefetch
+              onClick={onPrepareNewGame}
+            >
               {c.nav.newGame}
-            </button>
+            </Link>
           ) : null}
         </nav>
 
@@ -221,28 +229,33 @@ export function TitleMenu({
                   <span>{c.nav.installShort}</span>
                 </button>
               ) : (
-                <a href={ROUTES.install} className="title-screen__utility-pill">
+                <Link href={ROUTES.install} className="title-screen__utility-pill" prefetch>
                   <LucideIcon icon={HOME_ICONS.install} size={15} />
                   <span>{c.nav.installShort}</span>
-                </a>
+                </Link>
               )
             ) : null}
-            <a href={ROUTES.connect} className="title-screen__utility-pill">
+            <a
+              href={EXTERNAL_LINKS.linkedIn}
+              className="title-screen__utility-pill"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <LucideIcon icon={HOME_ICONS.connect} size={15} />
               <span>{c.nav.connectShort}</span>
             </a>
           </div>
 
           <div className="title-screen__legal">
-            <a href={ROUTES.terms} className="title-screen__legal-link">
+            <Link href={ROUTES.terms} className="title-screen__legal-link" prefetch>
               Terms
-            </a>
+            </Link>
             <span className="title-screen__legal-sep" aria-hidden>
               ·
             </span>
-            <a href={ROUTES.privacy} className="title-screen__legal-link">
+            <Link href={ROUTES.privacy} className="title-screen__legal-link" prefetch>
               Privacy
-            </a>
+            </Link>
           </div>
 
           <p className="title-screen__version" aria-label={`Version ${APP_VERSION}`}>

@@ -1,2 +1,7 @@
 allowBuilds:
+  '@firebase/util': true
+  protobufjs: true
   sharp: false
+minimumReleaseAgeExclude:
+  - '@capacitor-firebase/authentication@8.3.0'
+  - '@revenuecat/purchases-capacitor@13.1.5'

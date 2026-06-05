@@ -1,5 +1,5 @@
 import type { IconNode } from 'lucide';
-import { ROUTES } from '@/lib/shell/routes';
+import { EXTERNAL_LINKS, ROUTES } from '@/lib/shell/routes';
 import { SHELL_COPY } from '@/lib/copy/shell';
 import { HOME_ICONS } from '@/lib/shell/homeIcons';
 
@@ -72,7 +72,7 @@ export const HUB_NAV_ENTRIES: HubNavEntry[] = [
 export const HUB_UTILITY_ENTRIES: HubNavEntry[] = [
   { id: 'share', label: c.share, icon: HOME_ICONS.share, variant: 'default', action: 'share' },
   { id: 'install', label: c.installShort, icon: HOME_ICONS.install, variant: 'default', action: 'install' },
-  { id: 'connect', label: c.connectShort, icon: HOME_ICONS.connect, variant: 'default', href: ROUTES.connect },
+  { id: 'connect', label: c.connectShort, icon: HOME_ICONS.connect, variant: 'default', href: EXTERNAL_LINKS.linkedIn },
   { id: 'tutorial', label: c.tutorial, icon: HOME_ICONS.tutorial, variant: 'default', action: 'tutorial' },
 ];
 

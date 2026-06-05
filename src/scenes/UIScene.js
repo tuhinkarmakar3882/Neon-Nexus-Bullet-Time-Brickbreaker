@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { GAME, SCENES } from '../config/Constants.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { makeButton } from '../utils/UI.js';
-import { MetaProgress } from '../systems/MetaProgress.js';
+import { RunEconomy } from '../systems/RunEconomy.js';
 import { tickBump } from '../utils/MicroFx.js';
 import { clamp } from '../utils/Helpers.js';
 import { arenaWidth, fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
@@ -216,7 +216,7 @@ export class UIScene extends Phaser.Scene {
       if (this._refreshingCurrency) return;
       this._refreshingCurrency = true;
       try {
-        this._setPillValue(this._gemPill, MetaProgress.getGems());
+        this._setPillValue(this._gemPill, RunEconomy.getDisplayGems());
         this.layoutAll();
       } finally {
         this._refreshingCurrency = false;

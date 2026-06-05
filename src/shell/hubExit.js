@@ -13,13 +13,17 @@ export function recordHubExitFromPlay(scene, reason, extra = {}) {
   const level = scene?.level ?? 1;
   const score = scene?.score ?? 0;
   const hs = SaveManager.getHighScore();
+  const isNewBest =
+    reason === 'quit'
+      ? false
+      : (extra.isNewBest ?? (score > hs && score > 0));
   queuePostRunSummary({
     reason,
     level,
     score,
     stars: extra.stars ?? MetaProgress.getStars(`L${level}`),
     gemsEarned: extra.gemsEarned,
-    isNewBest: extra.isNewBest ?? (score >= hs && score > 0),
+    isNewBest,
     returnStreak: streak,
   });
 }
