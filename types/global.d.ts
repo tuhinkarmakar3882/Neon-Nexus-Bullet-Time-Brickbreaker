@@ -15,6 +15,11 @@ declare global {
     __neonGoBack?: () => void;
     __neonInstallPrompt?: BeforeInstallPromptEvent | null;
     __neonPlayIntent?: NeonPlayIntent | null;
+    gtag?: (
+      command: 'event',
+      eventName: string,
+      params?: Record<string, string | number | boolean | undefined>,
+    ) => void;
     __neonRunResetReason?: string;
     adsbygoogle?: Record<string, unknown>[];
     __googleShowInterstitial?: () => Promise<boolean>;

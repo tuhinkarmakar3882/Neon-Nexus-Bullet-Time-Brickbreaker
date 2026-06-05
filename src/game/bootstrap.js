@@ -27,18 +27,22 @@ import {
 } from '../systems/LayoutManager.js';
 import { attachFullscreenListener, lockMobileViewport } from '../systems/Fullscreen.js';
 import { initNativeBridge } from '../systems/NativeBridge.js';
-import { attachAppLifecycle } from '../systems/AppLifecycle.js';
+import { attachAppLifecycle, detachAppLifecycle } from '../systems/AppLifecycle.js';
 import { runMigrations } from '../systems/SaveMigration.js';
 import {
   attachEscapeListener,
   attachNavigation,
   attachPopstateListener,
+  detachEscapeListener,
+  detachNavigation,
+  detachPopstateListener,
   goBack,
   popOverlayHistory,
   pushOverlayHistory,
   markHistorySyncSkipped,
 } from '../systems/Navigation.js';
 import { attachGameKeyboard, detachGameKeyboard } from '../systems/GameKeyboard.js';
+import { attachGamepadRouter, detachGamepadRouter } from '../systems/GamepadRouter.js';
 import { attachLegalShell, wireLegalShellNavigation } from '../shell/LegalShell.js';
 import { audio } from '../systems/AudioManager.js';
 import { syncPendingEntitlements } from '../systems/WebUnlock.js';
@@ -48,12 +52,15 @@ import { getEnv } from '../config/env.js';
 import { peekForceNew, peekPlayIntent } from '../shell/playIntent.js';
 import { setBootSplash } from '../shell/BootSplash.js';
 import { attachRuntimeGuards } from '../systems/GameGuard.js';
+import { applyReducedMotionOverride, resolveSettings } from '../config/VfxQuality.js';
 
 const isMobile = typeof navigator !== 'undefined'
   && /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
 
 let game = null;
 let bootSettledAt = 0;
+let resizeTimer = null;
+let detachPlayShellFn = null;
 
 function isProd() {
   return getEnv('NODE_ENV', '') === 'production'
@@ -148,21 +155,9 @@ function handleViewportChangeInner() {
   }
 }
 
-let resizeTimer = null;
 function scheduleViewportChange() {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(handleViewportChange, 120);
-}
-
-function attachViewportListeners() {
-  window.addEventListener('resize', scheduleViewportChange);
-  window.addEventListener('orientationchange', () => {
-    lockMobileViewport();
-    scheduleViewportChange();
-  });
-  window.visualViewport?.addEventListener('resize', scheduleViewportChange);
-  window.visualViewport?.addEventListener('scroll', scheduleViewportChange);
-  attachFullscreenListener(() => scheduleViewportChange());
 }
 
 function warnProductionConfig() {
@@ -180,9 +175,87 @@ function warnProductionConfig() {
   }
 }
 
+function attachPlayShell(phaserGame) {
+  detachPlayShell();
+  const teardown = [];
+
+  const onResize = () => scheduleViewportChange();
+  window.addEventListener('resize', onResize);
+  teardown.push(() => window.removeEventListener('resize', onResize));
+
+  const onOrientation = () => {
+    lockMobileViewport();
+    scheduleViewportChange();
+  };
+  window.addEventListener('orientationchange', onOrientation);
+  teardown.push(() => window.removeEventListener('orientationchange', onOrientation));
+
+  const vv = window.visualViewport;
+  if (vv) {
+    vv.addEventListener('resize', onResize);
+    vv.addEventListener('scroll', onResize);
+    teardown.push(() => {
+      vv.removeEventListener('resize', onResize);
+      vv.removeEventListener('scroll', onResize);
+    });
+  }
+
+  teardown.push(attachFullscreenListener(() => scheduleViewportChange()));
+
+  attachNavigation(phaserGame);
+  teardown.push(() => detachNavigation());
+
+  wireLegalShellNavigation({
+    pushOverlay: pushOverlayHistory,
+    popOverlay: popOverlayHistory,
+    markSkip: markHistorySyncSkipped,
+  });
+  attachLegalShell(phaserGame);
+
+  teardown.push(attachPopstateListener(phaserGame));
+  teardown.push(attachEscapeListener(phaserGame));
+  attachGameKeyboard(phaserGame);
+  teardown.push(() => detachGameKeyboard());
+  teardown.push(attachAppLifecycle(phaserGame));
+  teardown.push(RunPersistence.attachAutoSave(phaserGame));
+
+  attachGamepadRouter(phaserGame);
+  teardown.push(() => detachGamepadRouter());
+
+  window.__neonGoBack = () => goBack(phaserGame);
+
+  detachPlayShellFn = () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = null;
+    for (let i = teardown.length - 1; i >= 0; i -= 1) {
+      try { teardown[i]?.(); } catch { /* ignore */ }
+    }
+    detachPlayShellFn = null;
+    delete window.__neonGoBack;
+  };
+}
+
+export function detachPlayShell() {
+  detachPlayShellFn?.();
+}
+
+function isGameAlive(g) {
+  if (!g) return false;
+  try {
+    return g.isRunning !== false;
+  } catch {
+    return false;
+  }
+}
+
 export function destroyGame() {
   if (!game) return;
+  detachPlayShell();
   detachGameKeyboard();
+  InputRouter.detach();
+  try {
+    audio.teardownPlaySession();
+  } catch { /* ignore */ }
   try {
     const intent = window.__neonPlayIntent ?? peekPlayIntent();
     const forceNew = intent?.extra?.forceNew === true || peekForceNew();
@@ -201,7 +274,10 @@ export function destroyGame() {
 }
 
 export function bootPlayGame() {
-  if (game) return game;
+  if (game) {
+    if (isGameAlive(game)) return game;
+    destroyGame();
+  }
   try {
     runMigrations();
   } catch (e) {
@@ -216,6 +292,9 @@ export function bootPlayGame() {
 
   GAME.USE_DOM_HUD = typeof document !== 'undefined'
     && !!document.querySelector('.play-stage--hud');
+
+  const bootSettings = applyReducedMotionOverride(resolveSettings(SaveManager.loadSettings()));
+  window.__neonBootVfx = bootSettings;
 
   syncViewportLayout();
   setBootSplash({ progress: 18, label: 'Initializing bullet-time…' });
@@ -236,19 +315,11 @@ export function bootPlayGame() {
 
     attachRuntimeGuards(game);
     InputRouter.attach(game);
-    attachNavigation(game);
-    wireLegalShellNavigation({
-      pushOverlay: pushOverlayHistory,
-      popOverlay: popOverlayHistory,
-      markSkip: markHistorySyncSkipped,
-    });
-    attachLegalShell(game);
-    attachPopstateListener(game);
-    attachEscapeListener(game);
-    attachGameKeyboard(game);
-    attachAppLifecycle(game);
-    window.__neonGoBack = () => goBack(game);
-    RunPersistence.attachAutoSave(game);
+    attachPlayShell(game);
+
+    if (bootSettings) {
+      game.events.emit('settings:vfx', bootSettings);
+    }
 
     const adProvider = createAdProvider(game);
     Monetization.register({
@@ -269,7 +340,6 @@ export function bootPlayGame() {
 
   });
 
-  attachViewportListeners();
   return game;
 }
 

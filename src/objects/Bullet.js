@@ -1,6 +1,6 @@
 import { GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
-import { fxParticleSize, fxParticleScale } from '../utils/FxBudget.js';
+import { fxParticleSize, fxParticleScale, fxParticlesOn } from '../utils/FxBudget.js';
 import { drawSoftGlow, makeGlowLayer } from '../utils/GlowFx.js';
 
 const TINTS = {
@@ -37,16 +37,18 @@ export class Bullet {
     this.glowGfx = makeGlowLayer(scene, 17);
     this.trailTarget = { x, y };
     const trailTex = this.type === 'fire' || this.type === 'napalm' ? 'ember' : 'spark-streak';
-    const trailScale = fxParticleScale(scene, trailTex, 10);
+    const particlesOn = fxParticlesOn(scene);
+    const trailScale = particlesOn ? fxParticleScale(scene, trailTex, 10) : 0;
     this.trail = scene.add.particles(0, 0, trailTex, {
       follow: this.trailTarget,
       speed: { min: 4, max: 18 },
       scale: { start: trailScale, end: 0 },
-      alpha: { start: 0.65, end: 0 },
+      alpha: { start: particlesOn ? 0.65 : 0, end: 0 },
       lifespan: 220,
-      frequency: 24,
+      frequency: particlesOn ? 24 : 9999,
       tint: this.tint,
       blendMode: 'ADD',
+      emitting: particlesOn,
     }).setDepth(16);
   }
 

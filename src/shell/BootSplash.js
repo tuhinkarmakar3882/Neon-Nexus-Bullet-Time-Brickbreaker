@@ -27,6 +27,13 @@ function emit(name, detail) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
+function emitProgress() {
+  emit('neon:boot-splash-progress', {
+    progress: currentProgress,
+    label: els()?.status?.textContent ?? '',
+  });
+}
+
 /**
  * @param {{ progress?: number, label?: string }} opts
  */
@@ -46,6 +53,8 @@ export function setBootSplash({ progress, label } = {}) {
   if (label && ui.status) ui.status.textContent = label;
 
   ui.root.setAttribute('aria-valuenow', String(Math.round(currentProgress)));
+  if (label && ui.status) ui.status.setAttribute('aria-label', label);
+  emitProgress();
 }
 
 export function dismissBootSplash(label) {
@@ -74,9 +83,15 @@ export function dismissBootSplash(label) {
 export function armBootSplashTimeout(onStuck) {
   if (maxTimeout) clearTimeout(maxTimeout);
   maxTimeout = setTimeout(() => {
-    if (!dismissed) onStuck?.();
-    dismissBootSplash('Taking longer than usual — entering garden…');
+    if (dismissed) return;
+    onStuck?.();
+    emit('neon:boot-splash-stuck', { progress: currentProgress });
   }, MAX_WAIT_MS);
+}
+
+/** Force-dismiss after max wait — used by stuck UI retry. */
+export function forceDismissBootSplash(label) {
+  dismissBootSplash(label ?? 'Taking longer than usual — entering garden…');
 }
 
 export function resetBootSplashState() {

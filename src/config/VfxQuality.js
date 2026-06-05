@@ -26,8 +26,8 @@ export const VFX_PRESETS = {
     vignette: 0,
     grain: 0,
     chroma: false,
-    haptics: false,
     bgReduced: true,
+    flashMinGap: 960,
     trailMult: 0.25,
     confettiMult: 0,
     shakeMult: 0,
@@ -69,8 +69,8 @@ export const VFX_PRESETS = {
     vignette: 0,
     grain: 0,
     chroma: false,
-    haptics: true,
     bgReduced: true,
+    flashMinGap: 840,
     trailMult: 0.6,
     confettiMult: 0.4,
     shakeMult: 0.55,
@@ -112,8 +112,8 @@ export const VFX_PRESETS = {
     vignette: 0,
     grain: 0,
     chroma: true,
-    haptics: true,
     bgReduced: false,
+    flashMinGap: 720,
     trailMult: 1,
     confettiMult: 1,
     shakeMult: 0.9,
@@ -149,15 +149,15 @@ export const VFX_PRESETS = {
     particleSizeMult: 0.95,
     bulletTime: true,
     flashText: true,
-    flashMinGap: 720,
     scanlines: true,
     scanlineAlpha: 0.028,
-    bloom: 0.82,
+    bloom: 0.92,
     vignette: 0,
-    grain: 0.035,
+    edgeStrip: 0.11,
+    grain: 0.04,
     chroma: true,
-    haptics: true,
     bgReduced: false,
+    flashMinGap: 600,
     trailMult: 1.4,
     confettiMult: 1.55,
     shakeMult: 1.15,
@@ -175,15 +175,16 @@ export const VFX_PRESETS = {
     comboFx: 'full',
     arenaDim: true,
     bg: {
-      nebula: 4,
-      nebulaAlpha: 0.17,
+      nebula: 5,
+      nebulaAlpha: 0.21,
       stars: true,
       motes: true,
-      gridAlpha: 0.15,
+      gridAlpha: 0.17,
       aurora: true,
-      starFarFreq: 90,
-      starNearFreq: 200,
-      moteFreq: 320,
+      auroraAlpha: 0.09,
+      starFarFreq: 75,
+      starNearFreq: 175,
+      moteFreq: 280,
     },
   },
 };
@@ -193,19 +194,45 @@ export function normalizeVfxQuality(q) {
   return VFX_LEVELS.includes(key) ? key : 'ultra';
 }
 
+export function prefersReducedMotion() {
+  if (typeof matchMedia !== 'function') return false;
+  return matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/** Session-only downgrade when the OS requests reduced motion (does not overwrite saves). */
+export function applyReducedMotionOverride(settings) {
+  if (!prefersReducedMotion()) return settings;
+  const low = VFX_PRESETS.low;
+  return {
+    ...settings,
+    vfxQuality: 'low',
+    ...low,
+    sound: settings.sound,
+    music: settings.music,
+    ambience: settings.ambience,
+    sfxVolume: settings.sfxVolume,
+    musicVolume: settings.musicVolume,
+  };
+}
+
 /** Expand stored settings into runtime flags used by GameScene / MenuScene. */
 export function resolveSettings(raw = {}) {
   const sound = raw.sound !== false;
   const music = raw.music !== false;
+  const haptics = raw.haptics !== false;
+  const ambience = raw.ambience !== false;
   const vfxQuality = normalizeVfxQuality(raw.vfxQuality);
   const preset = VFX_PRESETS[vfxQuality];
   return {
     sound,
     music,
+    haptics,
+    ambience,
     vfxQuality,
     sfxVolume: raw.sfxVolume ?? DEFAULT_SFX_VOLUME,
     musicVolume: raw.musicVolume ?? DEFAULT_MUSIC_VOLUME,
     ...preset,
+    ambience,
     particles: preset.particles,
     shakeMult: preset.shakeMult ?? 0,
   };

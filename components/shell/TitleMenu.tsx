@@ -9,7 +9,10 @@ import { WorldBackdrop } from '@/components/shell/WorldBackdrop';
 import { ROUTES } from '@/lib/shell/routes';
 import { SHELL_COPY } from '@/lib/copy/shell';
 import { HOME_ICONS } from '@/lib/shell/homeIcons';
+import { hubFeaturedEntries, hubPrimaryEntry, hubSettingsEntry } from '@/lib/shell/navConfig';
 import { APP_VERSION } from '@/src/config/Version.js';
+
+import { ProgressStrip } from '@/components/shell/ProgressStrip';
 
 type SavedRun = {
   level: number;
@@ -18,7 +21,14 @@ type SavedRun = {
 };
 
 type TitleMenuProps = {
+  gems: number;
+  highScore: number;
+  totalStars: number;
+  dailyBest: number;
+  returnStreak?: number;
+  levelsCleared?: number;
   run: SavedRun | null;
+  hydrated?: boolean;
   hint: string;
   showInstall: boolean;
   installPromptReady: boolean;
@@ -75,7 +85,14 @@ function MenuEntry({
 }
 
 export function TitleMenu({
+  gems,
+  highScore,
+  totalStars,
+  dailyBest,
+  returnStreak = 0,
+  levelsCleared = 0,
   run,
+  hydrated = false,
   hint,
   showInstall,
   installPromptReady,
@@ -87,6 +104,12 @@ export function TitleMenu({
 }: TitleMenuProps) {
   const c = SHELL_COPY.home;
   const brand = SHELL_COPY.brand;
+  const savedRun = hydrated ? run : null;
+  const primary = hubPrimaryEntry(!!savedRun);
+  const featured = hubFeaturedEntries();
+  const settings = hubSettingsEntry();
+  const showGemPromise = hydrated && levelsCleared === 0;
+  const showStreak = hydrated && (returnStreak ?? 0) > 1;
 
   return (
     <div className="shell-page shell-page--title">
@@ -100,14 +123,15 @@ export function TitleMenu({
         <LucideIcon icon={HOME_ICONS.tutorial} size={18} className="title-corner-btn__icon" />
         <span className="title-corner-btn__label">{c.nav.tutorial}</span>
       </button>
+
       <Link
         href={ROUTES.settings}
         className="title-corner-btn title-corner-btn--settings"
         prefetch
-        aria-label={c.nav.settings}
+        aria-label={settings.label}
       >
-        <LucideIcon icon={HOME_ICONS.settings} size={18} className="title-corner-btn__icon" />
-        <span className="title-corner-btn__label">{c.nav.settings}</span>
+        <LucideIcon icon={settings.icon} size={18} className="title-corner-btn__icon" />
+        <span className="title-corner-btn__label">{settings.label}</span>
       </Link>
 
       <div className="title-screen" role="group" aria-label="Game main menu">
@@ -126,45 +150,53 @@ export function TitleMenu({
           <p className="title-screen__tagline">{brand.taglineShort}</p>
         </header>
 
+        <ProgressStrip
+          gems={gems}
+          highScore={highScore}
+          totalStars={totalStars}
+          dailyBest={dailyBest}
+          returnStreak={returnStreak}
+          compact
+          hydrated={hydrated}
+        />
+
+        {showGemPromise ? (
+          <p className="title-screen__gem-promise" aria-label="First clear earns gems">
+            <LucideIcon icon={HOME_ICONS.gems} size={14} className="title-screen__gem-promise-icon" />
+            Clear your first level to earn gems for Garden Shop
+          </p>
+        ) : null}
+
+        {showStreak ? (
+          <p className="title-screen__streak-badge" aria-label={`${returnStreak} day return streak`}>
+            <LucideIcon icon={HOME_ICONS.streak} size={14} />
+            {returnStreak}-day garden streak
+          </p>
+        ) : null}
+
         <nav className="title-menu title-menu--premium" aria-label={c.menuLabel}>
           <span className="title-menu__badge">{c.menuLabel}</span>
           <ul className="title-menu__list">
-            {run ? (
-              <li className="title-menu__item title-menu__item--delay-1">
-                <MenuEntry
-                  icon={HOME_ICONS.resume}
-                  variant="primary"
-                  onClick={() => onPlay(true)}
-                  className="title-menu__entry--hero"
-                  subtitle={c.savedRun(run.level, run.score, run.lives)}
-                >
-                  {c.nav.resume}
-                </MenuEntry>
-              </li>
-            ) : (
-              <li className="title-menu__item title-menu__item--delay-1">
-                <MenuEntry
-                  icon={HOME_ICONS.play}
-                  variant="primary"
-                  onClick={() => onPlay(false)}
-                  className="title-menu__entry--pulse title-menu__entry--hero"
-                >
-                  {c.nav.play}
-                </MenuEntry>
-              </li>
-            )}
-            <li className="title-menu__item title-menu__item--delay-3">
-              <MenuEntry icon={HOME_ICONS.codex} variant="featured" href={ROUTES.codex}>
-                {c.nav.codex}
+            <li className="title-menu__item title-menu__item--delay-1">
+              <MenuEntry
+                icon={primary.icon}
+                variant="primary"
+                onClick={() => onPlay(!!savedRun)}
+                className={`title-menu__entry--hero${savedRun ? '' : ' title-menu__entry--pulse'}`}
+                subtitle={savedRun ? c.savedRun(savedRun.level, savedRun.score, savedRun.lives) : undefined}
+              >
+                {primary.label}
               </MenuEntry>
             </li>
-            <li className="title-menu__item title-menu__item--delay-4">
-              <MenuEntry icon={HOME_ICONS.shop} variant="featured" href={ROUTES.shop}>
-                {c.nav.shop}
-              </MenuEntry>
-            </li>
+            {featured.map((entry, i) => (
+              <li key={entry.id} className={`title-menu__item title-menu__item--delay-${i + 3}`}>
+                <MenuEntry icon={entry.icon} variant="featured" href={entry.href}>
+                  {entry.label}
+                </MenuEntry>
+              </li>
+            ))}
           </ul>
-          {run ? (
+          {savedRun ? (
             <button type="button" className="title-menu__secondary-link" onClick={onNewGame}>
               {c.nav.newGame}
             </button>

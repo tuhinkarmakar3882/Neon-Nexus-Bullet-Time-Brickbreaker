@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
 import { VFX_PRESETS } from '../config/VfxQuality.js';
+import { fxParticlesOn } from '../utils/FxBudget.js';
 import { rand } from '../utils/Helpers.js';
 
 const DEFAULT_BG = {
@@ -85,12 +86,14 @@ export class Background {
 
     this.aurora.forEach((a) => a.destroy());
     this.aurora = [];
-    if (bg.aurora && !this.gameplay) {
+    if (bg.aurora) {
+      const auroraBase = bg.auroraAlpha ?? 0.06;
+      const auroraA = this.dimAlpha(this.gameplay ? auroraBase * 0.85 : auroraBase);
       for (let i = 0; i < 2; i++) {
         const band = this.scene.add.image(W * (0.3 + i * 0.4), H * 0.22, 'soft')
           .setDisplaySize(W * 1.4, H * 0.35)
           .setTint(i === 0 ? this.accent : 0x8866cc)
-          .setAlpha(this.dimAlpha(0.06))
+          .setAlpha(auroraA)
           .setBlendMode('ADD')
           .setDepth(-94);
         this.aurora.push(band);
@@ -111,7 +114,7 @@ export class Background {
 
     const W = GAME.WIDTH;
     const H = GAME.HEIGHT;
-    const starsOn = bg.stars === true || bg.stars === 'reduced';
+    const starsOn = (bg.stars === true || bg.stars === 'reduced') && fxParticlesOn(this.scene);
     if (!starsOn) return;
 
     const farFreq = bg.starFarFreq || (bg.stars === 'reduced' ? 220 : 120);
@@ -143,7 +146,7 @@ export class Background {
       blendMode: 'ADD',
     }).setDepth(-88);
 
-    if (bg.motes && bg.moteFreq > 0) {
+    if (bg.motes && bg.moteFreq > 0 && fxParticlesOn(this.scene)) {
       this.motes = this.scene.add.particles(0, 0, 'spark-shard', {
         x: { min: 0, max: W },
         y: { min: 0, max: H },

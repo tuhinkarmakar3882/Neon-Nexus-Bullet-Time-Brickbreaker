@@ -15,6 +15,7 @@ import {
 } from '@/src/systems/Navigation.js';
 import { AdBanner } from '@/components/ads/AdBanner';
 import { trackScreenView } from '@/lib/analytics/shellAnalytics';
+import { installProductionAnalyticsSink } from '@/lib/analytics/productionSink';
 import { registerServiceWorker } from '@/lib/shell/registerServiceWorker';
 
 type ShellProvidersProps = {
@@ -28,6 +29,7 @@ export function ShellProviders({ children }: ShellProvidersProps) {
   useEffect(() => {
     audio.attachDocumentLifecycle(() => window.__NEON);
     registerServiceWorker();
+    installProductionAnalyticsSink();
   }, []);
 
   /** Shell routes play menu music; /play level music is owned by GameScene. */
@@ -50,6 +52,8 @@ export function ShellProviders({ children }: ShellProvidersProps) {
 
   useEffect(() => {
     if (isPlay) {
+      closeLegalShell();
+      document.body.classList.remove('neon-legal-open');
       document.body.classList.remove('shell-scroll');
       document.body.classList.add('shell-play');
       hideShellBanner();

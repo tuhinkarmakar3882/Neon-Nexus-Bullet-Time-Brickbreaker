@@ -6,6 +6,8 @@ import { lerpColor, clamp } from '../utils/Helpers.js';
 import { difficultyFor } from '../systems/DifficultyScaler.js';
 import { popScale } from '../utils/MicroFx.js';
 import { displayStyle } from '../utils/Typography.js';
+import { audio } from '../systems/AudioManager.js';
+import { fxSpatialPan } from '../utils/FxBudget.js';
 
 const BOSS_COLORS = [0xffb080, 0xff7040, 0xff4020];
 const STEEL_TYPES = new Set(['gold', 'steel']);
@@ -299,6 +301,8 @@ export class Brick {
 
   clang() {
     if (this._destroyed || !this.panel?.active) return;
+    const pan = fxSpatialPan(this.scene) ? this.cx : undefined;
+    audio.metalClang?.({ pan });
     this.scene.tweens.add({ targets: this.panel, scaleX: 0.94, scaleY: 0.94, duration: 60, yoyo: true });
     if (this.badge) {
       this.scene.tweens.add({ targets: this.badge, scaleX: 1.15, scaleY: 1.15, duration: 80, yoyo: true });

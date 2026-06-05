@@ -1,16 +1,25 @@
 /** Orchestrates VFX + SFX + haptics per gameplay moment — one timeline per event. */
 
 import { GAME } from '../config/Constants.js';
+import {
+  fxAtLeast,
+  fxConfettiCount,
+  fxReduced,
+  fxShake,
+  fxBurstMax,
+  fxSpatialPan,
+  fxComboFx,
+  fxCameraShake,
+} from '../utils/FxBudget.js';
 import { PAL, cssHex } from '../config/Palette.js';
 import { powerFillColor } from '../config/PowerUps.js';
 import { audio } from './AudioManager.js';
 import { hapticPulse, hapticPattern } from './Haptics.js';
 import {
-  brickBreakFx, comboFlare, surgeText, hitSpark, rippleRing,
+  brickBreakFx, surgeText, hitSpark, rippleRing,
   powerAcquireBurst, powerPickupFx, squashStretch, popScale, wobble,
   launchBurst, shardBurst, risePop, microShake, tileChipBurst,
 } from '../utils/MicroFx.js';
-import { fxConfettiCount, fxReduced, fxShake, fxBurstMax, fxSpatialPan, fxComboFx, fxCameraShake } from '../utils/FxBudget.js';
 import { bumpBloom, pulseChroma } from '../utils/SceneVfx.js';
 import {
   impactFlash, radialBlast, screenPunch, setArenaDim,
@@ -109,6 +118,10 @@ export class FeedbackDirector {
       'pot.incoming': () => this._potIncoming(opts),
       'paddle.catch': () => this._paddleCatch(opts),
       'knockout.levelClear': () => this._knockout(opts),
+      'gnome.juggle': () => this._gnomeJuggle(opts),
+      'gnome.electricPop': () => this._gnomeElectricPop(opts),
+      'gnome.dislodged': () => this._gnomeDislodged(opts),
+      'boss.perch': () => this._bossPerch(opts),
     };
     const fn = handlers[id];
     if (fn) fn();
@@ -116,7 +129,7 @@ export class FeedbackDirector {
   }
 
   _brickBreakNormal(opts) {
-    const { x, y, tint, brickType, fromBall, ball, panX } = opts;
+    const { x, y, tint, brickType, fromBall, ball, panX, combo = 0 } = opts;
     const scene = this.scene;
     const reduced = fxReduced(scene) || this.settings.reducedFx;
     const chipOpts = ball?.vx != null
@@ -126,7 +139,7 @@ export class FeedbackDirector {
     this.stage({
       at0: () => {
         if (fromBall) hapticPulse(4);
-        audio.brickBreak?.(brickType ?? 'normal', 0, 0, { pan: this.panX(panX ?? x) });
+        audio.brickBreak?.(brickType ?? 'normal', combo, 0, { pan: this.panX(panX ?? x) });
       },
       at2: () => {
         brickBreakFx(scene, x, y, tint, {
@@ -140,14 +153,15 @@ export class FeedbackDirector {
   }
 
   _brickBreakStyled(opts, style) {
-    const { x, y, tint, brickType, fromBall, panX } = opts;
+    const { x, y, tint, brickType, fromBall, panX, combo = 0 } = opts;
     const scene = this.scene;
     const reduced = fxReduced(scene) || this.settings.reducedFx;
 
     this.stage({
       at0: () => {
         if (fromBall) hapticPulse(4);
-        audio.brickBreak?.(brickType ?? 'normal', 0, 0, { pan: this.panX(panX ?? x) });
+        audio.elementBrickBreak?.(style, { pan: this.panX(panX ?? x) });
+        audio.brickBreak?.(brickType ?? 'normal', combo, 0, { pan: this.panX(panX ?? x) });
         if (style === 'nuke') {
           audio.sidechainImpulse?.();
           if (this.settings.reactiveBloom !== false) bumpBloom(scene, { delta: 0.06 });
@@ -166,9 +180,13 @@ export class FeedbackDirector {
   _comboMilestone(opts, tier) {
     const { x, y, combo, mult } = opts;
     const scene = this.scene;
-    const px = x ?? this._lastComboPos.x;
-    const py = y ?? this._lastComboPos.y;
-    this._lastComboPos = { x: px, y: py };
+    const W = GAME.WIDTH;
+    const H = GAME.HEIGHT;
+    const srcY = y ?? this._lastComboPos.y;
+    this._lastComboPos = { x: x ?? this._lastComboPos.x, y: srcY };
+    const side = (x ?? W / 2) < W / 2 ? 'left' : 'right';
+    const px = side === 'left' ? W * 0.07 : W * 0.93;
+    const py = Math.max(H * 0.14, Math.min(H * 0.72, srcY));
 
     this.stage({
       at0: () => {
@@ -176,14 +194,33 @@ export class FeedbackDirector {
         audio.comboMilestone?.(tier, { pan: this.panX(px) });
       },
       at2: () => {
-        const mode = fxComboFx(scene);
-        if (mode === 'full') comboFlare(scene, px, py, 0xffd23d, combo ?? tier);
-        else if (mode === 'text') hitSpark(scene, px, py, { tint: 0xffd23d, count: 2, spread: 14 });
+        if (!fxAtLeast(scene, 'medium')) return;
+        const edge = Math.max(8, Math.round(Math.min(W, H) * 0.045));
+        const g = scene.add.graphics().setDepth(36).setScrollFactor(0).setBlendMode('ADD');
+        const tint = 0xffd23d;
+        const ex = side === 'left' ? 0 : W - edge;
+        g.fillStyle(tint, 0.1 + tier * 0.004);
+        g.fillRect(ex, py - edge * 2, edge, edge * 4);
+        g.lineStyle(2, tint, 0.5);
+        g.lineBetween(
+          side === 'left' ? edge : W - edge,
+          py,
+          side === 'left' ? edge + edge * 0.6 : W - edge - edge * 0.6,
+          py,
+        );
+        scene.tweens.add({
+          targets: g,
+          alpha: 0,
+          duration: 420,
+          ease: 'Cubic.easeOut',
+          onComplete: () => g.destroy(),
+        });
+        hitSpark(scene, px, py, { tint, count: tier >= 24 ? 5 : 4, spread: 12 });
       },
       at8: () => {
         const mode = fxComboFx(scene);
         if (mode === false) return;
-        surgeText(scene, px, py - 24, `COMBO SURGE x${mult ?? 2}`, cssHex(PAL.accent3), 40);
+        surgeText(scene, px, py - 18, `COMBO x${mult ?? 2}`, cssHex(PAL.accent3), 34);
       },
     });
   }
@@ -341,9 +378,44 @@ export class FeedbackDirector {
 
   _potIncoming(opts) {
     const { x, y } = opts;
+    const scene = this.scene;
+    const side = (x ?? GAME.WIDTH / 2) < GAME.WIDTH / 2 ? 'left' : 'right';
+
     this.stage({
       at0: () => {
         audio.potIncomingTick?.({ pan: this.panX(x) });
+      },
+      at2: () => {
+        if (!fxAtLeast(scene, 'medium')) return;
+        const W = GAME.WIDTH;
+        const H = GAME.HEIGHT;
+        const edge = Math.max(10, Math.round(Math.min(W, H) * 0.05));
+        const g = scene.add.graphics().setDepth(35).setScrollFactor(0).setBlendMode('ADD');
+        const tint = 0xff8899;
+        const ex = side === 'left' ? 0 : W - edge;
+        g.fillStyle(tint, 0.14);
+        g.fillRect(ex, 0, edge, H);
+        g.lineStyle(2, tint, 0.55);
+        g.lineBetween(
+          side === 'left' ? edge : W - edge,
+          y ?? H * 0.72,
+          side === 'left' ? edge : W - edge,
+          (y ?? H * 0.72) + H * 0.08,
+        );
+        scene.tweens.add({
+          targets: g,
+          alpha: 0,
+          duration: 420,
+          ease: 'Cubic.easeOut',
+          onComplete: () => g.destroy(),
+        });
+        if (y != null) {
+          hitSpark(scene, side === 'left' ? edge + 8 : W - edge - 8, y, {
+            tint,
+            count: 3,
+            spread: 10,
+          });
+        }
       },
     });
   }
@@ -367,6 +439,63 @@ export class FeedbackDirector {
         }
         hitSpark(scene, x, y, { tint: sparkTint, count: clutch ? 5 : 4, spread: clutch ? 18 : 14 });
         if (this.settings.particles) this.requestBurst(x, y, sparkTint, 4);
+      },
+    });
+  }
+
+  _gnomeJuggle(opts) {
+    const { x, y, n = 1 } = opts;
+    const scene = this.scene;
+    this.stage({
+      at0: () => {
+        audio.juggle?.(n);
+      },
+      at2: () => {
+        hitSpark(scene, x, y, { tint: 0xffd23d, count: n >= 3 ? 5 : 4, spread: 16 });
+        if (n >= 3) rippleRing(scene, x, y, { tint: 0xffd23d, scale: 2.4, dur: 380 });
+      },
+    });
+  }
+
+  _gnomeElectricPop(opts) {
+    const { x, y } = opts;
+    const scene = this.scene;
+    this.stage({
+      at0: () => {
+        hapticPulse(10);
+      },
+      at2: () => {
+        hitSpark(scene, x, y, { tint: 0xa78bfa, count: 6, spread: 20 });
+        radialBlast(scene, x, y, { tint: 0xa78bfa, scale: 2.2 });
+      },
+    });
+  }
+
+  _gnomeDislodged(opts) {
+    const { x, y, dropped = false } = opts;
+    const scene = this.scene;
+    this.stage({
+      at2: () => {
+        hitSpark(scene, x, y, {
+          tint: dropped ? 0xffd23d : 0xc84040,
+          count: dropped ? 5 : 3,
+          spread: 14,
+        });
+      },
+    });
+  }
+
+  _bossPerch(opts) {
+    const { x, y, tint = 0xffd23d } = opts;
+    const scene = this.scene;
+    this.stage({
+      at0: () => {
+        audio.gnomePop?.({ pan: this.panX(x) });
+        hapticPulse(12);
+      },
+      at2: () => {
+        rippleRing(scene, x, y, { tint, scale: 1.9, dur: 380 });
+        hitSpark(scene, x, y, { tint, count: 5, spread: 18 });
       },
     });
   }

@@ -642,6 +642,49 @@ body.shell-play .shell-route-enter {
   background: rgba(20, 40, 80, 0.85);
 }
 
+.play-hud-chips {
+  position: fixed;
+  top: calc(var(--play-hud-top, 44px) + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 42;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: min(92vw, 420px);
+  pointer-events: none;
+}
+
+.play-hud-chip {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.play-hud-chip--goal {
+  color: #ffd56a;
+  border-color: rgba(255, 213, 106, 0.4);
+  background: rgba(40, 32, 12, 0.88);
+}
+
+.play-hud-chip--mutator {
+  color: rgba(170, 190, 220, 0.92);
+  border-color: rgba(120, 150, 200, 0.35);
+  background: rgba(12, 18, 32, 0.88);
+}
+
 .play-hud-combo {
   flex-shrink: 0;
   font-size: 0.62rem;
@@ -684,6 +727,88 @@ body.shell-play .shell-route-enter {
   color: #7ee8b0;
 }
 
+.play-hud-goal {
+  flex: 0 1 auto;
+  max-width: 72vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #7ee8b0;
+  line-height: 1.2;
+}
+
+.play-hud-mutators {
+  flex: 0 1 auto;
+  max-width: 72vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.5rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(170, 190, 220, 0.75);
+  line-height: 1.2;
+}
+
+.play-hud-powers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 0 0;
+}
+
+.play-hud-power {
+  --power-color: #2fe6c7;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 2.6rem;
+  max-width: 4.5rem;
+  padding: 2px 5px 3px;
+  border-radius: 6px;
+  background: rgba(8, 12, 22, 0.82);
+  border: 1px solid color-mix(in srgb, var(--power-color) 55%, transparent);
+}
+
+.play-hud-power--neg {
+  border-color: color-mix(in srgb, #ff5a6e 60%, transparent);
+}
+
+.play-hud-power--wild {
+  border-color: color-mix(in srgb, #9b8cff 60%, transparent);
+}
+
+.play-hud-power__label {
+  font-size: 0.48rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--power-color);
+  line-height: 1.1;
+  text-align: center;
+}
+
+.play-hud-power__track {
+  display: block;
+  height: 2px;
+  margin-top: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.play-hud-power__fill {
+  display: block;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--power-color);
+  transition: width 0.12s linear;
+}
+
 .play-hud-wallet {
   flex: 0 0 auto;
   display: flex;
@@ -703,6 +828,26 @@ body.shell-play .shell-route-enter {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.play-hud-wallet__tap {
+  margin: 0;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.play-hud-wallet__tap:hover {
+  background: rgba(102, 204, 255, 0.12);
+}
+
+.play-hud-wallet__tap:active {
+  opacity: 0.8;
 }
 
 .play-hud-wallet__icon--gem {
@@ -1412,6 +1557,22 @@ body.shell-play .shell-route-enter {
   color: #c877ff;
 }
 
+.level-complete-overlay__stars--count,
+.level-complete-overlay__gems-earned--count {
+  animation: level-reward-count 0.72s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes level-reward-count {
+  from {
+    opacity: 0.35;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .level-complete-overlay__goal {
   margin: 0;
   font-size: 0.72rem;
@@ -2094,13 +2255,17 @@ body.shell-scroll:has(.ad-banner-slot--visible) .shell-page {
   position: fixed;
   inset: 0;
   z-index: 20000;
-  display: flex;
+  display: none;
   flex-direction: column;
   background: #08050c;
 }
 
-#html-shell.hidden {
-  display: none;
+#html-shell.html-shell--open {
+  display: flex;
+}
+
+#html-shell[hidden] {
+  display: none !important;
 }
 
 body.neon-legal-open .shell-page,
@@ -3275,6 +3440,13 @@ body.shell-scroll:has(.ad-banner-slot--visible) .shell-page--title {
   letter-spacing: 0.2em;
   color: var(--text-muted);
   margin-bottom: 8px;
+}
+
+.shell-about__music {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  margin: 0 0 8px;
 }
 
 .shell-about__meta,

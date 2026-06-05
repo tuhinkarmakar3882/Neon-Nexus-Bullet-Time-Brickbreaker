@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import type Phaser from 'phaser';
 import { GAME } from '@/src/config/Constants.js';
 import { MetaProgress } from '@/src/systems/MetaProgress.js';
+import { getPlayMountGeneration, isCurrentPlayMount } from '@/lib/shell/playMount';
 import {
   INITIAL_GAMEPLAY_HUD,
   type GameplayHudState,
+  type HudPowerChip,
 } from '@/lib/shell/gameplayHudTypes';
 
 type HudStats = {
@@ -117,6 +119,10 @@ function attachHudListeners(
     patch((prev) => ({ ...prev, gambitReady: false }));
   };
 
+  const onPowers = (chips: HudPowerChip[]) => {
+    patch((prev) => ({ ...prev, activePowers: Array.isArray(chips) ? chips : [] }));
+  };
+
   bus.on('hud:stats', onStats);
   bus.on('hud:treasury', onTreasury);
   bus.on('hud:gnomeStreak', onGnome);
@@ -128,6 +134,7 @@ function attachHudListeners(
   bus.on('hud:life', onLife);
   bus.on('hud:achieve', onAchieve);
   bus.on('hud:gambit', onGambit);
+  bus.on('hud:powers', onPowers);
 
   onTreasury();
 
@@ -143,6 +150,7 @@ function attachHudListeners(
     bus.off('hud:life', onLife);
     bus.off('hud:achieve', onAchieve);
     bus.off('hud:gambit', onGambit);
+    bus.off('hud:powers', onPowers);
   };
 }
 
@@ -155,10 +163,12 @@ export function useGameplayHudState() {
   );
 
   useEffect(() => {
+    const mountGen = getPlayMountGeneration();
     let detach: (() => void) | undefined;
     let poll: ReturnType<typeof setInterval> | undefined;
 
     const tryAttach = (game?: Phaser.Game) => {
+      if (!isCurrentPlayMount(mountGen)) return false;
       const g = game ?? window.__NEON;
       if (!g?.events) return false;
       detach?.();
@@ -167,6 +177,7 @@ export function useGameplayHudState() {
     };
 
     const onReady = (e: Event) => {
+      if (!isCurrentPlayMount(mountGen)) return;
       const game = (e as CustomEvent<{ game?: Phaser.Game }>).detail?.game;
       setState(INITIAL_GAMEPLAY_HUD);
       tryAttach(game);
@@ -175,6 +186,10 @@ export function useGameplayHudState() {
     window.addEventListener('neon:game-ready', onReady);
     if (!tryAttach()) {
       poll = setInterval(() => {
+        if (!isCurrentPlayMount(mountGen)) {
+          clearInterval(poll);
+          return;
+        }
         if (tryAttach()) clearInterval(poll);
       }, 80);
     }

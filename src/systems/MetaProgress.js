@@ -2,6 +2,7 @@ import { STORAGE } from '../config/Constants.js';
 import { resolveEquippedCosmetics } from '../config/Cosmetics.js';
 import { SaveManager } from './SaveManager.js';
 import { META_SCHEMA_VERSION } from './SaveMigration.js';
+import { queueCodexUnlock } from '../shell/hubRewardQueue.js';
 
 const DEFAULT_META = {
   schemaVersion: META_SCHEMA_VERSION,
@@ -48,6 +49,12 @@ export function dailySeedForDate(d = new Date()) {
 
 export function todayKey() {
   const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function yesterdayKey() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
@@ -213,7 +220,15 @@ export const MetaProgress = {
       list.push(id);
       m.codex[kind] = list;
       saveMeta(m);
+      queueCodexUnlock(kind, id);
     }
+  },
+  getReturnStreak() {
+    return SaveManager.getNumber(STORAGE.RETURN_STREAK, 0);
+  },
+  /** Call when returning from play to hub — consecutive calendar-day visits. */
+  recordHubReturn() {
+    return this.recordReturnVisit();
   },
   getCodex() {
     return loadMeta().codex ?? DEFAULT_META.codex;
@@ -226,5 +241,16 @@ export const MetaProgress = {
   },
   getStats() {
     return loadMeta().stats ?? DEFAULT_META.stats;
+  },
+  /** Call on hub mount — increments consecutive calendar-day visits. */
+  recordReturnVisit() {
+    const today = todayKey();
+    const last = SaveManager.getString(STORAGE.RETURN_STREAK_DATE, '');
+    let streak = SaveManager.getNumber(STORAGE.RETURN_STREAK, 0);
+    if (last === today) return streak;
+    streak = last === yesterdayKey() ? streak + 1 : 1;
+    SaveManager.setNumber(STORAGE.RETURN_STREAK, streak);
+    SaveManager.setString(STORAGE.RETURN_STREAK_DATE, today);
+    return streak;
   },
 };

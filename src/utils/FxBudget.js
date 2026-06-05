@@ -110,6 +110,24 @@ export function fxFlashMult(scene) {
   return scene?.settings?.flashMult ?? 1;
 }
 
+export function fxFlashMinGap(scene) {
+  return scene?.settings?.flashMinGap ?? 480;
+}
+
+/** Max full-screen impact flash alpha after quality scaling. */
+export function fxFlashAlphaCap(scene) {
+  const mult = fxFlashMult(scene);
+  if (mult <= 0) return 0;
+  return 0.1 * mult;
+}
+
+/** Gate routine center flashes so they respect tier min-gap budget. */
+export function fxFlashBudgetOk(scene, lastAt = 0, priority = 'normal') {
+  if (priority === 'high') return true;
+  const now = scene?.time?.now ?? 0;
+  return now - (lastAt ?? 0) >= fxFlashMinGap(scene);
+}
+
 export function fxComboFx(scene) {
   return scene?.settings?.comboFx ?? 'full';
 }

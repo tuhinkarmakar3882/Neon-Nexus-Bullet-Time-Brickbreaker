@@ -80,6 +80,23 @@ function migrateRunFormat() {
   }
 }
 
+/** Seed nn_haptics and nn_return_streak keys for legacy installs. */
+function migrateLegacyPrefs() {
+  try {
+    if (localStorage.getItem(STORAGE.HAPTICS) === null) {
+      SaveManager.setBool(STORAGE.HAPTICS, true);
+    }
+    if (localStorage.getItem(STORAGE.RETURN_STREAK) === null) {
+      SaveManager.setNumber(STORAGE.RETURN_STREAK, 0);
+    }
+    if (localStorage.getItem(STORAGE.RETURN_STREAK_DATE) === null) {
+      SaveManager.setString(STORAGE.RETURN_STREAK_DATE, '');
+    }
+  } catch {
+    /* private mode */
+  }
+}
+
 const MIGRATIONS = [
   {
     from: 0,
@@ -95,6 +112,7 @@ const MIGRATIONS = [
     run() {
       migrateMetaSchema();
       migrateRunFormat();
+      migrateLegacyPrefs();
       setSchemaVersion(2);
     },
   },

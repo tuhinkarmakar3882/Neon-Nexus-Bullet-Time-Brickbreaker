@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Play, LogOut, Heart } from 'lucide';
 import { LucideIcon } from '@/components/shell/LucideIcon';
 import { NeonButton } from '@/components/shell/AppShell';
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap';
 import { mountPauseAdInContainer, hidePauseAdSlot } from '@/lib/ads/pauseAdSlot';
 import type { PauseOverlayData } from '@/lib/shell/pauseOverlayTypes';
 import { pauseOverlayQuitToMenu, pauseOverlayResume } from '@/lib/shell/pauseOverlayActions';
@@ -17,8 +18,22 @@ type Props = {
 const C = PLAY_COPY.pause;
 
 export function PauseOverlay({ data }: Props) {
+  const cardRef = useRef<HTMLDivElement>(null);
   const adRef = useRef<HTMLDivElement>(null);
   const [showAd, setShowAd] = useState(false);
+
+  useFocusTrap(cardRef, true);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        pauseOverlayResume();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   useEffect(() => {
     Monetization.applyConfig();
@@ -39,7 +54,7 @@ export function PauseOverlay({ data }: Props) {
       aria-modal="true"
       aria-labelledby="pause-overlay-title"
     >
-      <div className="pause-overlay__card">
+      <div className="pause-overlay__card" ref={cardRef} tabIndex={-1}>
         <header className="pause-overlay__head">
           <p className="pause-overlay__eyebrow">{C.eyebrow}</p>
           <h2 id="pause-overlay-title" className="pause-overlay__title">

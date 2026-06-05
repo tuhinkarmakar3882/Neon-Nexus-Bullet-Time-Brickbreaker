@@ -5,9 +5,13 @@ Technical detail: [`ARCHITECTURE.md`](./ARCHITECTURE.md) · Mechanics: [`GAME_ME
 
 ---
 
+## v3.1.5 — AAA UX audit
+
+Shipped June 2026. Full checklist: [**UX_IMPLEMENTATION_STATUS.md**](./UX_IMPLEMENTATION_STATUS.md). Highlights: hub gamification (ProgressStrip, JourneyPath, ⌘K palette), pause → settings only, DOM HUD chips/pills, flash/VFX restraint, a11y modals, CI smoke gate.
+
 ## v3.1.0 — UX product sprint
 
-Shipped June 2026. Full checklist: [**UX_IMPLEMENTATION_STATUS.md**](./UX_IMPLEMENTATION_STATUS.md). Highlights: pause Garden meta, home FTUE + power coach, game-over UX, design-system merge, analytics, share preview, boot error recovery.
+Earlier sprint: game-over UX, home FTUE, design-system merge, analytics, share preview, boot error recovery. Pause garden nav and in-play power coach were **removed in 3.1.5**.
 
 ---
 
@@ -16,7 +20,7 @@ Shipped June 2026. Full checklist: [**UX_IMPLEMENTATION_STATUS.md**](./UX_IMPLEM
 | Area | Status |
 |------|--------|
 | **Core loop** | Break bricks, clear level, lives/continues, procedural layouts, fortress every 5 |
-| **Shell UX (3.1)** | FTUE, Garden pause nav, DOM game-over, hub share preview, `from=play` resume |
+| **Shell UX (3.1.5)** | FTUE, ProgressStrip/JourneyPath, ⌘K palette, pause→settings, DOM overlays, hub reward toasts, `from=play` resume |
 | **Jardinains** | Dynamic pop-up spawner, pot throws, dislodge/juggle/knockout → power drops |
 | **Powers** | 44 keys in catalog (paddle cannons, ball mods, env, wild + negatives + tier II) |
 | **Visual baseline** | High-contrast ball (dark rim + identity tints); plain wood paddle when unpowered; powers tint/glow on apply |

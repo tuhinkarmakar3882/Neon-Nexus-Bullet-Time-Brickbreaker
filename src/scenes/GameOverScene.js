@@ -12,6 +12,7 @@ import { audio } from '../systems/AudioManager.js';
 import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 import { exitToHome } from '../shell/routes.js';
 import { RunPersistence } from '../systems/RunPersistence.js';
+import { recordHubExitFromPlay } from '../shell/hubExit.js';
 import { getGameScene } from '../utils/SceneRefs.js';
 import {
   dispatchGameOverOverlayClose,
@@ -209,6 +210,9 @@ export class GameOverScene extends Phaser.Scene {
 
   handleBack() {
     RunPersistence.clearRun();
+    recordHubExitFromPlay(this.gameScene, 'gameover', {
+      isNewBest: this.isNewBest,
+    });
     InputRouter.onOverlayClose(SCENES.GAMEOVER, false);
     this.scene.stop(SCENES.UI);
     this.scene.stop(SCENES.GAME);

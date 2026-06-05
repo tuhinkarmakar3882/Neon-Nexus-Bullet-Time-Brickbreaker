@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RotateCcw, Home, Share2, Play } from 'lucide';
 import { NeonButton } from '@/components/shell/AppShell';
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap';
 import { mountGameOverAdInContainer, hideInlineOverlayAd } from '@/lib/ads/pauseAdSlot';
 import type { GameOverOverlayData } from '@/lib/shell/gameOverOverlayTypes';
 import {
@@ -23,12 +24,15 @@ type Props = {
 const C = PLAY_COPY.gameOver;
 
 export function GameOverOverlay({ data }: Props) {
+  const cardRef = useRef<HTMLDivElement>(null);
   const adRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState('');
   const [busyContinue, setBusyContinue] = useState(false);
   const [busyShare, setBusyShare] = useState(false);
   const [quitConfirm, setQuitConfirm] = useState(false);
   const [showAd, setShowAd] = useState(false);
+
+  useFocusTrap(cardRef, true);
 
   const continueLabel = data.adsReady ? C.continue : C.continueNoAd;
   const shareLabel = data.isNewBest ? C.shareNewBest : C.shareChallenge;
@@ -123,7 +127,7 @@ export function GameOverOverlay({ data }: Props) {
       aria-modal="true"
       aria-labelledby="game-over-overlay-title"
     >
-      <div className="game-over-overlay__card">
+      <div className="game-over-overlay__card" ref={cardRef} tabIndex={-1}>
         <header className="game-over-overlay__head">
           <h2 id="game-over-overlay-title" className="game-over-overlay__title">
             {C.title}
@@ -186,16 +190,16 @@ export function GameOverOverlay({ data }: Props) {
                 </NeonButton>
               ) : null}
               <NeonButton
-                variant={data.isNewBest ? 'primary' : 'secondary'}
+                variant="secondary"
                 icon={Share2}
-                className="game-over-overlay__share"
+                className={`game-over-overlay__share${data.isNewBest ? ' game-over-overlay__share--highlight' : ''}`}
                 onClick={onShare}
                 disabled={busyShare}
               >
                 {shareLabel}
               </NeonButton>
               <NeonButton
-                variant="secondary"
+                variant="muted"
                 icon={RotateCcw}
                 className="game-over-overlay__restart"
                 onClick={onRestart}

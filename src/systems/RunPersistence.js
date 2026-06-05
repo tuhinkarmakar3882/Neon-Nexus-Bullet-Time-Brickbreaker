@@ -72,12 +72,19 @@ export const RunPersistence = {
       const gs = game.scene.getScene(SCENES.GAME);
       if (gs?.scene?.isActive() && !gs.over) RunPersistence.saveRun(gs);
     };
-    document.addEventListener('visibilitychange', () => {
+    const onVisibility = () => {
       if (document.visibilityState === 'hidden') save();
-    });
+    };
+    document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('beforeunload', save);
     const intervalMs = 15000;
     const intervalId = window.setInterval(save, intervalMs);
-    game.events?.once?.('destroy', () => window.clearInterval(intervalId));
+    const detach = () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('beforeunload', save);
+      window.clearInterval(intervalId);
+    };
+    game.events?.once?.('destroy', detach);
+    return detach;
   },
 };

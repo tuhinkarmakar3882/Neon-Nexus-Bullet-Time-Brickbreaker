@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NeonButton } from '@/components/shell/AppShell';
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap';
 
 export type TutorialStep = { title: string; body: string };
 
@@ -21,6 +22,20 @@ export function TutorialOverlay({
   skipLabel = 'Skip',
 }: TutorialOverlayProps) {
   const [index, setIndex] = useState(0);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(cardRef, true);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onComplete();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onComplete]);
+
   const step = steps[index];
   const last = index >= steps.length - 1;
 
@@ -34,7 +49,7 @@ export function TutorialOverlay({
 
   return (
     <div className="ftue-overlay" role="dialog" aria-modal="true" aria-label={ariaLabel}>
-      <div className="ftue-overlay__card">
+      <div className="ftue-overlay__card" ref={cardRef}>
         <p className="ftue-overlay__step">
           {index + 1} / {steps.length}
         </p>

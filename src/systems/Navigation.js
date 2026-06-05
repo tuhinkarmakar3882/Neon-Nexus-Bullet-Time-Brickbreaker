@@ -4,6 +4,7 @@ import { SCENES } from '../config/Constants.js';
 import { closeLegalShell, isLegalShellOpen, wireLegalShellNavigation } from '../shell/LegalShell.js';
 import { exitToHome } from '../shell/routes.js';
 import { handlePlayEscape } from './GameKeyboard.js';
+import { recordHubExitFromPlay } from '../shell/hubExit.js';
 
 export const NAV = {
   MENU: 'menu',
@@ -29,9 +30,15 @@ let lastMenuBackAt = 0;
 let historyDepth = 0;
 let suppressNextHistoryPop = false;
 let skipNextHistorySync = false;
+let popstateHandler = null;
+let escapeHandler = null;
 
 export function attachNavigation(game) {
   gameRef = game;
+}
+
+export function detachNavigation() {
+  gameRef = null;
 }
 
 function historyEnabled() {
@@ -145,6 +152,8 @@ export function quitGameToMenu(game = gameRef) {
     exitToHome();
     return;
   }
+  const gs = scenes.getScene(SCENES.GAME);
+  recordHubExitFromPlay(gs, 'quit');
   for (const key of [SCENES.PAUSE, ...PAUSE_CHILD_OVERLAYS, SCENES.GAMEOVER, SCENES.LEVEL_COMPLETE]) {
     if (scenes.isActive(key)) scenes.stop(key);
   }
@@ -233,9 +242,10 @@ export async function requestExitApp() {
 }
 
 export function attachPopstateListener(game) {
-  if (!historyEnabled()) return;
+  detachPopstateListener();
+  if (!historyEnabled()) return () => {};
   attachNavigation(game);
-  window.addEventListener('popstate', () => {
+  popstateHandler = () => {
     if (suppressNextHistoryPop) {
       suppressNextHistoryPop = false;
       return;
@@ -256,13 +266,23 @@ export function attachPopstateListener(game) {
 
     markHistorySyncSkipped();
     goBack(game);
-  });
+  };
+  window.addEventListener('popstate', popstateHandler);
+  return detachPopstateListener;
+}
+
+export function detachPopstateListener() {
+  if (popstateHandler) {
+    window.removeEventListener('popstate', popstateHandler);
+    popstateHandler = null;
+  }
 }
 
 export function attachEscapeListener(game) {
-  if (typeof window === 'undefined') return;
+  detachEscapeListener();
+  if (typeof window === 'undefined') return () => {};
   attachNavigation(game);
-  window.addEventListener('keydown', (e) => {
+  escapeHandler = (e) => {
     if (e.key !== 'Escape') return;
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -271,5 +291,14 @@ export function attachEscapeListener(game) {
     let result = onPlay ? handlePlayEscape(game) : goBack(game);
     if (onPlay && !result.handled) result = goBack(game);
     if (result.handled) e.preventDefault();
-  });
+  };
+  window.addEventListener('keydown', escapeHandler);
+  return detachEscapeListener;
+}
+
+export function detachEscapeListener() {
+  if (escapeHandler) {
+    window.removeEventListener('keydown', escapeHandler);
+    escapeHandler = null;
+  }
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap';
 import { Share2 } from 'lucide';
 import { NeonButton } from '@/components/shell/AppShell';
 import { PremiumLoader } from '@/components/shell/PremiumLoader';
@@ -15,6 +16,8 @@ type SharePreviewModalProps = {
 };
 
 export function SharePreviewModal({ gems, highScore, onClose }: SharePreviewModalProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(cardRef, true);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [hint, setHint] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,6 +35,17 @@ export function SharePreviewModal({ gems, highScore, onClose }: SharePreviewModa
     };
   }, [gems, highScore]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const runShare = async () => {
     setBusy(true);
     trackShareFunnel('start', 'home_modal');
@@ -45,7 +59,7 @@ export function SharePreviewModal({ gems, highScore, onClose }: SharePreviewModa
 
   return (
     <div className="share-preview-modal" role="dialog" aria-modal="true" aria-label={c.title}>
-      <div className="share-preview-modal__card">
+      <div className="share-preview-modal__card" ref={cardRef}>
         <button type="button" className="share-preview-modal__close" onClick={onClose} aria-label="Close preview">
           ×
         </button>

@@ -34,8 +34,10 @@ One primary action per screen; destructive actions use `danger`.
 
 ## Play ↔ shell
 
-Mid-run meta: pause → Garden → `saveRunAndLeavePlay` + `?from=play`. Back uses `shellBackHref` resume path.
+Mid-run meta: pause → **Settings** via `saveRunAndLeavePlay` + `?from=play`. Shop from HUD gem tap or hub. Back uses `shellBackHref` / `navigateToPlay({ resume: true })`.
+
+Hub components: `ProgressStrip`, `JourneyPath`, `HubCommandPalette`, `HubRewardToasts` — see [`SHELL.md`](./SHELL.md).
 
 ## Analytics
 
-`lib/analytics/shellAnalytics.ts` — `neon:analytics` custom events; `trackScreenView` from `ShellProviders`.
+`lib/analytics/shellAnalytics.ts` — `neon:analytics` custom events; `productionSink.ts` forwards to `window.gtag` when present; `trackScreenView` from `ShellProviders`.

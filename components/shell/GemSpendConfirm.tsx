@@ -1,6 +1,9 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NeonButton } from '@/components/shell/AppShell';
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap';
 import { SHELL_COPY } from '@/lib/copy/shell';
 
 type GemSpendConfirmProps = {
@@ -12,12 +15,52 @@ type GemSpendConfirmProps = {
 };
 
 export function GemSpendConfirm({ itemLabel, cost, balance, onConfirm, onCancel }: GemSpendConfirmProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  useFocusTrap(cardRef, mounted);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
   const c = SHELL_COPY.shop.confirm;
   const after = balance - cost;
 
-  return (
-    <div className="gem-spend-confirm" role="alertdialog" aria-labelledby="gem-spend-title">
-      <div className="gem-spend-confirm__card">
+  if (!mounted) return null;
+
+  return createPortal(
+    <div
+      className="gem-spend-confirm"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="gem-spend-title"
+      onClick={onCancel}
+    >
+      <div
+        className="gem-spend-confirm__card"
+        ref={cardRef}
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 id="gem-spend-title" className="gem-spend-confirm__title">
           {c.title}
         </h2>
@@ -36,6 +79,7 @@ export function GemSpendConfirm({ itemLabel, cost, balance, onConfirm, onCancel 
           </NeonButton>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

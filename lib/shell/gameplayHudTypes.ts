@@ -1,3 +1,14 @@
+/** Active timed power chip from `hud:powers`. */
+export type HudPowerChip = {
+  key: string;
+  ratio: number;
+  color: number;
+  letter: string;
+  polarity: string;
+  icon?: string;
+  label: string;
+};
+
 /** Snapshot driven by Phaser `hud:*` events (React overlay on /play). */
 export type GameplayHudState = {
   score: number;
@@ -20,6 +31,7 @@ export type GameplayHudState = {
   lifePulse: number;
   nexusMeterPulse: number;
   gnomeMeterPulse: number;
+  activePowers: HudPowerChip[];
 };
 
 export const INITIAL_GAMEPLAY_HUD: GameplayHudState = {
@@ -43,4 +55,5 @@ export const INITIAL_GAMEPLAY_HUD: GameplayHudState = {
   lifePulse: 0,
   nexusMeterPulse: 0,
   gnomeMeterPulse: 0,
+  activePowers: [],
 };

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Share2, Sparkles } from 'lucide';
 import { NeonButton } from '@/components/shell/AppShell';
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap';
 import { mountLevelCompleteAdInContainer, hideInlineOverlayAd } from '@/lib/ads/pauseAdSlot';
 import type { LevelCompleteOverlayData } from '@/lib/shell/levelCompleteOverlayTypes';
 import {
@@ -11,6 +12,7 @@ import {
   levelCompleteOverlayShare,
 } from '@/lib/shell/levelCompleteOverlayActions';
 import { Monetization } from '@/src/systems/Monetization.js';
+import { hapticPulse } from '@/src/systems/Haptics.js';
 import { PLAY_COPY } from '@/lib/copy/play';
 
 type Props = {
@@ -19,12 +21,35 @@ type Props = {
 
 const C = PLAY_COPY.levelComplete;
 
+function useCountUp(target: number, active: boolean, durationMs = 720) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (!active || target <= 0) {
+      setValue(target);
+      return;
+    }
+    setValue(0);
+    const start = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs);
+      const eased = 1 - (1 - t) ** 3;
+      setValue(Math.round(target * eased));
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, active, durationMs]);
+  return value;
+}
+
 function renderStars(stars: number) {
   const filled = Math.max(0, Math.min(3, stars));
   return '★'.repeat(filled) + '☆'.repeat(3 - filled);
 }
 
 export function LevelCompleteOverlay({ data }: Props) {
+  const cardRef = useRef<HTMLDivElement>(null);
   const adRef = useRef<HTMLDivElement>(null);
   const [bonus, setBonus] = useState(data.bonus);
   const [score, setScore] = useState(data.score);
@@ -35,6 +60,12 @@ export function LevelCompleteOverlay({ data }: Props) {
   const [canContinue, setCanContinue] = useState(false);
   const [showAd, setShowAd] = useState(false);
   const [hintPulse, setHintPulse] = useState(false);
+  const [animateRewards, setAnimateRewards] = useState(false);
+
+  const starCount = useCountUp(data.stars, animateRewards, 640);
+  const gemsShown = useCountUp(data.gemsEarned ?? 0, animateRewards, 820);
+
+  useFocusTrap(cardRef, true);
 
   useEffect(() => {
     Monetization.applyConfig();
@@ -48,14 +79,18 @@ export function LevelCompleteOverlay({ data }: Props) {
     setStatus('');
     setCanContinue(false);
     setHintPulse(false);
+    setAnimateRewards(false);
+    hapticPulse(16);
 
-    const tapTimer = window.setTimeout(() => setCanContinue(true), 1400);
-    const hintTimer = window.setTimeout(() => setHintPulse(true), 1200);
+    const animTimer = window.setTimeout(() => setAnimateRewards(true), 120);
+    const tapTimer = window.setTimeout(() => setCanContinue(true), 800);
+    const hintTimer = window.setTimeout(() => setHintPulse(true), 600);
     return () => {
+      window.clearTimeout(animTimer);
       window.clearTimeout(tapTimer);
       window.clearTimeout(hintTimer);
     };
-  }, [data.level, data.bonus, data.score]);
+  }, [data.level, data.bonus, data.score, data.stars, data.gemsEarned]);
 
   useEffect(() => {
     const el = adRef.current;
@@ -121,6 +156,8 @@ export function LevelCompleteOverlay({ data }: Props) {
     >
       <div
         className="level-complete-overlay__card"
+        ref={cardRef}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="level-complete-overlay__head">
@@ -142,13 +179,18 @@ export function LevelCompleteOverlay({ data }: Props) {
             <span className="level-complete-overlay__score-label">{C.score}</span>
             <span className="level-complete-overlay__score-val">{score.toLocaleString()}</span>
           </p>
-          <p className="level-complete-overlay__stars" aria-label={`${data.stars} of 3 stars`}>
-            {renderStars(data.stars)}
+          <p
+            className={`level-complete-overlay__stars${animateRewards ? ' level-complete-overlay__stars--count' : ''}`}
+            aria-label={`${data.stars} of 3 stars`}
+          >
+            {renderStars(starCount)}
           </p>
           {data.gemsEarned != null ? (
             <>
-              <p className="level-complete-overlay__gems-earned">
-                +{data.gemsEarned} {C.gems}
+              <p
+                className={`level-complete-overlay__gems-earned${animateRewards ? ' level-complete-overlay__gems-earned--count' : ''}`}
+              >
+                +{gemsShown} {C.gems}
               </p>
               <p className="level-complete-overlay__gems-total">
                 {C.total} {(data.gems ?? 0).toLocaleString()} {C.gems}

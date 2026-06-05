@@ -24,16 +24,25 @@
   order: 1;
 }
 
-.game-over-overlay__share {
+.game-over-overlay__inventory-continue {
   order: 2;
 }
 
-.game-over-overlay__restart {
+.game-over-overlay__share {
   order: 3;
 }
 
-.game-over-overlay__menu {
+.game-over-overlay__share--highlight {
+  border-color: rgba(255, 210, 61, 0.55);
+  box-shadow: 0 0 16px rgba(255, 210, 61, 0.16);
+}
+
+.game-over-overlay__restart {
   order: 4;
+}
+
+.game-over-overlay__menu {
+  order: 5;
 }
 
 .game-over-overlay__actions {

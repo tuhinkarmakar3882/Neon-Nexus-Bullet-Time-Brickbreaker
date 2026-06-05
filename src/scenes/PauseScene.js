@@ -8,6 +8,9 @@ import { Monetization } from '../systems/Monetization.js';
 import { hidePauseAdSlot, showPauseAdSlot } from '../systems/PauseAdSlot.js';
 import { dispatchPauseOverlayClose, dispatchPauseOverlayOpen } from '../shell/pauseOverlayDom.js';
 import { exitToHome } from '../shell/routes.js';
+import { recordHubExitFromPlay } from '../shell/hubExit.js';
+import { getGameScene } from '../utils/SceneRefs.js';
+import { audio } from '../systems/AudioManager.js';
 import { fitTextWidth, orbitronStyle, uiPx } from '../utils/Typography.js';
 
 /** Pause overlay — title → ad banner → resume → quit. */
@@ -160,6 +163,7 @@ export class PauseScene extends Phaser.Scene {
   }
 
   exitToHub() {
+    recordHubExitFromPlay(getGameScene(this), 'quit');
     this._teardown();
     InputRouter.onOverlayClose(SCENES.PAUSE, false, false);
     this.scene.stop(SCENES.UI);
@@ -170,6 +174,7 @@ export class PauseScene extends Phaser.Scene {
   }
 
   resume(syncHistory = true) {
+    audio.pauseClose?.();
     this._teardown();
     InputRouter.onOverlayClose(SCENES.PAUSE, true, syncHistory);
     const sm = this.scene;

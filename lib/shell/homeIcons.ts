@@ -2,6 +2,8 @@ import type { IconNode } from 'lucide';
 import {
   Archive,
   BookOpen,
+  CalendarDays,
+  Flame,
   CircleHelp,
   Download,
   Gem,
@@ -14,6 +16,7 @@ import {
   ShoppingBag,
   Sparkles,
   Sprout,
+  Star,
   Trophy,
   Zap,
 } from 'lucide';
@@ -37,4 +40,7 @@ export const HOME_ICONS = {
   archive: Archive,
   garden: Sprout,
   tutorial: CircleHelp,
+  stars: Star,
+  daily: CalendarDays,
+  streak: Flame,
 } as const satisfies Record<string, IconNode>;

@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { TitleMenu } from '@/components/shell/TitleMenu';
+import { HubRewardToasts } from '@/components/shell/HubRewardToasts';
+import { HubCommandPalette } from '@/components/shell/HubCommandPalette';
+import { MetaProgress } from '@/src/systems/MetaProgress.js';
 import { TutorialOverlay } from '@/components/shell/TutorialOverlay';
 import { SharePreviewModal } from '@/components/shell/SharePreviewModal';
 import { FTUE_HOME_STEPS, hasSeenHomeFtue, markHomeFtueSeen } from '@/lib/shell/ftue';
@@ -20,7 +23,7 @@ import { SaveManager } from '@/src/systems/SaveManager.js';
 import { DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '@/src/config/Constants.js';
 
 export default function HomePage() {
-  const { gems, highScore, run } = useGameMeta();
+  const { gems, highScore, totalStars, dailyBest, returnStreak, levelsCleared, run, hydrated } = useGameMeta();
   const [hint, setHint] = useState('');
   const [showInstall, setShowInstall] = useState(false);
   const [installPromptReady, setInstallPromptReady] = useState(false);
@@ -30,6 +33,16 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!hasSeenHomeFtue()) setShowTutorial(true);
+    MetaProgress.recordReturnVisit();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('share') !== '1') return;
+    setShowSharePreview(true);
+    params.delete('share');
+    const q = params.toString();
+    window.history.replaceState(null, '', q ? `/?${q}` : '/');
   }, []);
 
   useEffect(() => {
@@ -103,8 +116,24 @@ export default function HomePage() {
           onClose={() => setShowSharePreview(false)}
         />
       ) : null}
+      <HubRewardToasts />
+      <HubCommandPalette
+        hasRun={hydrated && !!run}
+        onPlay={onPlay}
+        onShare={onShare}
+        onInstall={onInstall}
+        onTutorial={() => setShowTutorial(true)}
+        showInstall={showInstall}
+      />
       <TitleMenu
+        gems={gems}
+        highScore={highScore}
+        totalStars={totalStars}
+        dailyBest={dailyBest}
+        returnStreak={returnStreak}
+        levelsCleared={levelsCleared}
         run={run}
+        hydrated={hydrated}
         hint={hint}
         showInstall={showInstall}
         installPromptReady={installPromptReady}

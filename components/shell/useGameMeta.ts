@@ -12,13 +12,22 @@ export type RunSnapshot = {
 };
 
 export function useGameMeta() {
+  const [hydrated, setHydrated] = useState(false);
   const [gems, setGems] = useState(0);
   const [highScore, setHighScore] = useState(0);
+  const [totalStars, setTotalStars] = useState(0);
+  const [dailyBest, setDailyBest] = useState(0);
+  const [returnStreak, setReturnStreak] = useState(0);
+  const [levelsCleared, setLevelsCleared] = useState(0);
   const [run, setRun] = useState<RunSnapshot | null>(null);
 
   const refresh = useCallback(() => {
     setGems(MetaProgress.getGems());
     setHighScore(SaveManager.getHighScore());
+    setTotalStars(MetaProgress.countTotalStars());
+    setDailyBest(MetaProgress.getDailyBest());
+    setReturnStreak(MetaProgress.getReturnStreak());
+    setLevelsCleared(MetaProgress.getStats().levelsCleared ?? 0);
     const snap = RunPersistence.loadRun();
     setRun(
       snap
@@ -29,6 +38,7 @@ export function useGameMeta() {
 
   useEffect(() => {
     refresh();
+    setHydrated(true);
     const onStorage = (e: StorageEvent) => {
       if (!e.key || e.key.includes('neon') || e.key.includes('nn_')) refresh();
     };
@@ -40,5 +50,5 @@ export function useGameMeta() {
     };
   }, [refresh]);
 
-  return { gems, highScore, run, refresh };
+  return { gems, highScore, totalStars, dailyBest, returnStreak, levelsCleared, run, refresh, hydrated };
 }

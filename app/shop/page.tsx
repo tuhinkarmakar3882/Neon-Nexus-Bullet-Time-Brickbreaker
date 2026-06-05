@@ -15,12 +15,22 @@ import { audio } from '@/src/systems/AudioManager.js';
 import { cssHex } from '@/src/config/Palette.js';
 import { SHELL_COPY } from '@/lib/copy/shell';
 import { PremiumLoader } from '@/components/shell/PremiumLoader';
+import { SegmentedControl } from '@/components/shell/SegmentedControl';
 import { countCosmetics } from '@/lib/shell/progression';
 import { Gem } from 'lucide';
 import { NeonButton } from '@/components/shell/AppShell';
 import { LucideIcon } from '@/components/shell/LucideIcon';
 
 const COPY = SHELL_COPY.shop;
+
+const SHOP_CATEGORIES = ['hull', 'trail', 'theme'] as const;
+type ShopCategory = (typeof SHOP_CATEGORIES)[number];
+
+const SHOP_CATEGORY_LABELS: Record<ShopCategory, string> = {
+  hull: 'Hull',
+  trail: 'Trail',
+  theme: 'Theme',
+};
 
 type PendingPurchase = {
   id: string;
@@ -35,9 +45,17 @@ function ShopContent() {
   const { gems, refresh } = useGameMeta();
   const [status, setStatus] = useState('');
   const [pending, setPending] = useState<PendingPurchase | null>(null);
+  const [category, setCategory] = useState<ShopCategory>('hull');
+  const [glowId, setGlowId] = useState<string | null>(null);
   const [, tick] = useState(0);
   const forceUpdate = () => tick((n) => n + 1);
   const vault = countCosmetics();
+
+  const celebrateUnlock = useCallback((kind: string, id: string) => {
+    const key = `${kind}:${id}`;
+    setGlowId(key);
+    window.setTimeout(() => setGlowId((cur) => (cur === key ? null : cur)), 2400);
+  }, []);
 
   const completePurchase = useCallback(
     (c: { id: string; cost: number; label: string }, kind: string) => {
@@ -47,6 +65,7 @@ function ShopContent() {
           emitCosmeticsChanged(null);
           audio.blip(880);
           setStatus(COPY.status.unlocked);
+          celebrateUnlock(kind, c.id);
         }
         forceUpdate();
         refresh();
@@ -55,7 +74,7 @@ function ShopContent() {
         audio.blip(220);
       }
     },
-    [refresh],
+    [refresh, celebrateUnlock],
   );
 
   const onSelect = useCallback(
@@ -90,11 +109,12 @@ function ShopContent() {
         emitCosmeticsChanged(null);
         audio.blip(880);
         setStatus(COPY.status.unlocked);
+        celebrateUnlock(kind, c.id);
       }
       forceUpdate();
       refresh();
     },
-    [from, refresh],
+    [from, refresh, celebrateUnlock],
   );
 
   const buyProduct = async (sku: string) => {
@@ -144,8 +164,17 @@ function ShopContent() {
 
       {status ? <p className="shell-hint shell-hint--status">{status}</p> : null}
 
+      <SegmentedControl
+        idPrefix="shop-category"
+        options={[...SHOP_CATEGORIES]}
+        value={category}
+        onChange={(v) => setCategory(v as ShopCategory)}
+        formatLabel={(v) => SHOP_CATEGORY_LABELS[v as ShopCategory]}
+        ariaLabel="Shop categories"
+      />
+
       <div className="shell-scroll-panel forge-showcase">
-        {COSMETIC_SECTIONS.map((section) => (
+        {COSMETIC_SECTIONS.filter((section) => section.kind === category).map((section) => (
           <div key={section.kind}>
             <h2 className="forge-section-title">{section.title}</h2>
             <p className="forge-section-blurb">{section.blurb}</p>
@@ -164,7 +193,7 @@ function ShopContent() {
               return (
                 <div
                   key={c.id}
-                  className={`forge-item forge-item--${section.kind}${equipped ? ' equipped' : ''}`}
+                  className={`forge-item forge-item--${section.kind}${equipped ? ' equipped' : ''}${glowId === `${section.kind}:${c.id}` ? ' forge-item--unlock-glow' : ''}`}
                 >
                   {equipped ? (
                     <span className="forge-item__badge">

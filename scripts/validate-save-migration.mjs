@@ -2,6 +2,7 @@
 /** Validate SaveMigration upgrades legacy fixtures. */
 import assert from 'node:assert/strict';
 import { upgradeRunSnapshot, runMigrations, CURRENT_SAVE_SCHEMA } from '../src/systems/SaveMigration.js';
+import { STORAGE } from '../src/config/Constants.js';
 
 const store = {};
 
@@ -54,5 +55,9 @@ assert.equal(upgraded.version, 2);
 assert.ok(upgraded.powerDropSeq === 0);
 
 assert.equal(upgradeRunSnapshot({ version: 99 }), null);
+
+assert.equal(store[STORAGE.HAPTICS], 'true', 'nn_haptics should default true after migration');
+assert.equal(store[STORAGE.RETURN_STREAK], '0', 'nn_return_streak should seed to 0');
+assert.equal(store[STORAGE.RETURN_STREAK_DATE], '', 'nn_return_streak_date should seed empty');
 
 console.log('validate-save-migration: OK');

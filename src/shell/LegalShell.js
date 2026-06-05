@@ -44,13 +44,14 @@ export function attachLegalShell(game) {
 
 export function isLegalShellOpen() {
   const { shell } = els();
-  return !!shell && !shell.classList.contains('hidden');
+  return !!shell?.classList.contains('html-shell--open');
 }
 
 export function closeLegalShell({ fromHistory = false } = {}) {
   if (!isLegalShellOpen()) return false;
   const { shell, frame, title } = els();
-  shell.classList.add('hidden');
+  shell.classList.remove('html-shell--open');
+  shell.setAttribute('hidden', '');
   shell.setAttribute('aria-hidden', 'true');
   if (frame) frame.removeAttribute('src');
   if (title) title.textContent = 'Legal';
@@ -130,7 +131,8 @@ export function openLegalPage(page) {
     },
     { once: true },
   );
-  shell.classList.remove('hidden');
+  shell.classList.add('html-shell--open');
+  shell.removeAttribute('hidden');
   shell.setAttribute('aria-hidden', 'false');
   document.body.classList.add('neon-legal-open');
   gameRef?.loop?.sleep?.();

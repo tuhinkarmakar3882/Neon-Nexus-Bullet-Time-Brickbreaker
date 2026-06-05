@@ -28,7 +28,7 @@ export const PLAY_COPY = {
     preparingShare: 'Preparing screenshot…',
     loadingVideo: 'Loading video…',
     hint: 'Tap to continue',
-    hintSoon: '…',
+    hintSoon: 'Clear bonus tallying… tap in a moment',
   },
   gameOver: {
     title: 'Game over',

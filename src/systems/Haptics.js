@@ -1,8 +1,8 @@
-import { resolveSettings } from '../config/VfxQuality.js';
+import { STORAGE } from '../config/Constants.js';
 import { SaveManager } from './SaveManager.js';
 
 function hapticsOn() {
-  return !!resolveSettings(SaveManager.loadSettings()).haptics;
+  return SaveManager.getBool(STORAGE.HAPTICS, true);
 }
 
 export function hapticPulse(ms = 12) {

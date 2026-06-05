@@ -1,6 +1,6 @@
 import { RunPersistence } from '@/src/systems/RunPersistence.js';
 import { SCENES } from '@/src/config/Constants.js';
-import { setPlayIntent } from '@/lib/shell/playIntent';
+import { clearHubSession, isHubSessionWarm, markHubSessionActive, setPlayIntent } from '@/lib/shell/playIntent';
 import { audio } from '@/src/systems/AudioManager.js';
 import { SaveManager } from '@/src/systems/SaveManager.js';
 
@@ -29,6 +29,11 @@ export function isOnPlayRoute(): boolean {
   return window.location.pathname.replace(/\/$/, '') === '/play';
 }
 
+/**
+ * Hub ↔ play uses full `location.href` navigation (no client-side router).
+ * Session flags (`neon-play-intent`, `neon-hub-session-ts`) carry resume vs new-game intent
+ * across reloads; warm hub session skips redundant music prefetch on return to /play/.
+ */
 export function destroyPhaserIfAny(): void {
   const g = window.__NEON;
   if (!g) return;
@@ -44,7 +49,9 @@ export function destroyPhaserIfAny(): void {
     /* ignore */
   }
   window.__NEON = undefined;
+  markHubSessionActive();
   try {
+    audio.teardownPlaySession();
     audio.init();
     const s = SaveManager.loadSettings();
     if (s.music) audio.setMenuMusic();
@@ -61,10 +68,14 @@ export function exitToHome(): void {
 
 export function navigateToPlay({ resume = false }: { resume?: boolean } = {}): void {
   if (typeof window === 'undefined') return;
-  if (!resume) RunPersistence.clearRun();
+  const warmResume = resume && isHubSessionWarm() && !!RunPersistence.loadRun();
+  if (!resume) {
+    RunPersistence.clearRun();
+    clearHubSession();
+  }
   setPlayIntent({
-    mode: resume ? 'resume' : 'new',
-    extra: { forceNew: !resume },
+    mode: warmResume || resume ? 'resume' : 'new',
+    extra: { forceNew: !resume, warmBoot: warmResume },
   });
   window.location.href = ROUTES.play;
 }

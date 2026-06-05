@@ -3,10 +3,13 @@ import { SCENES, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '../config/Cons
 import { audio } from '../systems/AudioManager.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { RunPersistence } from '../systems/RunPersistence.js';
-import { consumePlayIntent, peekForceNew, peekPlayIntent } from '../shell/playIntent.js';
+import { consumePlayIntent, peekForceNew, peekPlayIntent, isHubSessionWarm } from '../shell/playIntent.js';
 import { setBootSplash } from '../shell/BootSplash.js';
 
-/** Boot pass — prefetch music catalog, then start gameplay (shell is React). */
+/**
+ * Boot pass — prefetch music catalog, then start gameplay (shell is React).
+ * Progress labels here are coarse (62% → 72%); finer steps live in BootScene / GameScene.
+ */
 export class PreloadScene extends Phaser.Scene {
   constructor() {
     super(SCENES.PRELOAD);
@@ -23,13 +26,14 @@ export class PreloadScene extends Phaser.Scene {
       musicVolume: s.musicVolume ?? DEFAULT_MUSIC_VOLUME,
     });
     audio.setMusicEnabled(s.music);
-    audio.preloadMusicCatalog();
 
     const fromWindow = typeof window !== 'undefined' ? window.__neonPlayIntent : null;
     const peeked = peekPlayIntent();
     const intent = fromWindow ?? peeked;
     const mode = intent?.mode ?? 'new';
     const extra = intent?.extra ?? {};
+    const warmBoot = extra.warmBoot === true || isHubSessionWarm();
+    if (!warmBoot) audio.preloadMusicCatalog();
     const forceNew = extra.forceNew === true || peekForceNew();
     if (typeof window !== 'undefined') window.__neonPlayIntent = null;
     consumePlayIntent();
@@ -37,7 +41,8 @@ export class PreloadScene extends Phaser.Scene {
     setBootSplash({ progress: 72, label: 'Arming your siege…' });
     if (forceNew) RunPersistence.clearRun();
     const snap = RunPersistence.loadRun();
-    const shouldResume = !!snap && (mode === 'resume' || (mode === 'new' && !forceNew));
+    // Direct /play/ bookmark: resume when a snapshot exists unless hub set forceNew (new game).
+    const shouldResume = !!snap && !forceNew && (mode === 'resume' || mode === 'new');
     if (shouldResume) {
       this.scene.start(SCENES.GAME, { resume: snap, ...extra });
       return;

@@ -35,6 +35,13 @@ export const SaveManager = {
   setNumber(key, value) {
     set(key, value);
   },
+  getString(key, fallback = '') {
+    const v = get(key, null);
+    return v === null ? fallback : String(v);
+  },
+  setString(key, value) {
+    set(key, value);
+  },
   getJson(key, fallback = null) {
     try {
       const v = get(key, null);
@@ -61,6 +68,8 @@ export const SaveManager = {
     return resolveSettings({
       sound,
       music,
+      haptics: this.getBool(STORAGE.HAPTICS, true),
+      ambience: this.getBool(STORAGE.AMBIENCE, true),
       vfxQuality: storedQuality ? normalizeVfxQuality(storedQuality) : 'ultra',
       sfxVolume: this.getNumber(STORAGE.SFX_VOLUME, DEFAULT_SFX_VOLUME),
       musicVolume: this.getNumber(STORAGE.MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME),
@@ -69,6 +78,8 @@ export const SaveManager = {
   saveSettings(s) {
     this.setBool(STORAGE.SOUND, s.sound);
     this.setBool(STORAGE.MUSIC, s.music);
+    this.setBool(STORAGE.HAPTICS, s.haptics !== false);
+    this.setBool(STORAGE.AMBIENCE, s.ambience !== false);
     set(STORAGE.VFX_QUALITY, normalizeVfxQuality(s.vfxQuality));
     this.setNumber(STORAGE.SFX_VOLUME, s.sfxVolume ?? DEFAULT_SFX_VOLUME);
     this.setNumber(STORAGE.MUSIC_VOLUME, s.musicVolume ?? DEFAULT_MUSIC_VOLUME);

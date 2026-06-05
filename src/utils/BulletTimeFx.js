@@ -1,7 +1,7 @@
 import { GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
 import {
-  fxArenaDim, fxFlashMult, fxRadialBlasts, fxRingScale, fxScreenPunchMult,
+  fxArenaDim, fxFlashAlphaCap, fxFlashMinGap, fxFlashMult, fxRadialBlasts, fxRingScale, fxScreenPunchMult,
 } from './FxBudget.js';
 
 /** Screen-space bullet-time overlay + camera punch helpers. */
@@ -122,12 +122,18 @@ export function screenPunch(scene, amt = 0.05, dur = 70) {
   });
 }
 
-export function impactFlash(scene, color = 0xffffff, alpha = 0.1) {
+export function impactFlash(scene, color = 0xffffff, alpha = 0.1, priority = 'normal') {
   const mult = fxFlashMult(scene);
   if (mult <= 0 || alpha <= 0) return;
   const cam = scene.cameras?.main;
   if (!cam) return;
-  const a = alpha * mult;
+  const now = scene?.time?.now ?? 0;
+  const last = scene._lastImpactFlashAt ?? 0;
+  if (priority !== 'high' && now - last < fxFlashMinGap(scene)) return;
+  const cap = fxFlashAlphaCap(scene);
+  const a = Math.min(alpha * mult, cap > 0 ? cap : alpha * mult);
+  if (a <= 0) return;
+  scene._lastImpactFlashAt = now;
   const r = (color >> 16) & 255;
   const g = (color >> 8) & 255;
   const b = color & 255;

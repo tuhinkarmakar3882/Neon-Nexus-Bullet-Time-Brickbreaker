@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { APP_VERSION, BUILD_STAMP } from '@/src/config/Version.js';
+import { MUSIC_CREDITS } from '@/src/config/MusicCatalog.js';
 import { ROUTES } from '@/lib/shell/routes';
 import { SHELL_COPY } from '@/lib/copy/shell';
 
@@ -22,6 +23,9 @@ export function ShellAbout() {
           Privacy Policy
         </Link>
       </div>
+      <p className="shell-about__music" role="note">
+        {MUSIC_CREDITS}
+      </p>
       <p className="shell-about__credit">{SHELL_COPY.legal.footerCredit}</p>
     </section>
   );

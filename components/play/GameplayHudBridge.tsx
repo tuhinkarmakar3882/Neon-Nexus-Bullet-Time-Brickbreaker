@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { GameplayHud } from '@/components/play/GameplayHud';
+import { GameplayHudLiveRegion } from '@/components/play/GameplayHudLiveRegion';
 import { useGameplayHudState } from '@/lib/shell/useGameplayHudState';
 import { syncPlayFrameLayout } from '@/src/systems/LayoutManager.js';
 
@@ -23,6 +24,7 @@ export function GameplayHudBridge() {
   return (
     <>
       <GameplayHud state={state} />
+      <GameplayHudLiveRegion />
     </>
   );
 }

@@ -1,11 +1,17 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import { Heart, Pause, Gem } from 'lucide';
 import { LucideIcon } from '@/components/shell/LucideIcon';
-import type { GameplayHudState } from '@/lib/shell/gameplayHudTypes';
+import type { GameplayHudState, HudPowerChip } from '@/lib/shell/gameplayHudTypes';
 import { emitGameplayRequest } from '@/lib/shell/useGameplayHudState';
 
 const MAX_HEARTS = 4;
+
+function hexColor(n: number) {
+  const v = Math.max(0, Math.min(0xffffff, n >>> 0));
+  return `#${v.toString(16).padStart(6, '0')}`;
+}
 
 function MeterRail({
   id,
@@ -49,11 +55,31 @@ function MeterRail({
   );
 }
 
+function PowerPill({ chip }: { chip: HudPowerChip }) {
+  const pct = Math.round(Math.min(1, Math.max(0, chip.ratio)) * 100);
+  const neg = chip.polarity === 'neg';
+  const wild = chip.polarity === 'wild';
+  return (
+    <span
+      className={`play-hud-power${neg ? ' play-hud-power--neg' : ''}${wild ? ' play-hud-power--wild' : ''}`}
+      style={{ '--power-color': hexColor(chip.color) } as CSSProperties}
+      title={chip.label}
+      aria-label={`${chip.label} ${pct}% remaining`}
+    >
+      <span className="play-hud-power__label">{chip.label}</span>
+      <span className="play-hud-power__track" aria-hidden>
+        <span className="play-hud-power__fill" style={{ width: `${pct}%` }} />
+      </span>
+    </span>
+  );
+}
+
 /** Single-row play header — pause + lives (left), score (center), gems (right). */
 export function GameplayHud({ state }: { state: GameplayHudState }) {
   const hearts = Math.min(state.lives, MAX_HEARTS);
   const extraLives = state.lives > MAX_HEARTS ? state.lives - MAX_HEARTS : 0;
   const showProgress = !state.immersive;
+  const showGoalChip = state.immersive && !!state.goalText;
   const combo =
     state.combo >= 2
       ? state.gambitReady
@@ -128,7 +154,7 @@ export function GameplayHud({ state }: { state: GameplayHudState }) {
           </div>
 
           <div className="play-hud-bar__right">
-            <div className="play-hud-wallet" aria-label="Gems">
+            <div className="play-hud-wallet" aria-label={`${state.gems.toLocaleString()} gems`}>
               <span className="play-hud-wallet__item">
                 <LucideIcon icon={Gem} size={12} className="play-hud-wallet__icon play-hud-wallet__icon--gem" label="Gems" />
                 <span>{state.gems.toLocaleString()}</span>
@@ -136,7 +162,37 @@ export function GameplayHud({ state }: { state: GameplayHudState }) {
             </div>
           </div>
         </div>
+        {state.activePowers.length > 0 ? (
+          <div className="play-hud-powers" aria-label="Active powers">
+            {state.activePowers.map((chip) => (
+              <PowerPill key={chip.key} chip={chip} />
+            ))}
+          </div>
+        ) : null}
       </header>
+
+      {showGoalChip || state.mutators ? (
+        <div className="play-hud-chips">
+          {showGoalChip ? (
+            <span
+              className="play-hud-chip play-hud-chip--goal"
+              aria-label={`Goal: ${state.goalText}`}
+              title={state.goalText}
+            >
+              {state.goalText}
+            </span>
+          ) : null}
+          {state.mutators ? (
+            <span
+              className="play-hud-chip play-hud-chip--mutator"
+              aria-label={`Mutators: ${state.mutators}`}
+              title={state.mutators}
+            >
+              {state.mutators}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       <MeterRail
         id="play-hud-left"

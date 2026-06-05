@@ -3,21 +3,42 @@ import { Capacitor } from '@capacitor/core';
 import { SCENES } from '../config/Constants.js';
 import { RunPersistence } from './RunPersistence.js';
 
+let detachLifecycle = null;
+
 export function attachAppLifecycle(game) {
-  if (typeof document === 'undefined') return;
+  detachAppLifecycle();
+  if (typeof document === 'undefined') return () => {};
 
   const onHide = () => {
     const gs = game?.scene?.getScene(SCENES.GAME);
     if (gs?.sys?.isActive?.() && !gs.over) RunPersistence.saveRun(gs);
   };
 
-  document.addEventListener('visibilitychange', () => {
+  const onVisibility = () => {
     if (document.hidden) onHide();
-  });
+  };
 
-  if (!Capacitor.isNativePlatform()) return;
+  document.addEventListener('visibilitychange', onVisibility);
 
-  import('@capacitor/app').then(({ App }) => {
-    App.addListener('pause', onHide);
-  }).catch(() => {});
+  let pauseHandle = null;
+  if (Capacitor.isNativePlatform()) {
+    import('@capacitor/app').then(({ App }) => {
+      App.addListener('pause', onHide).then((h) => {
+        pauseHandle = h;
+      });
+    }).catch(() => {});
+  }
+
+  detachLifecycle = () => {
+    document.removeEventListener('visibilitychange', onVisibility);
+    pauseHandle?.remove?.();
+    pauseHandle = null;
+    detachLifecycle = null;
+  };
+
+  return detachLifecycle;
+}
+
+export function detachAppLifecycle() {
+  detachLifecycle?.();
 }

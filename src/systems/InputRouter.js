@@ -17,6 +17,12 @@ class InputRouterService {
 
   attach(game) {
     this.game = game;
+    this._overlayActive = false;
+  }
+
+  detach() {
+    this.game = null;
+    this._overlayActive = false;
   }
 
   isOverlayActive() {

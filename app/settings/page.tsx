@@ -19,7 +19,7 @@ import { isIapEnabled } from '@/src/config/AdsConfig.js';
 import { isWebStripeEnabled, promptUnlockCode } from '@/src/systems/WebUnlock.js';
 import { ROUTES } from '@/lib/shell/routes';
 import Link from 'next/link';
-import { ShoppingBag } from 'lucide';
+import { BookOpen, ShoppingBag } from 'lucide';
 import type { GameSettings } from '@/lib/types/settings';
 import { SHELL_COPY } from '@/lib/copy/shell';
 import { SETTINGS_ICONS } from '@/lib/shell/settingsIcons';
@@ -54,7 +54,7 @@ function SettingsContent() {
     notifyVfxChange(resolved);
   }, []);
 
-  const toggle = (key: keyof Pick<GameSettings, 'sound' | 'music'>) => {
+  const toggle = (key: keyof Pick<GameSettings, 'sound' | 'music' | 'haptics' | 'ambience'>) => {
     const next = { ...settings, [key]: !settings[key] };
     persist(next);
     if (key === 'sound' && next.sound) audio.blip(720);
@@ -131,6 +131,9 @@ function SettingsContent() {
           <SettingRow icon={SETTINGS_ICONS.music} label={COPY.music} controlId="setting-music">
             <UiSwitch id="setting-music" on={settings.music} onToggle={() => toggle('music')} />
           </SettingRow>
+          <SettingRow icon={SETTINGS_ICONS.ambience} label={COPY.ambience} controlId="setting-ambience">
+            <UiSwitch id="setting-ambience" on={settings.ambience !== false} onToggle={() => toggle('ambience')} />
+          </SettingRow>
           <SettingRow icon={SETTINGS_ICONS.sfx} label={COPY.sfxVolume}>
             <VolumeControl
               value={sfxVol}
@@ -147,6 +150,16 @@ function SettingsContent() {
               onIncrease={() => bumpVol('musicVolume', 5)}
               decreaseLabel="Decrease music volume"
               increaseLabel="Increase music volume"
+            />
+          </SettingRow>
+        </SettingsSection>
+
+        <SettingsSection title={COPY.sections.feedback} icon={SETTINGS_ICONS.haptics}>
+          <SettingRow icon={SETTINGS_ICONS.haptics} label={COPY.haptics} controlId="setting-haptics">
+            <UiSwitch
+              id="setting-haptics"
+              on={settings.haptics !== false}
+              onToggle={() => toggle('haptics')}
             />
           </SettingRow>
         </SettingsSection>
@@ -181,6 +194,13 @@ function SettingsContent() {
           >
             <LucideIcon icon={ShoppingBag} size={18} className="shell-label__icon" />
             <span>{COPY.shopLink}</span>
+          </Link>
+          <Link
+            href={from === 'play' ? `${ROUTES.codex}?from=play` : ROUTES.codex}
+            className="neon-btn neon-btn-secondary shell-block-link"
+          >
+            <LucideIcon icon={BookOpen} size={18} className="shell-label__icon" />
+            <span>{COPY.codexLink}</span>
           </Link>
           <ShellAbout />
         </SettingsSection>

@@ -656,12 +656,14 @@
 .gem-spend-confirm {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 12000;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   background: rgba(4, 6, 12, 0.78);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .gem-spend-confirm__card {
@@ -697,10 +699,6 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.power-coach--nexus {
-  border-color: rgba(102, 153, 255, 0.55);
 }
 
 .shell-block-link {
@@ -861,61 +859,202 @@
   margin: 0;
 }
 
-/* ── Power coach (first pickup in play) ── */
+/* ── Hub command palette (⌘K) ── */
 
-.power-coach {
+.hub-palette {
   position: fixed;
-  left: 50%;
-  bottom: max(16px, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  z-index: 55;
-  width: min(calc(100% - 24px), 360px);
-  padding: 12px 14px;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: start center;
+  padding: 12vh 16px 16px;
+  background: rgba(4, 6, 12, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.hub-palette__panel {
+  width: min(100%, 420px);
+  padding: 12px;
   border-radius: var(--radius-card);
-  border: 1px solid var(--border-accent);
-  background: rgba(8, 12, 22, 0.94);
-  box-shadow: var(--shadow-md);
-  pointer-events: auto;
-}
-
-.power-coach__label {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--lore);
-  margin: 0 0 4px;
-}
-
-.power-coach__power {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0 0 6px;
-  line-height: 1.35;
-}
-
-.power-coach__tip {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  margin: 0 0 10px;
-  line-height: 1.4;
-}
-
-.power-coach__dismiss {
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: var(--radius-cta);
   border: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+}
+
+.hub-palette__input {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-cta);
   background: var(--surface-2);
   color: var(--text);
-  font-family: var(--type-body);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.hub-palette__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.hub-palette__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-cta);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.875rem;
+  text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.power-coach__dismiss:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+.hub-palette__item:hover,
+.hub-palette__item:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+}
+
+.hub-palette__empty {
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.hub-palette__hint {
+  margin: 10px 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.hub-palette__hint kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  margin: 0 2px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  font-size: 0.6875rem;
+}
+
+/* ── Gamification hub widgets ── */
+
+.hub-reward-toasts {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(320px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.hub-reward-toast {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(47, 230, 199, 0.22);
+  background: rgba(8, 12, 24, 0.92);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  animation: hub-toast-in 0.35s ease-out;
+}
+
+@keyframes hub-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hub-reward-toast__icon {
+  color: var(--lore);
+  margin-top: 2px;
+}
+
+.hub-reward-toast__title {
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.hub-reward-toast__text {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.hub-reward-toast__dismiss {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.title-screen__gem-promise,
+.title-screen__streak-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 6px auto 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.title-screen__gem-promise {
+  border: 1px solid rgba(90, 160, 255, 0.35);
+  background: rgba(90, 160, 255, 0.08);
+  color: #9ec5ff;
+}
+
+.title-screen__streak-badge {
+  border: 1px solid rgba(255, 140, 60, 0.35);
+  background: rgba(255, 140, 60, 0.08);
+  color: #ffb347;
+}
+
+.forge-item--unlock-glow {
+  animation: forge-unlock-glow 2.4s ease-out;
+  border-left-color: var(--economy);
+  box-shadow: 0 0 24px rgba(90, 160, 255, 0.25);
+}
+
+@keyframes forge-unlock-glow {
+  0% {
+    box-shadow: 0 0 0 rgba(90, 160, 255, 0);
+    transform: scale(1);
+  }
+  20% {
+    box-shadow: 0 0 28px rgba(90, 160, 255, 0.45);
+    transform: scale(1.01);
+  }
+  100% {
+    box-shadow: 0 0 8px rgba(90, 160, 255, 0.12);
+    transform: scale(1);
+  }
 }

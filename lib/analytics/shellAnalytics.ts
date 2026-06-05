@@ -24,7 +24,3 @@ export function trackGameOverAction(
 export function trackShareFunnel(step: 'start' | 'preview' | 'complete' | 'cancel', surface: string) {
   emit('share_funnel', { step, surface });
 }
-
-export function trackPauseGardenNav(target: 'settings' | 'codex' | 'shop') {
-  emit('pause_garden_nav', { target });
-}

@@ -1,13 +1,13 @@
 # Web deployment (Vercel & Netlify)
 
-Guide for shipping **Neon Nexus** as a static site on **Vercel** or **Netlify**. The shell is **Next.js 15** (App Router) with `output: 'export'`; production assets land in **`out/`** (also Capacitor `webDir`).
+Guide for shipping **Neon Nexus** as a static site on **Vercel** or **Netlify**. The shell is **Next.js 16** (App Router, **webpack** build) with `output: 'export'`; production assets land in **`out/`** (also Capacitor `webDir`).
 
 ## Stack
 
 | Piece | Location |
 |-------|----------|
-| Build | `pnpm run build` → `out/` |
-| Config | [`next.config.mjs`](../next.config.mjs) (`trailingSlash: true`, `images.unoptimized`) |
+| Build | `pnpm run build` → `next build --webpack` → `out/` |
+| Config | [`next.config.mjs`](../next.config.mjs) (`trailingSlash: true`, `images.unoptimized`, `turbopack: {}` + webpack `extensionAlias`) |
 | Vercel | [`vercel.json`](../vercel.json) + dashboard env |
 | Netlify | [`netlify.toml`](../netlify.toml) + dashboard env |
 | Manifest / icons | `public/manifest.json`, `scripts/gen-icons.mjs` (`prebuild`) |
@@ -31,7 +31,7 @@ Set in the host dashboard (Production + Preview) or in `.env.production` for loc
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `VITE_GAME_URL` | **Yes** for SEO | Canonical URL, sitemap, OG (no trailing slash) |
+| `VITE_GAME_URL` | **Yes** for SEO | Canonical URL, sitemap, OG, `metadataBase` in `app/layout.tsx` (no trailing slash) |
 | `VITE_AD_PROVIDER` | Yes | `google` for production freemium |
 | `VITE_AD_TEST_MODE` | Yes | `false` in production |
 | `VITE_STRIPE_CHECKOUT_URL` | Web IAP | Stripe Payment Link base URL |

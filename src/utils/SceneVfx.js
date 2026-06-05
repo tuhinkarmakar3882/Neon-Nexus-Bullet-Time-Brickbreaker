@@ -18,6 +18,23 @@ function applyVignette(cam, strength) {
   cam.filters.internal.addVignette(0.5, 0.5, 0.68, strength, 0x040810);
 }
 
+/** Outer-rim darkening only — playfield center stays readable (≤6% inset, low alpha). */
+function ensureEdgeStrip(scene, alpha) {
+  destroyOverlay(scene, 'edgeStrip');
+  if (alpha <= 0) return;
+  const W = scene.scale.width;
+  const H = scene.scale.height;
+  const edge = Math.max(4, Math.round(Math.min(W, H) * 0.06));
+  const a = Math.min(0.15, alpha);
+  const g = scene.add.graphics().setDepth(996).setScrollFactor(0);
+  g.fillStyle(0x040810, a);
+  g.fillRect(0, 0, W, edge);
+  g.fillRect(0, H - edge, W, edge);
+  g.fillRect(0, 0, edge, H);
+  g.fillRect(W - edge, 0, edge, H);
+  scene._edgeStripGfx = g;
+}
+
 function destroyOverlay(scene, key) {
   const g = scene[`_${key}Gfx`];
   if (g) {
@@ -89,6 +106,7 @@ export function applySceneVfx(scene, settings = {}) {
   clearCameraFilters(cam);
   applyBloom(cam, bloom);
   applyVignette(cam, settings.vignette ?? 0);
+  ensureEdgeStrip(scene, settings.edgeStrip ?? 0);
 
   ensureScanlines(scene, settings.scanlines ? (settings.scanlineAlpha ?? 0.03) : 0);
   ensureGrain(scene, settings.grain ?? 0);
@@ -104,6 +122,7 @@ export function destroySceneVfxOverlays(scene) {
   destroyOverlay(scene, 'scanline');
   destroyOverlay(scene, 'grain');
   destroyOverlay(scene, 'chroma');
+  destroyOverlay(scene, 'edgeStrip');
 }
 
 /** Brief bloom bump on big hits (0.62 → ~0.85 for 200ms). */

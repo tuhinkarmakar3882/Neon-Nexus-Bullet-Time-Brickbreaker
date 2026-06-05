@@ -3,7 +3,10 @@ import './globals.css';
 import { ShellProviders } from '@/components/shell/ShellProviders';
 import { LegalShellMount } from '@/components/shell/LegalShellMount';
 
+const siteUrl = (process.env.VITE_GAME_URL || 'https://example.com').replace(/\/$/, '');
+
 export const metadata: Metadata = {
+  metadataBase: new URL(`${siteUrl}/`),
   title: {
     default: 'Neon Nexus: Bullet-Time Brick Breaker',
     template: '%s · Neon Nexus',

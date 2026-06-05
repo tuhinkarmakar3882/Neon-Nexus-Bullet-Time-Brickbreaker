@@ -23,6 +23,11 @@ export function isArrowHeld(dir) {
   return dir === 'left' ? held.left : held.right;
 }
 
+function setHeld(dir, down) {
+  if (dir === 'left') held.left = down;
+  else held.right = down;
+}
+
 function getGameScene(game) {
   const gs = game?.scene?.getScene(SCENES.GAME);
   if (!gs?.scene?.isActive?.()) return null;
@@ -65,18 +70,35 @@ function onKeyDown(e, game) {
   const gs = getGameScene(game);
   if (!gs || gs.over || gs.transitioning) return;
 
-  if (e.key === 'ArrowLeft') {
-    held.left = true;
+  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+    setHeld('left', true);
     e.preventDefault();
     return;
   }
-  if (e.key === 'ArrowRight') {
-    held.right = true;
+  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+    setHeld('right', true);
     e.preventDefault();
     return;
   }
 
-  if (InputRouter.shouldBlockGameplay() || gs.draftOpen) return;
+  if (gs.draftOpen) {
+    const slot = e.key === '1' || e.key === '2' || e.key === '3'
+      ? Number(e.key) - 1
+      : -1;
+    if (slot >= 0) {
+      e.preventDefault();
+      gs.pickDraftByIndex?.(slot);
+    }
+    return;
+  }
+
+  if (InputRouter.shouldBlockGameplay()) return;
+
+  if (e.key === 'w' || e.key === 'W') {
+    e.preventDefault();
+    gs.onKeyboardLaunch?.();
+    return;
+  }
 
   if (e.key === ' ' || e.key === 'Enter') {
     e.preventDefault();
@@ -91,8 +113,8 @@ function onKeyDown(e, game) {
 }
 
 function onKeyUp(e) {
-  if (e.key === 'ArrowLeft') held.left = false;
-  if (e.key === 'ArrowRight') held.right = false;
+  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') setHeld('left', false);
+  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') setHeld('right', false);
 }
 
 /** Attach play-route keyboard; call once after Phaser READY. */

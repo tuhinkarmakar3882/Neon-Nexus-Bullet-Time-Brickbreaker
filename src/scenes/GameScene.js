@@ -44,7 +44,7 @@ import { scaledBallBaseSpeed, difficultyFor } from '../systems/DifficultyScaler.
 import { addCameraFx, spawnConfetti, makeButton } from '../utils/UI.js';
 import { applySceneVfx } from '../utils/SceneVfx.js';
 import { popScale, squashStretch, wobble, rippleRing, staggerDropIn, shardBurst, brickBreakFx, microShake, surgeText, hitSpark, brickNudge, launchBurst, risePop, dropIn, spinIn, powerAcquireBurst, powerPickupFx, explosiveImpactFx, fireImpactFx, electricImpactFx, frostImpactFx, comboFlare } from '../utils/MicroFx.js';
-import { fxParticleScale, fxCameraShake } from '../utils/FxBudget.js';
+import { fxParticleScale, fxCameraShake, fxFlashBudgetOk, fxFlashMinGap } from '../utils/FxBudget.js';
 import { initBulletTimeFx, setBulletTimeIntensity, screenPunch, impactFlash, radialBlast, resetGameplayCamera, clearBulletTimeFx } from '../utils/BulletTimeFx.js';
 import {
   pick, clamp, rand, mulberry32,
@@ -52,7 +52,7 @@ import {
   brickPowerDropBudget,
 } from '../utils/Helpers.js';
 import { fitTextWidth, orbitronStyle, uiPx, wrapWidth } from '../utils/Typography.js';
-import { resolveSettings } from '../config/VfxQuality.js';
+import { applyReducedMotionOverride, resolveSettings } from '../config/VfxQuality.js';
 import { gemsForLevelClear } from '../config/GemRewards.js';
 import { dismissBootSplash, setBootSplash } from '../shell/BootSplash.js';
 import { clearTransitionFlags } from '../systems/GameGuard.js';
@@ -75,7 +75,11 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     setBootSplash({ progress: 82, label: 'Growing the twilight garden…' });
-    this.settings = resolveSettings(SaveManager.loadSettings());
+    this.settings = window.__neonBootVfx
+      ?? applyReducedMotionOverride(resolveSettings(SaveManager.loadSettings()));
+    this._statsSig = '';
+    this._reachableCacheAt = 0;
+    this._reachableCache = true;
     const musicSettings = SaveManager.loadSettings();
     addCameraFx(this, this.settings);
     initBulletTimeFx(this);
@@ -215,14 +219,18 @@ export class GameScene extends Phaser.Scene {
     });
     this.bus = this.game.events;
     this.emitStats();
+    this.emitPowers();
     consumeForceNew();
     this.emitGnomeStreak();
     this.emitBtMeter();
     this.bus?.emit('hud:treasury', { value: MetaProgress.getTreasury() });
     this.bus?.emit('hud:immersive', { on: true });
-    this.game.events.on('req:gambit', () => this.cashComboGambit());
-    this.game.events.on('req:nexus', () => this.trySpendNexus());
-    this.game.events.on('req:gnome', () => this.trySpendGnome());
+    this._onGambitReq = () => this.cashComboGambit();
+    this._onNexusReq = () => this.trySpendNexus();
+    this._onGnomeReq = () => this.trySpendGnome();
+    this.game.events.on('req:gambit', this._onGambitReq);
+    this.game.events.on('req:nexus', this._onNexusReq);
+    this.game.events.on('req:gnome', this._onGnomeReq);
     this._onCosmeticsChanged = () => this.applyEquippedCosmetics();
     this.game.events.on('meta:cosmetics', this._onCosmeticsChanged);
     this._onVfxSettings = (settings) => this.syncVfxSettings(settings);
@@ -295,6 +303,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   cleanup() {
+    this.game.events.off('req:gambit', this._onGambitReq);
+    this.game.events.off('req:nexus', this._onNexusReq);
+    this.game.events.off('req:gnome', this._onGnomeReq);
+    this.game.events.off('meta:cosmetics', this._onCosmeticsChanged);
     this.game.events.off('settings:vfx', this._onVfxSettings);
     this.bus?.emit('hud:flash', { text: '', color: '#fff', ms: 0 });
     this.bus?.emit('hud:toast', { text: '', ms: 0 });
@@ -310,6 +322,9 @@ export class GameScene extends Phaser.Scene {
     if (this.btFx?.overlay?.active) this.btFx.overlay.destroy();
     if (this.btFx?.streaks?.active) this.btFx.streaks.destroy();
     this.btFx = null;
+    try { this.stopBlackHole?.(); } catch { /* ignore */ }
+    clearBulletTimeFx(this);
+    this.tweens?.killAll();
     resetGameplayCamera(this);
   }
 
@@ -318,7 +333,6 @@ export class GameScene extends Phaser.Scene {
       this.isBoss ? `FORTRESS ${this.level}` : `LEVEL ${this.level}`,
       cssHex(this.isBoss ? PAL.gold : (this.theme?.bg ?? PAL.accent)),
       750,
-      'high',
     );
   }
 
@@ -399,7 +413,7 @@ export class GameScene extends Phaser.Scene {
     const j = new Jardinain(this, brick, 'elite', { popping: true });
     this.jardinains.push(j);
     risePop(this, j.c, { peak: 1.25 });
-    rippleRing(this, brick.cx, brick.cy, { tint: 0xffd23d, scale: 1.9, dur: 380 });
+    this.feedback.playMoment('boss.perch', { x: brick.cx, y: brick.cy, tint: 0xffd23d });
     this.floatText(brick.cx, brick.y, 'FORTRESS GNOME!', cssHex(PAL.gold), 22);
   }
 
@@ -408,21 +422,29 @@ export class GameScene extends Phaser.Scene {
     this.arenaGfx?.clear();
   }
 
-  /** In-canvas band below paddle — ignore drag so phone nav gestures don't move the paddle. */
+  /** In-canvas band below paddle — ignore new touches so phone nav gestures don't move the paddle. */
   _touchDeadY() {
     if (!GAME.USE_DOM_HUD) return GAME.HEIGHT + 1;
     return GAME.HEIGHT - (GAME.DOM_BOTTOM_GUTTER ?? 56) - (GAME.SAFE_BOTTOM ?? 0);
   }
 
+  _applyPaddlePointer(worldX) {
+    this.paddle.setPointer(worldX);
+    if (this.balls.some((b) => b.stuck)) {
+      const off = clamp(worldX - this.paddle.x, -this.paddle.w / 2, this.paddle.w / 2);
+      this.balls.forEach((b) => { if (b.stuck) b.stuckOffset = off; });
+    }
+  }
+
+  _shouldIgnoreTouchY(p) {
+    return p.y > this._touchDeadY() && !p.isDown;
+  }
+
   setupInput() {
     this.input.on('pointermove', (p) => {
       if (InputRouter.shouldBlockGameplay() || this.over || this.transitioning || this.draftOpen) return;
-      if (p.y > this._touchDeadY()) return;
-      this.paddle.setPointer(p.worldX);
-      if (this.balls.some((b) => b.stuck)) {
-        const off = clamp(p.worldX - this.paddle.x, -this.paddle.w / 2, this.paddle.w / 2);
-        this.balls.forEach((b) => { if (b.stuck) b.stuckOffset = off; });
-      }
+      if (this._shouldIgnoreTouchY(p)) return;
+      this._applyPaddlePointer(p.worldX);
     });
     this.input.on('pointerdown', (p) => {
       if (InputRouter.shouldBlockGameplay() || this.over || this.transitioning || this.draftOpen) return;
@@ -476,6 +498,7 @@ export class GameScene extends Phaser.Scene {
     if (sm.isPaused(SCENES.GAME)) return;
 
     RunPersistence.saveRun(this);
+    audio.pauseOpen?.();
     this.scene.pause();
     if (sm.isActive(SCENES.UI)) this.scene.pause(SCENES.UI);
     this.scene.launch(SCENES.PAUSE, {
@@ -494,6 +517,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   releaseBalls() {
+    const pan = this.settings?.spatialPan ? this.paddle.x : undefined;
+    audio.ballLaunch?.({ pan });
     this.balls.forEach((b) => {
       b.release();
       popScale(this, b.core, { peak: 1.25, dur: 100 });
@@ -1029,6 +1054,7 @@ export class GameScene extends Phaser.Scene {
     const W = GAME.WIDTH;
     const H = GAME.HEIGHT;
     const picks = rollPositivePowerDraft(this.level, this.nextPowerDropSeed(), 3);
+    this._draftPicks = picks ?? [];
     if (!picks?.length) {
       this.draftOpen = false;
       if (this._pendingCompleteLevel) this.time.delayedCall(120, () => this.requestLevelComplete());
@@ -1078,6 +1104,11 @@ export class GameScene extends Phaser.Scene {
     rippleRing(this, W / 2, H * 0.3, { tint: isNexus ? PAL.accent : PAL.accent2, scale: 2, dur: 460 });
     audio.wowHit?.();
     hapticPulse(16);
+  }
+
+  pickDraftByIndex(index) {
+    const key = this._draftPicks?.[index];
+    if (key) this.pickDraftPower(key);
   }
 
   pickDraftPower(key) {
@@ -1138,6 +1169,7 @@ export class GameScene extends Phaser.Scene {
 
   onGnomeDislodged(j) {
     const dropped = this.spawnGnomePower(j.x, j.y, Math.random() < GAME.GNOME_DISLODGE_DROP_CHANCE);
+    this.feedback.playMoment('gnome.dislodged', { x: j.x, y: j.y, dropped });
     this.floatText(j.x, j.y, dropped ? 'DROPPED!' : 'DISLODGED!', cssHex(PAL.accent3), 22);
   }
 
@@ -1145,23 +1177,21 @@ export class GameScene extends Phaser.Scene {
     const pts = this.jugglePoints(n);
     this.score += pts;
     this.floatText(j.x, j.y, `JUGGLE +${pts}`, '#ffd23d', n > 2 ? 34 : 28);
-    this.burst(j.x, j.y, 0xffd23d, 8);
-    if (n >= 3) rippleRing(this, j.x, j.y, { tint: 0xffd23d, scale: 2.4, dur: 380 });
+    this.feedback.playMoment('gnome.juggle', { x: j.x, y: j.y, n });
     if (n >= 4) {
       microShake(this, 0.005, 90);
       if (this.settings.bulletTime) this.triggerBulletTime(320, { intensity: 0.65 });
     }
     fxCameraShake(this, 80, 0.004);
-    audio.juggle?.(n);
     this.addGnomeStreak(GAME.GNOME_STREAK_JUGGLE);
+    this.markStatsDirty();
   }
 
   onGnomeElectricPop(j) {
     const pts = this.jugglePoints(Math.max(1, j.juggleCount + 1));
     this.score += pts;
     this.floatText(j.x, j.y, `ZAP +${pts}`, '#a78bfa', 32);
-    this.burst(j.x, j.y, 0xa78bfa, 8);
-    radialBlast(this, j.x, j.y, { tint: 0xa78bfa, scale: 2.2 });
+    this.feedback.playMoment('gnome.electricPop', { x: j.x, y: j.y });
     if (this.settings.bulletTime) this.triggerBulletTime(420, { intensity: 0.85, punch: true });
     if (this.spawnGnomePower(j.x, j.y, true)) {
       this.floatText(j.x, j.y, 'POWER!', '#ffd23d', 26);
@@ -1203,15 +1233,15 @@ export class GameScene extends Phaser.Scene {
     if (c.id === 'knockoutElite' && c.tier === 'elite' && j.tier === 'elite') {
       this.contractDone = true;
       this.applyPower(rollPower(this.level, this.nextPowerDropSeed()));
-      this.flash('CONTRACT!', '#ffd23d', 650, 'high');
+      this.flash('CONTRACT!', '#ffd23d', 650);
     } else if (c.id === 'knockoutElite' && c.tier !== 'elite' && this.levelKnockouts >= (c.target ?? 2)) {
       this.contractDone = true;
       this.applyPower(rollPower(this.level, this.nextPowerDropSeed()));
-      this.flash('CONTRACT!', '#ffd23d', 650, 'high');
+      this.flash('CONTRACT!', '#ffd23d', 650);
     } else if (c.id === 'juggleChain' && j.juggleCount >= (c.target ?? 4)) {
       this.contractDone = true;
       this.addGnomeStreak(GAME.GNOME_STREAK_MAX);
-      this.flash('JUGGLE CONTRACT!', '#ffd23d', 650, 'high');
+      this.flash('JUGGLE CONTRACT!', '#ffd23d', 650);
     }
   }
 
@@ -1274,6 +1304,23 @@ export class GameScene extends Phaser.Scene {
     return !below.some((x) => this.isColumnBlocker(x));
   }
 
+  /** Throttled winnability probe (~2 Hz) — full per-brick checks are expensive. */
+  hasReachableBrick() {
+    const now = this.time?.now ?? 0;
+    if (now - (this._reachableCacheAt ?? 0) < 500) return this._reachableCache;
+    this._reachableCacheAt = now;
+    this._reachableCache = this.bricks.some((b) => b.alive && this.isBallReachable(b));
+    return this._reachableCache;
+  }
+
+  invalidateReachableCache() {
+    this._reachableCacheAt = 0;
+  }
+
+  markStatsDirty() {
+    this._statsDirty = true;
+  }
+
   isColumnBlocker(b) {
     if (!b?.alive) return false;
     if (b.indestructible && (b.type === 'steel' || b.type === 'gold')) return true;
@@ -1323,7 +1370,8 @@ export class GameScene extends Phaser.Scene {
 
   ensureLevelWinnable() {
     this.fixBlockedColumns();
-    if (this.bricks.some((b) => b.alive && this.isBallReachable(b))) return;
+    this.invalidateReachableCache();
+    if (this.hasReachableBrick()) return;
 
     const maxY = Math.max(...this.bricks.filter((b) => b.alive).map((b) => b.y), 0);
     const bh = this.bricks[0]?.h ?? BRICK.HEIGHT;
@@ -1346,7 +1394,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    if (this.bricks.some((b) => b.alive && this.isBallReachable(b))) return;
+    this.invalidateReachableCache();
+    if (this.hasReachableBrick()) return;
     this.relieveSoftlock(true);
   }
 
@@ -1629,6 +1678,7 @@ export class GameScene extends Phaser.Scene {
     if (fused && this.powerSys.isActive(key)) {
       this.powerSys.clear(key);
       this.flash('FUSION!', powerColorHex(fused), 700);
+      audio.powerFusion?.();
       this.applyPower(fused);
       return;
     }
@@ -1647,7 +1697,6 @@ export class GameScene extends Phaser.Scene {
 
     if (!this._seenPowers.has(key)) {
       this._seenPowers.add(key);
-      this.bus?.emit('hud:toast', { text: def.desc, ms: 2200 });
     }
 
     const neg = def.polarity === 'neg';
@@ -1691,6 +1740,7 @@ export class GameScene extends Phaser.Scene {
     }
     RunPersistence.saveRun(this);
     this.playPowerAcquireFx(key, def, { skipPunch: willBt });
+    this.emitPowers();
   }
 
   onPowerExpire(key) {
@@ -1757,6 +1807,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.balls.forEach((b) => this.applyActiveStateToBall(b));
     this.applyEquippedCosmetics();
+    this.emitPowers();
   }
 
   doEarthquake() {
@@ -2225,7 +2276,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.settings.bulletTime && !hitStop && !player) return;
     if (hitStop) this.hitStopRemaining = Math.max(this.hitStopRemaining, GAME.HIT_STOP_MS);
     if (punch) screenPunch(this, wow ? 0.09 : 0.045);
-    if (wow) impactFlash(this, nexus ? 0x4488ff : PAL.accent2, nexus ? 0.08 : 0.1);
+    if (wow) impactFlash(this, nexus ? 0x4488ff : PAL.accent2, nexus ? 0.08 : 0.1, 'high');
     if (this.bulletTimeRemaining <= 0) audio.bulletTime();
     if (nexus) {
       this._nexusSlowMo = true;
@@ -2767,6 +2818,7 @@ export class GameScene extends Phaser.Scene {
       fromBall,
       ball,
       panX: brick.cx,
+      combo: fromBall ? this.combo : 0,
     });
 
     if (fromBall) {
@@ -2909,7 +2961,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     audio.restoreMusic();
-    this.flash(pick(GAME_OVER_MESSAGES), '#ff5a6e', 1000, 'high');
+    this.flash('EXTRA LIFE', '#55ff88', 1000, 'high');
     this.balls.push(new Ball(this, this.paddle, 0));
     this.balls.forEach((b) => { this.syncBallSpeed(b, { reset: true }); });
     this.applyEquippedCosmetics();
@@ -2961,7 +3013,9 @@ export class GameScene extends Phaser.Scene {
 
   gameOver() {
     this.over = true;
+    audio.gameOverSting?.();
     MetaProgress.saveLastRunPath(this._runPath);
+    MetaProgress.recordDailyScore(this.score);
     RunPersistence.saveRun(this, { pendingGameOver: true });
     const hs = SaveManager.getHighScore();
     if (this.score > hs) SaveManager.setHighScore(this.score);
@@ -3018,7 +3072,11 @@ export class GameScene extends Phaser.Scene {
     this.scene.start(SCENES.GAME, { newGame: true, forceNew: true });
   }
 
-  doResume() { InputRouter.onOverlayClose(); this.scene.resume(); }
+  doResume() {
+    audio.pauseClose?.();
+    InputRouter.onOverlayClose();
+    this.scene.resume();
+  }
 
   async completeLevel() {
     this._levelCompleteQueued = false;
@@ -3092,6 +3150,8 @@ export class GameScene extends Phaser.Scene {
     this.addBtMeter(GAME.BT_METER_LEVEL_FILL, { deferDraft: true });
     if (this.draftOpen) {
       this._pendingCompleteLevel = true;
+      this._completingLevel = false;
+      this.transitioning = false;
       return;
     }
     this.combo = 0;
@@ -3111,6 +3171,7 @@ export class GameScene extends Phaser.Scene {
     this._lastLevelBonus = bonus;
     this.score += bonus;
     if (this.score > SaveManager.getHighScore()) SaveManager.setHighScore(this.score);
+    MetaProgress.recordDailyScore(this.score);
     audio.levelUp();
     if (this.isBoss) {
       const wx = GAME.WALL_X;
@@ -3120,7 +3181,7 @@ export class GameScene extends Phaser.Scene {
       audio.fortressShatter?.();
       microShake(this, 0.008, 180);
       screenPunch(this, 0.06, 120);
-      impactFlash(this, PAL.accent2, 0.1);
+      impactFlash(this, PAL.accent2, 0.1, 'high');
       const shardN = this.settings.reducedFx ? 4 : 7;
       shardBurst(this, wx + 8, wt + 48, PAL.accent2, shardN);
       shardBurst(this, W - wx - 8, wt + 48, PAL.accent2, shardN);
@@ -3236,10 +3297,23 @@ export class GameScene extends Phaser.Scene {
     this.emitStats();
   }
 
-  emitStats() {
+  emitStats(force = false) {
     const nestsLeft = this.bricks.filter((b) => b.alive && b.type === 'nest').length;
     const bricksLeft = this.destructiblesLeft();
     const bricksTotal = Math.max(1, this._levelDestructibles ?? bricksLeft);
+    const goalText = goalProgressText(this.goal, {
+      knockouts: this.levelKnockouts,
+      potHit: this.potHitLevel,
+      nestsLeft,
+      escortLost: this.goalFail && this.goal?.type === 'escort',
+    });
+    const sig = [
+      this.score, this.lives, this.level, this.combo, bricksLeft,
+      goalText, this.difficulty?.rating ?? 1,
+    ].join('|');
+    if (!force && sig === this._statsSig && !this._statsDirty) return;
+    this._statsSig = sig;
+    this._statsDirty = false;
     this.bus?.emit('hud:stats', {
       score: this.score, lives: this.lives, level: this.level,
       combo: this.combo,
@@ -3247,13 +3321,27 @@ export class GameScene extends Phaser.Scene {
       brickProgress: clamp(1 - bricksLeft / bricksTotal, 0, 1),
       difficulty: this.difficulty?.rating ?? 1,
       band: this.difficulty?.label ?? '',
-      goalText: goalProgressText(this.goal, {
-        knockouts: this.levelKnockouts,
-        potHit: this.potHitLevel,
-        nestsLeft,
-        escortLost: this.goalFail && this.goal?.type === 'escort',
-      }),
+      goalText,
     });
+  }
+
+  emitPowers() {
+    if (!this.bus || !this.powerSys) return;
+    const chips = [];
+    for (const key of this.powerSys.keys()) {
+      const def = POWERS[key];
+      if (!def || def.kind !== 'timed') continue;
+      chips.push({
+        key,
+        ratio: this.powerSys.ratio(key),
+        color: powerFillColor(key),
+        letter: def.short ?? powerPillLabel(key).slice(0, 2),
+        polarity: def.polarity ?? 'pos',
+        icon: def.icon,
+        label: powerPillLabel(key),
+      });
+    }
+    this.bus.emit('hud:powers', chips);
   }
 
   toast(text, ms = 1600) {
@@ -3270,15 +3358,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const now = this.time?.now ?? 0;
-    if (priority !== 'high') {
-      const gap = now - (this._lastFlashAt ?? 0);
-      const minGap = this.settings.flashMinGap ?? 480;
-      if (gap < minGap) {
-        this.toast(text, Math.min(ms, 1400));
-        return;
-      }
-      if (text === this._lastFlashText && gap < minGap * 2) return;
+    if (!fxFlashBudgetOk(this, this._lastFlashAt ?? 0, priority)) {
+      this.toast(text, Math.min(ms, 1400));
+      return;
     }
+    const minGap = fxFlashMinGap(this);
+    if (text === this._lastFlashText && now - (this._lastFlashAt ?? 0) < minGap * 2) return;
     this._lastFlashText = text;
     this._lastFlashAt = now;
     this.bus?.emit('hud:flash', { text, color, ms });
@@ -3377,6 +3462,7 @@ export class GameScene extends Phaser.Scene {
     audio.setMusicIntensity(musicIntensity);
 
     this.powerSys.tick(dtMs);
+    if (this.powerSys.keys().length) this.emitPowers();
     this.statusSys.tick();
     if (this.blackHole && this.powerSys.isActive('BlackHole')) {
       this.pullBlackHole(realDt / 1000);
@@ -3406,6 +3492,7 @@ export class GameScene extends Phaser.Scene {
         const e = Enemy.random(this, x, this.level);
         dropIn(this, e.gfx, { fromY: e.y - 56 });
         dropIn(this, e.glow, { fromY: e.y - 56 });
+        audio.enemySpawn?.();
         this.enemies.push(e);
       }
     }
@@ -3431,19 +3518,13 @@ export class GameScene extends Phaser.Scene {
       }
       return true;
     });
-    if (this.bricks.length !== before) this.emitStats();
-
-    this.paddle.sync();
-    this.balls.forEach((b) => b.sync());
-    this.bricks.forEach((b) => b.sync());
-    this.bullets.forEach((b) => b.sync());
-    this.pots.forEach((p) => p.sync());
-    this.enemies.forEach((e) => e.sync());
-    this.gems.forEach((gm) => gm.sync());
-    this.powers.forEach((p) => p.sync());
-    if (this.escortGlow && this.escortBrick?.alive) {
-      this.escortGlow.setPosition(this.escortBrick.cx, this.escortBrick.cy);
+    if (this.bricks.length !== before) {
+      this.invalidateReachableCache();
+      this.markStatsDirty();
     }
+
+    this._syncGameplayEntities(inPlay);
+
     this.renderFx();
 
     const anyStuck = this.balls.some((b) => b.stuck);
@@ -3457,21 +3538,39 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (this.destructiblesLeft() > 0) {
-      const reachable = () => this.bricks.some((b) => b.alive && this.isBallReachable(b));
-      if (!reachable()) {
+      if (!this.hasReachableBrick()) {
         this.fixBlockedColumns();
+        this.invalidateReachableCache();
       }
-      if (!reachable()) {
+      if (!this.hasReachableBrick()) {
         this.relieveSoftlock();
+        this.invalidateReachableCache();
       } else if (!this._lastBrickBreakAt) {
         this._lastBrickBreakAt = this.time.now;
       } else if (this.time.now - this._lastBrickBreakAt > 28000) {
         this.fixBlockedColumns();
         this.relieveSoftlock();
+        this.invalidateReachableCache();
         this._lastBrickBreakAt = this.time.now;
       }
     }
     this.emitStats();
+  }
+
+  /** One batched sync pass per frame — skips static bricks when the ball is stuck. */
+  _syncGameplayEntities(inPlay = false) {
+    this.paddle.sync();
+    this.balls.forEach((b) => b.sync());
+    const syncBricks = inPlay || (this.frame % 2 === 0);
+    if (syncBricks) this.bricks.forEach((b) => b.sync());
+    this.bullets.forEach((b) => b.sync());
+    this.pots.forEach((p) => p.sync());
+    this.enemies.forEach((e) => e.sync());
+    this.gems.forEach((gm) => gm.sync());
+    this.powers.forEach((p) => p.sync());
+    if (this.escortGlow && this.escortBrick?.alive) {
+      this.escortGlow.setPosition(this.escortBrick.cx, this.escortBrick.cy);
+    }
   }
 
   updateJardinains(dtMs, dtSec) {
@@ -3513,6 +3612,7 @@ export class GameScene extends Phaser.Scene {
           spawnThrow(0, j.tier === GNOME_TIER.SNIPER ? 1.05 : 1, 0);
         }
         wobble(this, j.c, { angle: 10, dur: 160, repeat: 0 });
+        this.feedback.playMoment('pot.incoming', { x: j.x, y: j.y - j.r });
         hitSpark(this, j.x, j.y - j.r, { tint: 0xc84040, count: 4, spread: 16 });
         audio.blip(220);
       }
@@ -3545,6 +3645,7 @@ export class GameScene extends Phaser.Scene {
           this.spikeDeflectEnemy(e);
           this.enemies.splice(i, 1);
         } else {
+          audio.enemyAttack?.();
           this.stunPaddle('HIT!');
           this.burst(e.x, e.y, e.color, 8);
           e.destroy();
@@ -3561,7 +3662,7 @@ export class GameScene extends Phaser.Scene {
     this.floatText(e.x, e.y, `+${SCORE_ENEMY}`, '#' + e.color.toString(16).padStart(6, '0'), 28);
     this.burst(e.x, e.y, e.color, 12);
     fxCameraShake(this, 120, 0.006);
-    audio.blip(660);
+    audio.enemyDefeat?.();
   }
 
   /** Curve ball velocity toward a world target (positive strength = homing). */
@@ -3938,6 +4039,7 @@ export class GameScene extends Phaser.Scene {
 
     switch (b.type) {
       case 'laser':
+        audio.laser?.();
         if (br.indestructible) { br.alive = false; this.destroyBrick(br, false); }
         else if (br.hit(1)) this.destroyBrick(br, false);
         if (this.settings.particles) this.burst(b.x, b.y, 0xff5566, 4);
@@ -3956,6 +4058,7 @@ export class GameScene extends Phaser.Scene {
         if (this.settings.particles) this.burst(b.x, b.y, PAL.powerFrost, 5);
         return true;
       case 'shock':
+        audio.shockHit?.();
         if (br.indestructible) { br.alive = false; this.destroyBrick(br, false); }
         else if (br.hit(999)) this.destroyBrick(br, false);
         if (this.settings.particles) this.burst(b.x, b.y, 0xa78bfa, 6);
@@ -4069,18 +4172,14 @@ export class GameScene extends Phaser.Scene {
   renderFx() {
     const bt = this.bulletTimeRemaining > 0;
     const btRatio = bt ? clamp(this.bulletTimeRemaining / GAME.BULLET_TIME_MS, 0, 1) : 0;
-    this.balls.forEach((b) => {
-      if (!b.trail) return;
-      const mod = b.isModified();
-      b.trail.frequency = bt ? 4 : (mod ? 10 : (b._trailId === 'nexus' ? 14 : 18));
-      b.trail.setAlpha(bt ? 0.98 : (mod ? 0.82 : 0.95));
-      if (bt) {
+    if (bt) {
+      this.balls.forEach((b) => {
+        if (!b.trail) return;
+        b.trail.frequency = 4;
+        b.trail.setAlpha(0.98);
         b.ring.setAlpha(0.28 + btRatio * 0.2);
-      } else if (!mod) {
-        b.rim?.setAlpha(0.95);
-        b.core?.setAlpha(1);
-      }
-    });
+      });
+    }
 
     this.drawShieldBar();
 

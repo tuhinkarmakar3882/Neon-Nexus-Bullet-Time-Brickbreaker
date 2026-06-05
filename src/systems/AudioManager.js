@@ -403,6 +403,19 @@ export class AudioManager {
     [this._trackA, this._trackB].forEach((el) => el?.pause());
   }
 
+  /** Stop play-route music/ambience when Phaser tears down (avoids bleed into hub). */
+  teardownPlaySession() {
+    this.stopMusic();
+    this.stopAmbience();
+    this._stopTracks(true);
+    if (this._trackFadeId) {
+      clearInterval(this._trackFadeId);
+      this._trackFadeId = null;
+    }
+    this._backgroundPaused = false;
+    this._pendingTrackDef = null;
+  }
+
   /** Suspend music + SFX when app/tab goes to background. */
   pauseForBackground() {
     if (this._backgroundPaused) return;
@@ -644,7 +657,62 @@ export class AudioManager {
     else if (def.ballMod === 'explosive' || def.ballMod === 'nuke') this._noise(0.05, 0.14, 200, 3200);
     else if (def.ballMod === 'frost') this._chime([880, 1174, 1396], 0.04, 'sine', 0.16);
     else if (def.ballMod === 'electric') this._sweep(660, 1180, 0.09, 'square', 0.12);
-    else if (def.kind === 'instant') this._chime([523, 659, 784, 988, 1174], 0.06, 'triangle', 0.28);
+    this.powerInstantSting(k, def, opts);
+  }
+
+  /** Distinct stings for signature instant / timed powers. */
+  powerInstantSting(key, def, opts = {}) {
+    const k = resolvePowerKey(key);
+    switch (k) {
+      case 'TimeFreeze':
+        this._chime([880, 1174, 1568], 0.07, 'sine', 0.24, opts);
+        this._sweep(1200, 440, 0.18, 'triangle', 0.14, opts);
+        this._noise(0.04, 0.1, 2400, 8000, opts);
+        break;
+      case 'BlackHole':
+        this._sweep(880, 55, 0.32, 'sawtooth', 0.22, opts);
+        this._sfx(72, 0.28, 'triangle', 0.16, 0, opts);
+        this._noise(0.1, 0.16, 80, 900, opts);
+        break;
+      case 'GnomeRush':
+        this._chime([330, 392, 494, 587], 0.09, 'square', 0.24, opts);
+        this._sweep(420, 880, 0.14, 'sawtooth', 0.16, opts);
+        break;
+      default:
+        if (def?.kind === 'instant') {
+          this._chime([523, 659, 784], 0.055, 'triangle', 0.2, opts);
+        }
+        break;
+    }
+  }
+
+  powerFusion(opts = {}) {
+    this._sweep(660, 1320, 0.22, 'triangle', 0.28, opts);
+    this._chime([523, 784, 1046, 1318], 0.055, 'sine', 0.26, opts);
+    this._noise(0.05, 0.12, 400, 2400, opts);
+  }
+
+  enemySpawn(opts = {}) {
+    this._sweep(180, 420, 0.14, 'sawtooth', 0.2, opts);
+    this._sfx(220, 0.08, 'square', 0.16, 0, opts);
+  }
+
+  enemyAttack(opts = {}) {
+    this._sweep(520, 120, 0.2, 'sawtooth', 0.26, opts);
+    this._sfx(146, 0.18, 'square', 0.2, 0, opts);
+    this._noise(0.06, 0.14, 200, 1800, opts);
+  }
+
+  enemyDefeat(opts = {}) {
+    this._chime([440, 554, 659], 0.05, 'triangle', 0.22, opts);
+    this._sweep(880, 220, 0.16, 'sine', 0.18, opts);
+  }
+
+  shockHit(opts = {}) {
+    if (!this._rateLimit('shockHit', 60, 8)) return;
+    this._sweep(880, 1320, 0.1, 'sawtooth', 0.18, opts);
+    this._sfx(660, 0.05, 'square', 0.14, 0, opts);
+    this._noise(0.03, 0.08, 1200, 5000, opts);
   }
 
   gemPickup() {
@@ -710,6 +778,11 @@ export class AudioManager {
         this._chime([784, 988, 1174], 0.045, 'sine', 0.26, opts);
         this._sfx(880, 0.06, 'triangle', 0.14, 0, opts);
         break;
+      case 'steel':
+        this._sfx(220 * lift, 0.09, 'square', 0.3, 0, opts);
+        this._sfx(440 * lift, 0.05, 'sawtooth', 0.16, 0, opts);
+        this._noise(0.04, 0.1, 900, 4200, opts);
+        break;
       default:
         this._sfx(520, 0.05, 'square', 0.24, 0, opts);
         this._sfx(1040, 0.035, 'sine', 0.1, 0, opts);
@@ -725,6 +798,61 @@ export class AudioManager {
   lose() {
     this._sweep(440, 55, 0.55, 'sawtooth', 0.3);
     this._sfx(110, 0.35, 'triangle', 0.2);
+  }
+
+  /** Ball released from paddle — crisp upward sting. */
+  ballLaunch(opts = {}) {
+    if (!this._rateLimit('ballLaunch', 120, 4)) return;
+    this._sfx(620, 0.05, 'triangle', 0.22, 0, opts);
+    this._sfx(1240, 0.035, 'sine', 0.12, 0, opts);
+    this._sweep(480, 880, 0.08, 'sine', 0.14, opts);
+  }
+
+  /** Indestructible brick / wall hit — metallic ring. */
+  metalClang(opts = {}) {
+    if (!this._rateLimit('metalClang', 70, 8)) return;
+    this._sfx(180, 0.07, 'square', 0.28, 0, opts);
+    this._sfx(360, 0.05, 'triangle', 0.14, 0, opts);
+    this._noise(0.03, 0.08, 1200, 5000, opts);
+  }
+
+  /** Element-styled brick destroy layered on type timbre. */
+  elementBrickBreak(style, opts = {}) {
+    switch (style) {
+      case 'fire':
+      case 'explosive':
+        this.fireHit();
+        break;
+      case 'frost':
+        this.frostHit();
+        break;
+      case 'electric':
+        this._sweep(520, 1180, 0.1, 'square', 0.16, opts);
+        this._sfx(880, 0.04, 'sine', 0.1, 0, opts);
+        break;
+      case 'nuke':
+        this._noise(0.12, 0.2, 60, 1600, opts);
+        this._sweep(200, 40, 0.18, 'sawtooth', 0.2, opts);
+        break;
+      default:
+        break;
+    }
+  }
+
+  gameOverSting(opts = {}) {
+    this._sweep(392, 55, 0.48, 'sawtooth', 0.28, opts);
+    this._sfx(98, 0.28, 'triangle', 0.2, 0, opts);
+    this._chime([196, 165, 131], 0.08, 'sine', 0.18, opts);
+  }
+
+  pauseOpen(opts = {}) {
+    this._sfx(440, 0.04, 'sine', 0.16, 0, opts);
+    this._sfx(330, 0.05, 'triangle', 0.1, 0, opts);
+  }
+
+  pauseClose(opts = {}) {
+    this._sfx(330, 0.04, 'sine', 0.14, 0, opts);
+    this._sfx(494, 0.05, 'triangle', 0.12, 0, opts);
   }
 
   laser() {
@@ -808,11 +936,12 @@ export class AudioManager {
       garden: { type: 'lowpass', freq: 12000 },
       frost: { type: 'highpass', freq: 400 },
       ember: { type: 'bandpass', freq: 800 },
+      nexus: { type: 'bandpass', freq: 640, q: 1.2 },
     };
     const p = profiles[biome] ?? profiles.garden;
     this._biomeFilter.type = p.type;
     this._biomeFilter.frequency.value = p.freq;
-    if (p.type === 'bandpass') this._biomeFilter.Q.value = 0.8;
+    if (p.type === 'bandpass') this._biomeFilter.Q.value = p.q ?? 0.8;
   }
 
   setMusicIntensity(intensity = 0) {

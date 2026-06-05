@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
-import { fxTrailMult, fxParticleScale, fxGlowScale } from '../utils/FxBudget.js';
+import { fxTrailMult, fxParticleScale, fxGlowScale, fxParticlesOn } from '../utils/FxBudget.js';
 import { drawSoftGlow, drawSoftShadow, makeGlowLayer } from '../utils/GlowFx.js';
 import { clamp } from '../utils/Helpers.js';
 
@@ -64,19 +64,23 @@ export class Ball {
 
   buildTrail() {
     const p = TRAIL_PROFILES[this._trailId] ?? TRAIL_PROFILES.comet;
-    const tm = fxTrailMult(this.scene);
-    const trailScale = fxParticleScale(this.scene, p.tex, p.targetPx ?? 14) * Math.min(1.25, tm);
+    const particlesOn = fxParticlesOn(this.scene);
+    const tm = particlesOn ? fxTrailMult(this.scene) : 0;
+    const trailScale = particlesOn
+      ? fxParticleScale(this.scene, p.tex, p.targetPx ?? 14) * Math.min(1.25, tm)
+      : 0;
     this._trailTex = p.tex;
     return this.scene.add.particles(0, 0, p.tex, {
       follow: this.trailTarget,
       speed: { min: p.speedMin * tm, max: p.speedMax * tm },
       scale: { start: trailScale, end: 0 },
-      alpha: { start: 0.78 * Math.min(1.25, tm), end: 0 },
+      alpha: { start: particlesOn ? 0.78 * Math.min(1.25, tm) : 0, end: 0 },
       lifespan: p.lifespan,
       frequency: tm > 0 ? Math.max(4, Math.round(p.frequency / tm)) : 9999,
       tint: 0xffffff,
       blendMode: 'ADD',
       angle: { min: 0, max: 360 },
+      emitting: particlesOn,
     }).setDepth(19);
   }
 
@@ -236,14 +240,21 @@ export class Ball {
       .setTint(mod ? c : 0xffffff)
       .setAlpha(mod ? 0.65 : 0.78);
 
-    if (!mod) this.trail.setParticleTint(this._trailTint);
-    else this.trail.setParticleTint(c);
-    const baseFreq = TRAIL_PROFILES[this._trailId]?.frequency ?? 14;
-    const tm = fxTrailMult(this.scene);
-    const speedRatio = clamp(speed / (this.speed || GAME.BALL_MIN_SPEED), 0.4, 1.6);
-    const modBoost = mod ? 0.55 : 0;
-    const invSpeed = 1.4 - speedRatio * 0.5;
-    this.trail.frequency = Math.max(3, Math.round((baseFreq * invSpeed * (1 - modBoost)) / Math.max(0.5, tm)));
+    if (!this.trail) return;
+    if (!fxParticlesOn(this.scene)) {
+      this.trail.frequency = 9999;
+      this.trail.setAlpha(0);
+    } else {
+      this.trail.setAlpha(1);
+      if (!mod) this.trail.setParticleTint(this._trailTint);
+      else this.trail.setParticleTint(c);
+      const baseFreq = TRAIL_PROFILES[this._trailId]?.frequency ?? 14;
+      const tm = fxTrailMult(this.scene);
+      const speedRatio = clamp(speed / (this.speed || GAME.BALL_MIN_SPEED), 0.4, 1.6);
+      const modBoost = mod ? 0.55 : 0;
+      const invSpeed = 1.4 - speedRatio * 0.5;
+      this.trail.frequency = Math.max(3, Math.round((baseFreq * invSpeed * (1 - modBoost)) / Math.max(0.5, tm)));
+    }
     this.trailTarget.x = this.x;
     this.trailTarget.y = this.y;
   }

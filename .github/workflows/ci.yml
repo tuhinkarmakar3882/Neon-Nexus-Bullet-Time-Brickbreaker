@@ -23,3 +23,5 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run build
       - run: pnpm run test:migration
+      - uses: browser-actions/setup-chrome@v1
+      - run: pnpm run test:smoke

@@ -31,7 +31,7 @@ When docs disagree with code, trust `src/` and update these plans after implemen
 | Web unlock (Settings + checkout-success) | Done |
 | Install prompt (MenuScene) | Done |
 | Prod boot guards | Done |
-| Smoke tests expanded | Done |
+| Smoke tests + CI gate | Done — `pnpm run test:smoke` in `.github/workflows/ci.yml` |
 | Codex / Shop scroll direction | Done |
 | Capacitor android/ios | `pnpm run cap:add:android` / `cap:add:ios` (gitignored); see [NATIVE.md](./NATIVE.md) |
 | Back navigation | Done — `Navigation.goBack` + native + PWA popstate |
@@ -43,8 +43,10 @@ When docs disagree with code, trust `src/` and update these plans after implemen
 
 ```bash
 pnpm install
+pnpm run typecheck
 pnpm run build
-pnpm run test:smoke
+pnpm run test:migration
+pnpm run test:smoke    # also runs in CI after Chrome setup
 pnpm run cap:add:android   # first-time Android scaffold
 ```
 
@@ -55,3 +57,6 @@ pnpm run cap:add:android   # first-time Android scaffold
 - [IAP.md](./IAP.md) — RevenueCat + Stripe
 - [MUSIC.md](./MUSIC.md) — Pixabay ambient music
 - [ADS.md](./ADS.md) — Freemium ad setup
+- [QA_CONSTRAINT_CHECKLIST.md](./QA_CONSTRAINT_CHECKLIST.md) — Manual release QA
+- [QA_WAVE_SIGNOFF.md](./QA_WAVE_SIGNOFF.md) — Wave sign-off matrix
+- [UX_IMPLEMENTATION_STATUS.md](./UX_IMPLEMENTATION_STATUS.md) — AAA UX audit (v3.1.5)

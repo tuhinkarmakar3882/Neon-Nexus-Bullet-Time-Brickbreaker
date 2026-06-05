@@ -16,6 +16,8 @@ const nextConfig = {
   reactStrictMode: false,
   env: viteEnv(),
   transpilePackages: [],
+  // Next 16 defaults to Turbopack; Phaser needs webpack extensionAlias below.
+  turbopack: {},
   webpack: (config) => {
     config.resolve.extensionAlias = {
       '.js': ['.ts', '.tsx', '.js', '.jsx'],

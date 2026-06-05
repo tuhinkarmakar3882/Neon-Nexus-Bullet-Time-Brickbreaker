@@ -9,7 +9,9 @@ Canonical docs for the **Twilight Garden** build. When docs disagree with code, 
 | [**GAME_MECHANICS.md**](./GAME_MECHANICS.md) | Designers & players | Loop, controls, gnomes, powers, goals, save/resume, monetization |
 | [**REDESIGN.md**](./REDESIGN.md) | Product | Implemented roadmap, viewport/HUD notes, monetization map |
 | [**DESIGN_SYSTEM.md**](./DESIGN_SYSTEM.md) | Design / eng | Shell tokens, buttons, new-page checklist |
-| [**UX_IMPLEMENTATION_STATUS.md**](./UX_IMPLEMENTATION_STATUS.md) | Product | UX audit roadmap phases (quick / mid / strategic) |
+| [**UX_IMPLEMENTATION_STATUS.md**](./UX_IMPLEMENTATION_STATUS.md) | Product | AAA UX audit roadmap — **complete at v3.1.5** |
+| [**QA_CONSTRAINT_CHECKLIST.md**](./QA_CONSTRAINT_CHECKLIST.md) | QA | Manual release QA checklist |
+| [**QA_WAVE_SIGNOFF.md**](./QA_WAVE_SIGNOFF.md) | QA | Wave sign-off matrix |
 | [**ADS.md**](./ADS.md) | Release | Google AdMob / AdSense — config-only provider swap |
 | [**PRODUCTION_PLAN.md**](./PRODUCTION_PLAN.md) | Release | Master checklist — Phases 0–6, status, execution order |
 | [**RELEASE.md**](./RELEASE.md) | Release | Capacitor Android, signing, Play Store listing |
@@ -18,15 +20,16 @@ Canonical docs for the **Twilight Garden** build. When docs disagree with code, 
 | [**NATIVE.md**](./NATIVE.md) | Release | Capacitor workflow, save migrations across app updates |
 | [**MUSIC.md**](./MUSIC.md) | Audio | Pixabay ambient loops per level |
 
-## Quick facts (v3.1.0)
+## Quick facts (v3.1.5)
 
-- **Shell:** Next.js 15 (`app/`, `components/`) + Phaser 4.1 on `/play/` only
-- **Engine:** [Phaser 4.1.0](https://phaser.io/v401) · **Bundler:** Next + Vite (game chunks)
+- **Shell:** Next.js 16 (`app/`, `components/`) + Phaser 4.1 on `/play/` only · dev/build use **`--webpack`** (Phaser extension alias)
+- **Engine:** [Phaser 4.1.0](https://phaser.io/v401)
 - **Powers:** 44 keys in `PowerUps.js` (includes tier-II fusion entries)
 - **Mutators:** 13 in `LevelGenerator.js` + seasonal rotation every 7 levels
 - **Levels:** Hybrid multi-zone layouts (`LevelGenerator.js`); vertical wall reach **65–85%** per level
-- **Persistence:** `nn_run_v1` (run snapshot, format v2, 7-day TTL) · `nn_meta_v1` (gems, stars, cosmetics)
-- **Verify:** `pnpm run build` · `pnpm run test:smoke` · `pnpm run typecheck`
+- **Persistence:** `nn_run_v1` (run snapshot, format v2, 7-day TTL) · `nn_meta_v1` (gems, stars, cosmetics, daily best)
+- **CI:** `typecheck` · `build` · `test:migration` · `test:smoke` (Chrome) — see `.github/workflows/ci.yml`
+- **Verify locally:** `pnpm run build` · `pnpm run test:smoke` · `pnpm run test:migration` · `pnpm run typecheck`
 
 ## Save / resume (summary)
 

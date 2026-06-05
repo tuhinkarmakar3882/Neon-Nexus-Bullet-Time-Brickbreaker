@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/shell/AppShell';
 import { HOW_TO_PLAY } from '@/src/config/HowToPlay.js';
 import {
@@ -27,11 +27,40 @@ const TABS = [
   { id: 'journal', label: SHELL_COPY.codex.tabs.journal },
 ] as const;
 
+type CodexTab = (typeof TABS)[number]['id'];
+
+const TAB_IDS = new Set<string>(TABS.map((t) => t.id));
+
+function parseTab(raw: string | null): CodexTab {
+  if (raw && TAB_IDS.has(raw)) return raw as CodexTab;
+  return 'guide';
+}
+
 function CodexContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const from = searchParams.get('from') ?? '';
-  const [tab, setTab] = useState('guide');
+  const tabParam = searchParams.get('tab');
+  const [tab, setTab] = useState<CodexTab>(() => parseTab(tabParam));
   const archive = codexDiscovery();
+  const codex = useMemo(() => MetaProgress.getCodex(), [tab, archive.found]);
+
+  useEffect(() => {
+    setTab(parseTab(tabParam));
+  }, [tabParam]);
+
+  const onTabChange = useCallback(
+    (next: string) => {
+      const id = parseTab(next);
+      setTab(id);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', id);
+      router.replace(`/codex/?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+
+  const unlockedPowers = new Set(codex.powers ?? []);
 
   return (
     <AppShell title={HOW_TO_PLAY.title} subtitle={HOW_TO_PLAY.subtitle} from={from} tone="codex">
@@ -49,7 +78,7 @@ function CodexContent() {
         idPrefix="codex"
         options={TABS.map((t) => t.id)}
         value={tab}
-        onChange={setTab}
+        onChange={onTabChange}
         formatLabel={(id) => TABS.find((t) => t.id === id)?.label ?? id}
         ariaLabel="Codex sections"
       />
@@ -104,11 +133,20 @@ function CodexContent() {
               <h3 style={{ color: cssHex(cat) }}>{(CATEGORY_LABELS[catId as keyof typeof CATEGORY_LABELS] ?? catId).toUpperCase()}</h3>
               {keys.map((key) => {
                 const def = POWERS[key as keyof typeof POWERS];
+                const unlocked = unlockedPowers.has(key);
                 return (
-                  <div key={key} className="shop-row" style={{ borderLeft: `4px solid ${cssHex(cat)}` }}>
+                  <div
+                    key={key}
+                    className="shop-row"
+                    style={{ borderLeft: `4px solid ${cssHex(cat)}`, opacity: unlocked ? 1 : 0.55 }}
+                    aria-disabled={!unlocked}
+                    aria-label={unlocked ? undefined : `${powerDisplayName(key)} — locked`}
+                  >
                     <div className="shop-row-main">
-                      <div className="shop-row-title">{powerDisplayName(key)}</div>
-                      <div className="shop-row-desc">{def.desc}</div>
+                      <div className="shop-row-title">{unlocked ? powerDisplayName(key) : '???'}</div>
+                      <div className="shop-row-desc">
+                        {unlocked ? def.desc : 'Locked — pick up this power in a run to catalog it.'}
+                      </div>
                     </div>
                   </div>
                 );
@@ -127,7 +165,7 @@ function CodexContent() {
         {tab === 'bestiary' && (
           <>
             {Object.entries(GNOME_TIERS).map(([id, info]) => {
-              const unlocked = MetaProgress.getCodex().gnomes?.includes(id);
+              const unlocked = codex.gnomes?.includes(id);
               return (
                 <div
                   key={id}
