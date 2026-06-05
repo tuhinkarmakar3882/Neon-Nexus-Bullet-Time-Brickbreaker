@@ -27,7 +27,7 @@ function normalizeShellHref(href: string): string {
   return href.endsWith('/') ? href : `${href}/`;
 }
 
-/** Low-priority fetch so the service worker caches HTML + linked chunks. */
+/** Low-priority fetch to warm shell HTML + linked chunks in the HTTP cache. */
 export function prefetchShellRoute(href: string): void {
   const path = normalizeShellHref(href);
   if (!canWarm() || path.startsWith('http') || warmed.has(path)) return;
@@ -37,7 +37,7 @@ export function prefetchShellRoute(href: string): void {
   });
 }
 
-/** Next.js RSC/chunk prefetch + SW warm fetch for a shell route. */
+/** Next.js chunk prefetch + low-priority document warm fetch for a shell route. */
 export function prefetchShellHref(router: RouterLike, href: string): void {
   const path = normalizeShellHref(href);
   try {

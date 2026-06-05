@@ -10,12 +10,6 @@ export type { RouterLike };
 
 const HUB_WARM_ROUTES = [ROUTES.home, ...HUB_PREFETCH_ROUTES] as const;
 
-function postWarmToServiceWorker(urls: string[]): void {
-  const controller = navigator.serviceWorker?.controller;
-  if (!controller) return;
-  controller.postMessage({ type: 'neon-warm-cache', urls });
-}
-
 function runWhenIdle(fn: () => void): void {
   if (typeof requestIdleCallback === 'function') {
     requestIdleCallback(() => fn(), { timeout: 4000 });
@@ -24,13 +18,12 @@ function runWhenIdle(fn: () => void): void {
   window.setTimeout(fn, 1200);
 }
 
-/** Idle prefetch of all hub shell pages after SW registration. */
+/** Idle prefetch of hub shell pages (Next router + low-priority fetch). */
 export function warmHubCache(): void {
   if (typeof window === 'undefined') return;
 
   runWhenIdle(() => {
     for (const route of HUB_WARM_ROUTES) prefetchShellRoute(route);
-    postWarmToServiceWorker([...HUB_WARM_ROUTES]);
   });
 }
 

@@ -19,8 +19,8 @@ import { installProductionAnalyticsSink } from '@/lib/analytics/productionSink';
 import { initPersistence } from '@/lib/persistence/Persistence';
 import { startPeriodicSync, syncIfSignedIn, attachSyncLifecycle } from '@/lib/persistence/SyncEngine';
 import { AuthProvider } from '@/lib/auth/AuthProvider';
-import { registerServiceWorker } from '@/lib/shell/registerServiceWorker';
-import { wireHubLinkPrefetch } from '@/lib/shell/warmHubCache';
+import { unregisterLegacyServiceWorkers } from '@/lib/shell/unregisterLegacyServiceWorkers';
+import { warmHubCache, wireHubLinkPrefetch } from '@/lib/shell/warmHubCache';
 import { prefetchBeforeNavigate, prefetchHubRoutes } from '@/lib/shell/hubRoutePrefetch';
 import { registerShellRouter, unregisterShellRouter } from '@/lib/shell/shellRouter';
 import { recordShellNavigation, syncShellStackOnPop } from '@/lib/shell/shellNavStack';
@@ -60,16 +60,10 @@ export function ShellProviders({ children }: ShellProvidersProps) {
 
   useEffect(() => {
     audio.attachDocumentLifecycle(() => window.__NEON);
-    registerServiceWorker();
+    unregisterLegacyServiceWorkers();
+    warmHubCache();
     const offPrefetch = wireHubLinkPrefetch(document, router);
     installProductionAnalyticsSink();
-
-    const onSwPush = (e: MessageEvent) => {
-      if (e.data?.type === 'neon-save-push') {
-        void syncIfSignedIn();
-      }
-    };
-    navigator.serviceWorker?.addEventListener('message', onSwPush);
 
     void initPersistence().then(() => {
       attachSyncLifecycle();
@@ -79,7 +73,6 @@ export function ShellProviders({ children }: ShellProvidersProps) {
 
     return () => {
       offPrefetch();
-      navigator.serviceWorker?.removeEventListener('message', onSwPush);
     };
   }, [router]);
 

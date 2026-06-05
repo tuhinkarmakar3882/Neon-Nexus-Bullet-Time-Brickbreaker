@@ -119,11 +119,6 @@ export async function syncNow(opts: { pullFirst?: boolean; includeRun?: boolean 
 export function schedulePush(): void {
   if (!signedIn) return;
   markDirty();
-  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-    navigator.serviceWorker.ready
-      .then((reg) => (reg as ServiceWorkerRegistration & { sync?: { register: (tag: string) => Promise<void> } }).sync?.register('neon-save-push'))
-      .catch(() => {});
-  }
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
