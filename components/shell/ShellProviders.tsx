@@ -22,6 +22,8 @@ import { AuthProvider } from '@/lib/auth/AuthProvider';
 import { unregisterLegacyServiceWorkers } from '@/lib/shell/unregisterLegacyServiceWorkers';
 import { registerShellRouter, unregisterShellRouter } from '@/lib/shell/shellRouter';
 import { recordShellNavigation, syncShellStackOnPop } from '@/lib/shell/shellNavStack';
+import { executeShellBack } from '@/lib/shell/shellBack';
+import { ShellHintToast } from '@/components/shell/ShellHintToast';
 
 type ShellProvidersProps = {
   children: ReactNode;
@@ -113,7 +115,7 @@ export function ShellProviders({ children }: ShellProvidersProps) {
     window.addEventListener('popstate', onPopState);
     void initAppShell({ showBanner: true });
     window.__neonGoBack = () => {
-      if (window.history.length > 1) window.history.back();
+      executeShellBack();
     };
 
     return () => {
@@ -125,6 +127,7 @@ export function ShellProviders({ children }: ShellProvidersProps) {
   return (
     <AuthProvider>
       <div className="shell-app-root">{children}</div>
+      {!isPlay ? <ShellHintToast /> : null}
       <AdBanner visible={process.env.NEXT_PUBLIC_SHELL_ADS === '1'} />
     </AuthProvider>
   );

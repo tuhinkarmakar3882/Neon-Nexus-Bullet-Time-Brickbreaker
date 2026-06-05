@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { SCENES } from '../config/Constants.js';
 import { closeLegalShell, isLegalShellOpen, wireLegalShellNavigation } from '../shell/LegalShell.js';
 import { exitToHome } from '../shell/routes.js';
+import { executeShellBack } from '../../lib/shell/shellBack.ts';
 import { handlePlayEscape } from './GameKeyboard.js';
 import { recordHubExitFromPlay } from '../shell/hubExit.js';
 import { RunEconomy } from './RunEconomy.js';
@@ -176,9 +177,19 @@ export function goBack(game = gameRef) {
 
   const scenes = game?.scene;
   if (!scenes) {
+    const shell = executeShellBack();
+    if (shell.handled) {
+      if (shell.atMenuRoot && handleMenuExitAttempt(game)) {
+        return { handled: true, action: 'menu-exit' };
+      }
+      return { handled: true, action: 'shell-back' };
+    }
     if (typeof window !== 'undefined' && window.history.length > 1) {
       window.history.back();
       return { handled: true, action: 'shell-back' };
+    }
+    if (handleMenuExitAttempt(game)) {
+      return { handled: true, action: 'menu-exit' };
     }
     return { handled: false };
   }
@@ -225,11 +236,16 @@ function handleMenuExitAttempt(game) {
   }
   const now = Date.now();
   if (now - lastMenuBackAt < 2000) {
-    requestExitApp();
+    void requestExitApp();
     return true;
   }
   lastMenuBackAt = now;
-  game?.events?.emit('hud:toast', { text: 'Press back again to exit the app', ms: 2000 });
+  const hint = { text: 'Press back again to exit the app', ms: 2000 };
+  if (game?.events) {
+    game.events.emit('hud:toast', hint);
+  } else if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('neon:shell-toast', { detail: hint }));
+  }
   return true;
 }
 
