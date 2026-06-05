@@ -204,7 +204,7 @@ export default function SettingsPage() {
           <Link
             href={from === 'play' ? `${ROUTES.codex}?from=play` : ROUTES.codex}
             className="neon-btn neon-btn-secondary shell-block-link"
-            prefetch
+            
           >
             <LucideIcon icon={BookOpen} size={18} className="shell-label__icon" />
             <span>{COPY.codexLink}</span>

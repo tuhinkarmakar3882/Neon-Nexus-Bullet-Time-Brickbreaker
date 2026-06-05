@@ -42,7 +42,7 @@ export function isOnPlayRoute(): boolean {
 /**
  * Hub ↔ play uses the Next.js client router (`shellNavigate`).
  * Session flags (`neon-play-intent`, `neon-hub-session-ts`) carry resume vs new-game intent
- * across route changes; warm hub session skips redundant music prefetch on return to /play/.
+ * across route changes; warm hub session skips redundant music  on return to /play/.
  */
 export function destroyPhaserIfAny(): void {
   const g = window.__NEON;

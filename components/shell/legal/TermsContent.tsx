@@ -137,7 +137,7 @@ export function TermsContent({ showFooter = true, nav }: TermsContentProps) {
       <h2>13. Severability and entire agreement</h2>
       <p>
         If any provision is held invalid, the remainder stays in effect. These Terms, together with the{' '}
-        <Link href={privacyHref} prefetch>
+        <Link href={privacyHref} >
           Privacy Policy
         </Link>
         , constitute the entire agreement regarding the game and

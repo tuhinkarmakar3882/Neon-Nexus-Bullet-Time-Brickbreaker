@@ -72,7 +72,7 @@ function MenuEntry({
 
   if (href) {
     return (
-      <Link href={href} className={cls} prefetch onClick={onClick}>
+      <Link href={href} className={cls}  onClick={onClick}>
         {inner}
       </Link>
     );
@@ -129,7 +129,7 @@ export function TitleMenu({
         href={ROUTES.settings}
         className="title-corner-btn title-corner-btn--settings"
         aria-label={settings.label}
-        prefetch
+        
       >
         <LucideIcon icon={settings.icon} size={18} className="title-corner-btn__icon" />
         <span className="title-corner-btn__label">{settings.label}</span>
@@ -204,7 +204,7 @@ export function TitleMenu({
             <Link
               href={ROUTES.play}
               className="title-menu__secondary-link"
-              prefetch
+              
               onClick={onPrepareNewGame}
             >
               {c.nav.newGame}
@@ -229,7 +229,7 @@ export function TitleMenu({
                   <span>{c.nav.installShort}</span>
                 </button>
               ) : (
-                <Link href={ROUTES.install} className="title-screen__utility-pill" prefetch>
+                <Link href={ROUTES.install} className="title-screen__utility-pill" >
                   <LucideIcon icon={HOME_ICONS.install} size={15} />
                   <span>{c.nav.installShort}</span>
                 </Link>
@@ -247,13 +247,13 @@ export function TitleMenu({
           </div>
 
           <div className="title-screen__legal">
-            <Link href={ROUTES.terms} className="title-screen__legal-link" prefetch>
+            <Link href={ROUTES.terms} className="title-screen__legal-link" >
               Terms
             </Link>
             <span className="title-screen__legal-sep" aria-hidden>
               ·
             </span>
-            <Link href={ROUTES.privacy} className="title-screen__legal-link" prefetch>
+            <Link href={ROUTES.privacy} className="title-screen__legal-link" >
               Privacy
             </Link>
           </div>

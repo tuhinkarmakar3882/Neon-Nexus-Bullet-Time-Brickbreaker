@@ -21,10 +21,10 @@ export function ShellAbout({ parentReturnTo = ROUTES.settings }: ShellAboutProps
         v{APP_VERSION} · build {BUILD_STAMP}
       </p>
       <div className="shell-about__links">
-        <Link href={legalEntryHref('terms', parentReturnTo)} className="neon-text-link" prefetch>
+        <Link href={legalEntryHref('terms', parentReturnTo)} className="neon-text-link" >
           Terms of Service
         </Link>
-        <Link href={legalEntryHref('privacy', parentReturnTo)} className="neon-text-link" prefetch>
+        <Link href={legalEntryHref('privacy', parentReturnTo)} className="neon-text-link" >
           Privacy Policy
         </Link>
       </div>

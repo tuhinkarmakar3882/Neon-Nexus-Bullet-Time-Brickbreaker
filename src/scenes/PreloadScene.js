@@ -7,7 +7,7 @@ import { consumePlayIntent, peekForceNew, peekPlayIntent, isHubSessionWarm } fro
 import { setBootSplash } from '../shell/BootSplash.js';
 
 /**
- * Boot pass — prefetch music catalog, then start gameplay (shell is React).
+ * Boot pass —  music catalog, then start gameplay (shell is React).
  * Progress labels here are coarse (62% → 72%); finer steps live in BootScene / GameScene.
  */
 export class PreloadScene extends Phaser.Scene {

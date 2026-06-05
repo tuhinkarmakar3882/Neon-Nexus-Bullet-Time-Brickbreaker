@@ -14,7 +14,7 @@ export function LegalProse({ children, showFooter = true, siblingHref, siblingLa
       {children}
       {showFooter && siblingHref && siblingLabel ? (
         <p className="legal-prose__footer">
-          <Link href={siblingHref} prefetch>
+          <Link href={siblingHref} >
             {siblingLabel}
           </Link>
         </p>

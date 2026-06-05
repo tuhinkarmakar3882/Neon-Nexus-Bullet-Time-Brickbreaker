@@ -52,7 +52,7 @@ Starting a run uses **sessionStorage** (`lib/shell/playIntent.ts`):
 | **New Garden** | `mode: 'new'`, `forceNew: true` | Clear run, level 1 |
 | First **Play** (no save) | `mode: 'new'`, `forceNew: true` | New run |
 
-Warm hub session flags skip redundant music prefetch when returning to `/play/`.
+Warm hub session flags skip redundant music  when returning to `/play/`.
 
 `PreloadScene.js` also **auto-resumes** when a valid snapshot exists and the player did not explicitly force a new game (e.g. refresh on `/play/`).
 

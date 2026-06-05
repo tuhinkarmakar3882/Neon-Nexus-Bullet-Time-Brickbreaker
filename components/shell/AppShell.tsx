@@ -107,14 +107,14 @@ export function NeonLink({ href, children, icon, variant = 'secondary', classNam
   if (variant === 'tertiary') {
     const cls = `neon-text-link ${className}`.trim();
     return (
-      <Link href={href} className={cls} prefetch>
+      <Link href={href} className={cls} >
         <ShellLabel icon={icon}>{children}</ShellLabel>
       </Link>
     );
   }
   const cls = `neon-btn neon-btn-${variant} ${className}`.trim();
   return (
-    <Link href={href} className={cls} prefetch>
+    <Link href={href} className={cls} >
       <ShellLabel icon={icon}>{children}</ShellLabel>
     </Link>
   );

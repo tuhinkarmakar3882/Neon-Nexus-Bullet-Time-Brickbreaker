@@ -118,7 +118,7 @@ export function HubCommandPalette({
                   <span>{entry.label}</span>
                 </a>
               ) : entry.href ? (
-                <Link href={entry.href} className="hub-palette__item" prefetch onClick={close}>
+                <Link href={entry.href} className="hub-palette__item"  onClick={close}>
                   <LucideIcon icon={entry.icon} size={18} />
                   <span>{entry.label}</span>
                 </Link>

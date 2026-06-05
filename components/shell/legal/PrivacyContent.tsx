@@ -21,7 +21,7 @@ export function PrivacyContent({ showFooter = true, nav }: PrivacyContentProps) 
         <p>
           <strong>Entertainment only.</strong> This policy describes how the casual game Neon Nexus handles information.
           Use of the game is also governed by our{' '}
-          <Link href={termsHref} prefetch>
+          <Link href={termsHref} >
             Terms of Service
           </Link>
           , including disclaimers
