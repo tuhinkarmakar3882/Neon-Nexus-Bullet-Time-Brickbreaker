@@ -1,6 +1,7 @@
 import { BRICK, GAME } from '../config/Constants.js';
 import { PAL } from '../config/Palette.js';
 import { drawSoftGlow, makeGlowLayer } from '../utils/GlowFx.js';
+import { circleOverlapsPaddle } from '../utils/PaddleCollision.js';
 
 // Neon garden pests — crisp silhouettes with glowing outlines.
 const KINDS = ['drifter', 'chaser', 'zigzag'];
@@ -125,7 +126,7 @@ export class Enemy {
     this.wingPhase += dtSec * 12;
     this.draw();
 
-    if (this.y + this.r >= paddle.top && this.x > paddle.left - this.r && this.x < paddle.right + this.r) return 'attack';
+    if (circleOverlapsPaddle(paddle, this.x, this.y, this.r)) return 'attack';
     if (this.y > GAME.HEIGHT + this.r * 2) return 'gone';
     return null;
   }

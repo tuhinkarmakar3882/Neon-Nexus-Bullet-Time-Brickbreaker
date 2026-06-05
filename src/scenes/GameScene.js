@@ -94,7 +94,8 @@ export class GameScene extends Phaser.Scene {
     audio.setMusicEnabled(musicSettings.music);
     audio.setSpatialPan(this.settings.spatialPan === true);
 
-    this.bg = new Background(this, PAL.accent, { preset: this.settings, gameplay: true });
+    const gardenTheme = cosmeticById(GARDEN_THEMES, MetaProgress.getEquipped().theme);
+    this.bg = new Background(this, gardenTheme?.accent ?? PAL.accent, { preset: this.settings, gameplay: true });
     this.campaignSeed = this._resumeData?.campaignSeed ?? ((Date.now() ^ 0xdeadbeef) >>> 0);
     this.levelSeed = this._resumeData?.levelSeed ?? this.campaignSeed + 1;
 

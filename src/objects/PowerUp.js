@@ -8,6 +8,7 @@ import { iconTextureKey } from '../utils/IconTextures.js';
 import { rand } from '../utils/Helpers.js';
 import { fitTextWidth, displayStyle } from '../utils/Typography.js';
 import { drawSoftGlow, makeGlowLayer } from '../utils/GlowFx.js';
+import { aabbOverlapsPaddle } from '../utils/PaddleCollision.js';
 
 /** Falling seed capsule — Arkanoid-style letter on a color-coded pill. */
 export class PowerUp {
@@ -151,9 +152,7 @@ export class PowerUp {
   }
 
   overlapsPaddle(p) {
-    const pad = 8;
-    return this.x < p.right + pad && this.x + this.w > p.left - pad &&
-      this.y + this.h > p.top - pad && this.y < p.y + p.h / 2 + pad;
+    return aabbOverlapsPaddle(p, this.x, this.y, this.w, this.h, 2);
   }
 
   /** Suck into paddle before applying the power. */

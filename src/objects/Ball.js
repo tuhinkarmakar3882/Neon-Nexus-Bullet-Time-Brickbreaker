@@ -11,6 +11,9 @@ const TRAIL_PROFILES = {
   rose: { tex: 'spark-shard', targetPx: 9, frequency: 14, lifespan: 320, speedMin: 4, speedMax: 18 },
   ember: { tex: 'ember', targetPx: 13, frequency: 8, lifespan: 400, speedMin: 8, speedMax: 26 },
   frost: { tex: 'spark-shard', targetPx: 10, frequency: 11, lifespan: 360, speedMin: 3, speedMax: 16 },
+  spark: { tex: 'spark-shard', targetPx: 8, frequency: 13, lifespan: 300, speedMin: 6, speedMax: 22 },
+  mist: { tex: 'soft', targetPx: 11, frequency: 10, lifespan: 380, speedMin: 3, speedMax: 14 },
+  prism: { tex: 'spark-shard', targetPx: 10, frequency: 12, lifespan: 350, speedMin: 5, speedMax: 20 },
   nexus: { tex: 'trail-plasma', targetPx: 16, frequency: 7, lifespan: 440, speedMin: 8, speedMax: 30 },
   void: { tex: 'trail-plasma', targetPx: 15, frequency: 6, lifespan: 460, speedMin: 6, speedMax: 22 },
 };
@@ -77,7 +80,7 @@ export class Ball {
       alpha: { start: particlesOn ? 0.78 * Math.min(1.25, tm) : 0, end: 0 },
       lifespan: p.lifespan,
       frequency: tm > 0 ? Math.max(4, Math.round(p.frequency / tm)) : 9999,
-      tint: 0xffffff,
+      tint: this._trailTint ?? 0xffffff,
       blendMode: 'ADD',
       angle: { min: 0, max: 360 },
       emitting: particlesOn,

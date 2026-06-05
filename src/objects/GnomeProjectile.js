@@ -1,6 +1,7 @@
 import { GAME } from '../config/Constants.js';
 import { clamp } from '../utils/Helpers.js';
 import { drawSoftGlow, makeGlowLayer } from '../utils/GlowFx.js';
+import { circleOverlapsPaddle } from '../utils/PaddleCollision.js';
 
 /** Gnome-thrown hazard: pot, anchor/safe, or smartphone. */
 export class GnomeProjectile {
@@ -98,8 +99,7 @@ export class GnomeProjectile {
   }
 
   hitsPaddle(p) {
-    return this.y + this.r > p.top && this.y - this.r < p.y + p.h &&
-      this.x > p.left - this.r && this.x < p.right + this.r && this.vy > 0;
+    return this.vy > 0 && circleOverlapsPaddle(p, this.x, this.y, this.r);
   }
 
   sync() {

@@ -139,8 +139,9 @@ export class Paddle {
   }
 
   _syncHullTint() {
-    this.body.setTint(this.stunned ? 0xff6b7a : 0xffffff);
-    return this.stunned ? 0xff6b7a : this._hullTint;
+    const tint = this.stunned ? 0xff6b7a : this._hullTint;
+    this.body.setTint(tint);
+    return tint;
   }
 
   sync() {

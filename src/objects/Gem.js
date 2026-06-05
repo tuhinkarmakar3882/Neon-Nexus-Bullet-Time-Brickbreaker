@@ -1,5 +1,6 @@
 import { GAME } from '../config/Constants.js';
 import { drawSoftGlow, makeGlowLayer } from '../utils/GlowFx.js';
+import { circleOverlapsPaddle } from '../utils/PaddleCollision.js';
 
 /** Collectible garden dew crystal — bonus score. */
 export class Gem {
@@ -29,7 +30,7 @@ export class Gem {
   }
 
   overlapsPaddle(p) {
-    return this.x > p.left - this.r && this.x < p.right + this.r && this.y + this.r > p.top && this.y < p.y + p.h;
+    return circleOverlapsPaddle(p, this.x, this.y, this.r);
   }
 
   sync() {

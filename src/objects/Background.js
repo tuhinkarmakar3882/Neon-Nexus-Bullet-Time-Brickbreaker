@@ -176,6 +176,7 @@ export class Background {
     this.starsNear?.setParticleTint(color);
     this.motes?.setParticleTint(color);
     if (this.nebula[0]) this.nebula[0].img.setTint(color);
+    if (this.aurora[0]) this.aurora[0].setTint(color);
   }
 
   /** @deprecated use applyVfxPreset */

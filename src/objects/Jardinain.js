@@ -1,6 +1,7 @@
 import { GAME, JARDINAIN, paddleSideInset } from '../config/Constants.js';
 import { GNOME_TIERS, GNOME_TIER, pickProjectile } from '../config/GnomeTiers.js';
 import { rand, clamp } from '../utils/Helpers.js';
+import { circleOverlapsPaddle, paddleBottom } from '../utils/PaddleCollision.js';
 
 export const JSTATE = {
   POPPING: 'popping',
@@ -379,18 +380,14 @@ export class Jardinain {
     if (this.vy <= 0) return false;
     // Miss only once the gnome has fallen past the paddle hull — not at ARENA_FLOOR,
     // which sits above the paddle when the canvas reserves bottom touch space.
-    const missLine = paddle.y + paddle.h * 0.62;
+    const missLine = paddleBottom(paddle) + paddle.h * 0.12;
     return this.y - this.r > missLine;
   }
 
   hitsPaddle(paddle) {
     if (!this.isAirborne || this.state === JSTATE.EXITING) return false;
     if (this.vy <= 0) return false;
-    const pad = Math.max(6, this.r * 0.2);
-    return this.x > paddle.left - this.r - pad
-      && this.x < paddle.right + this.r + pad
-      && this.y + this.r >= paddle.top - pad
-      && this.y - this.r <= paddle.y + paddle.h * 0.55;
+    return circleOverlapsPaddle(paddle, this.x, this.y, this.r, 2);
   }
 
   /** @deprecated Use missedBelowPaddle — kept for legacy callers. */
