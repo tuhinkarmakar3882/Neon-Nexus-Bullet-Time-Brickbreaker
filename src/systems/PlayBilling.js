@@ -158,6 +158,9 @@ function syncEntitlementsFromCustomerInfo(info) {
       MetaProgress.addGems(50);
     }
   });
+  import('../../lib/persistence/syncEntitlements.ts').then(({ syncEntitlementsToCloud }) => {
+    void syncEntitlementsToCloud();
+  }).catch(() => {});
 }
 
 export function formatStorePrice(productId) {

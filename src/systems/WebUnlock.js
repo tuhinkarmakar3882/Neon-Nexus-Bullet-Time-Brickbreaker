@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import { isIapEnabled } from '../config/AdsConfig.js';
 import { MetaProgress } from './MetaProgress.js';
 import { SaveManager } from './SaveManager.js';
+import { getItem, setItem, removeItem } from '../../lib/persistence/LocalStore.js';
 
 const PENDING_ENTITLEMENT = 'neon_pending_entitlement';
 const STRIPE_SESSION = 'neon_stripe_session';
@@ -61,7 +62,7 @@ function syncMonetizationFlags(productId) {
 
 function readPendingEntitlement() {
   try {
-    const raw = localStorage.getItem(PENDING_ENTITLEMENT);
+    const raw = getItem(PENDING_ENTITLEMENT, null);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -71,8 +72,8 @@ function readPendingEntitlement() {
 
 function clearPendingEntitlement() {
   try {
-    localStorage.removeItem(PENDING_ENTITLEMENT);
-    localStorage.removeItem(STRIPE_SESSION);
+    removeItem(PENDING_ENTITLEMENT);
+    removeItem(STRIPE_SESSION);
   } catch { /* ignore */ }
 }
 
@@ -104,7 +105,7 @@ export async function syncPendingEntitlements() {
 
   const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
   const sessionId = params.get('session_id') ?? (() => {
-    try { return localStorage.getItem(STRIPE_SESSION); } catch { return null; }
+    try { return getItem(STRIPE_SESSION, null); } catch { return null; }
   })();
 
   if (sessionId) {

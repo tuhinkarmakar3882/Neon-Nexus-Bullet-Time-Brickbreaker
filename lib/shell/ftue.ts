@@ -1,3 +1,5 @@
+import { getItem, setItem } from '@/lib/persistence/LocalStore.js';
+
 const FTUE_HOME_KEY = 'nn_ftue_home_v2';
 
 export const FTUE_HOME_STEPS = [
@@ -18,15 +20,28 @@ export const FTUE_HOME_STEPS = [
 export function hasSeenHomeFtue(): boolean {
   if (typeof window === 'undefined') return true;
   try {
-    return localStorage.getItem(FTUE_HOME_KEY) === '1';
+    if (getItem(FTUE_HOME_KEY, null) === '1') return true;
+    // Sync fallback — home can mount before IndexedDB cache hydrates.
+    if (typeof localStorage !== 'undefined' && localStorage.getItem(FTUE_HOME_KEY) === '1') {
+      setItem(FTUE_HOME_KEY, '1');
+      return true;
+    }
+    return false;
   } catch {
     return true;
   }
 }
 
+/** Wait for persistence, then decide if the home FTUE should appear. */
+export async function shouldShowHomeFtue(): Promise<boolean> {
+  const { initPersistence } = await import('@/lib/persistence/Persistence');
+  await initPersistence();
+  return !hasSeenHomeFtue();
+}
+
 export function markHomeFtueSeen(): void {
   try {
-    localStorage.setItem(FTUE_HOME_KEY, '1');
+    setItem(FTUE_HOME_KEY, '1');
   } catch {
     /* private mode */
   }

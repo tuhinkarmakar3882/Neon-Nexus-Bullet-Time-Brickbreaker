@@ -746,13 +746,17 @@ HUDScene registers listeners in `create()`, removes on `shutdown`.
 
 ## 16. Persistence & save format
 
+**Local:** IndexedDB store `neon-persistence` via `lib/persistence/LocalStore.js` (sync in-memory cache). Legacy `localStorage` keys migrate once on `Persistence.init()`.
+
+**Cloud (optional):** Signed-in players sync to MongoDB Atlas through Vercel `/api/saves/me`. Firebase Google Auth. See `docs/CLOUD_SAVE.md`.
+
 ### 16.1 Settings (`SaveManager`)
 
 Stored under keys in `STORAGE` (Constants.js): sound, music, bullet time, flash text, particles, volumes, scanlines, reduced FX, haptics, **immersive HUD**, remove ads, high score, equipped cosmetics.
 
 ### 16.2 Meta progress (`MetaProgress`)
 
-Key: `localStorage['nn_meta_v1']`
+Key: IndexedDB / `nn_meta_v1` (migrated from localStorage)
 
 | Field | Purpose |
 |-------|---------|

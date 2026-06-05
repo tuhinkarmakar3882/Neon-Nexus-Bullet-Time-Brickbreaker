@@ -25,6 +25,7 @@ import { SHELL_COPY } from '@/lib/copy/shell';
 import { SETTINGS_ICONS } from '@/lib/shell/settingsIcons';
 import { PremiumLoader } from '@/components/shell/PremiumLoader';
 import { LucideIcon } from '@/components/shell/LucideIcon';
+import { SettingsBackupPanel } from '@/components/shell/SettingsBackupPanel';
 
 const COPY = SHELL_COPY.settings;
 
@@ -111,6 +112,8 @@ function SettingsContent() {
   return (
     <AppShell title={COPY.title} from={from} tone="utility" badge="">
       <div className="shell-scroll-panel settings-panel">
+        <SettingsBackupPanel />
+
         <SettingsSection title={COPY.sections.graphics} icon={SETTINGS_ICONS.graphics}>
           <SettingRow icon={SETTINGS_ICONS.quality} label={COPY.vfxLabel} stacked>
             <SegmentedControl

@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.2.0] — 2026-06-05
+
+### Cloud save
+
+- **IndexedDB** local persistence with one-time localStorage migration
+- **Firebase Google sign-in** for optional cloud sync
+- **MongoDB Atlas** + Vercel `/api/saves/me` for cross-device saves
+- **SyncEngine:** debounced push, 5-minute periodic sync, foreground/background triggers, SW `neon-save-push`
+- **Guest UX:** local-only play + dismissible hub nudge to enable cloud sync
+- **Settings:** Account section, export/import backup, account deletion
+- **Entitlements:** server-trusted flags via Stripe webhook + RevenueCat restore
+- **Docs:** `docs/CLOUD_SAVE.md`; `pnpm test:merge-meta`
+
 ## [3.1.5] — 2026-06-05
 
 ### AAA UX audit (complete)

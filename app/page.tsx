@@ -7,7 +7,7 @@ import { HubCommandPalette } from '@/components/shell/HubCommandPalette';
 import { MetaProgress } from '@/src/systems/MetaProgress.js';
 import { TutorialOverlay } from '@/components/shell/TutorialOverlay';
 import { SharePreviewModal } from '@/components/shell/SharePreviewModal';
-import { FTUE_HOME_STEPS, hasSeenHomeFtue, markHomeFtueSeen } from '@/lib/shell/ftue';
+import { FTUE_HOME_STEPS, markHomeFtueSeen, shouldShowHomeFtue } from '@/lib/shell/ftue';
 import { useGameMeta } from '@/components/shell/useGameMeta';
 import { navigateToPlay } from '@/lib/shell/routes';
 import { SHELL_COPY } from '@/lib/copy/shell';
@@ -32,8 +32,18 @@ export default function HomePage() {
   const c = SHELL_COPY.home;
 
   useEffect(() => {
-    if (!hasSeenHomeFtue()) setShowTutorial(true);
+    void import('@/lib/persistence/SyncEngine').then(({ syncIfSignedIn }) => syncIfSignedIn());
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void shouldShowHomeFtue().then((show) => {
+      if (!cancelled && show) setShowTutorial(true);
+    });
     MetaProgress.recordReturnVisit();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

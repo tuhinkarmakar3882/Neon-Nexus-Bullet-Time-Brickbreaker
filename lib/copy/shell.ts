@@ -37,6 +37,8 @@ export const SHELL_COPY = {
     title: 'Settings',
     subtitle: '',
     sections: {
+      account: 'Account & cloud sync',
+      backup: 'Save backup',
       graphics: 'Graphics',
       audio: 'Audio',
       feedback: 'Feedback',
@@ -64,6 +66,30 @@ export const SHELL_COPY = {
       noPurchases: 'No previous purchases found for this account.',
       redeemPrompt: 'Enter your unlock code when prompted.',
       unlocked: 'Content unlocked.',
+    },
+  },
+  account: {
+    title: 'Cloud sync',
+    guestHint: 'Your progress is saved on this device only. Sign in with Google to sync across devices.',
+    enableCloudSync: 'Enable cloud sync',
+    signedInAs: (email: string) => `Signed in as ${email}`,
+    lastSynced: (when: string) => `Last synced ${when}`,
+    syncPending: 'Sync pending…',
+    syncNow: 'Sync now',
+    signOut: 'Sign out',
+    loading: 'Checking account…',
+    notConfigured:
+      'Your progress is saved on this device automatically. Cloud sign-in is not available in this build — use Export / Import below to back up manually.',
+    notConfiguredDev:
+      'Cloud sign-in is off until Firebase env vars are set (see docs/CLOUD_SAVE.md). Players will see an “Enable cloud sync” button once deployed.',
+    exportSave: 'Export save file',
+    importSave: 'Import save file',
+    deleteAccount: 'Delete account & cloud save',
+    nudge: {
+      title: 'Save your garden to the cloud',
+      body: 'Your progress is stored on this device only. Sign in with Google to sync across devices and never lose your gems.',
+      enable: 'Enable cloud sync',
+      dismiss: 'Not now',
     },
   },
   shop: {

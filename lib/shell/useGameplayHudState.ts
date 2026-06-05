@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type Phaser from 'phaser';
-import { GAME } from '@/src/config/Constants.js';
+import { GAME, SCENES } from '@/src/config/Constants.js';
 import { MetaProgress } from '@/src/systems/MetaProgress.js';
 import { getPlayMountGeneration, isCurrentPlayMount } from '@/lib/shell/playMount';
 import {
@@ -20,11 +20,77 @@ type HudStats = {
   goalText?: string;
 };
 
+type GameSceneHud = {
+  refreshDomHud?: () => void;
+  score?: number;
+  lives?: number;
+  level?: number;
+  combo?: number;
+  gnomeStreak?: number;
+  btMeter?: number;
+  challengeSys?: { mutators?: string[] };
+  destructiblesLeft?: () => number;
+  _levelDestructibles?: number;
+  goal?: { type?: string };
+  difficulty?: { rating?: number; label?: string };
+  levelKnockouts?: number;
+  potHitLevel?: boolean;
+  goalFail?: boolean;
+  bricks?: { alive?: boolean; type?: string }[];
+};
+
 function formatMutators(ids: string[]) {
   return ids
     .map((id) => id.replace(/([A-Z])/g, ' $1').trim())
     .join(' · ')
     .toUpperCase();
+}
+
+function syncHudFromGameScene(
+  game: Phaser.Game,
+  patch: (fn: (prev: GameplayHudState) => GameplayHudState) => void,
+) {
+  const gs = game.scene?.getScene(SCENES.GAME) as GameSceneHud | undefined;
+  if (!gs) return false;
+
+  const bricksLeft = gs.destructiblesLeft?.() ?? 0;
+  const bricksTotal = Math.max(1, gs._levelDestructibles ?? bricksLeft);
+  const combo = gs.combo ?? 0;
+  const gnomeMax = GAME.GNOME_STREAK_MAX;
+  const nexusMax = GAME.BT_METER_MAX;
+
+  patch(() => ({
+    ...INITIAL_GAMEPLAY_HUD,
+    score: gs.score ?? 0,
+    lives: gs.lives ?? INITIAL_GAMEPLAY_HUD.lives,
+    level: gs.level ?? 1,
+    bricksLeft,
+    combo,
+    gems: MetaProgress.getGems(),
+    goalText: '',
+    mutators: formatMutators(gs.challengeSys?.mutators ?? []),
+    gnomeRatio: Math.min(1, (gs.gnomeStreak ?? 0) / gnomeMax),
+    gnomeReady: (gs.gnomeStreak ?? 0) >= gnomeMax,
+    nexusRatio: Math.min(1, (gs.btMeter ?? 0) / nexusMax),
+    nexusReady: (gs.btMeter ?? 0) >= nexusMax,
+    gambitReady: combo >= GAME.COMBO_GAMBIT_MIN,
+    immersive: true,
+    activePowers: [],
+  }));
+
+  return true;
+}
+
+function requestHudSync(
+  game: Phaser.Game,
+  patch: (fn: (prev: GameplayHudState) => GameplayHudState) => void,
+) {
+  const gs = game.scene?.getScene(SCENES.GAME) as GameSceneHud | undefined;
+  if (gs?.refreshDomHud) {
+    gs.refreshDomHud();
+    return;
+  }
+  syncHudFromGameScene(game, patch);
 }
 
 function attachHudListeners(
@@ -33,7 +99,7 @@ function attachHudListeners(
 ) {
   const bus = game.events;
 
-    const onStats = (s: HudStats) => {
+  const onStats = (s: HudStats) => {
     patch((prev) => ({
       ...prev,
       score: typeof s.score === 'number' ? s.score : prev.score,
@@ -53,8 +119,15 @@ function attachHudListeners(
     }));
   };
 
+  const onStorage = () => {
+    patch((prev) => ({
+      ...prev,
+      gems: MetaProgress.getGems(),
+    }));
+  };
+
   const onGnome = (s: { value?: number; max?: number; ratio?: number; ready?: boolean }) => {
-    const max = s.max || 100;
+    const max = s.max || GAME.GNOME_STREAK_MAX;
     const ratio = s.ratio ?? (s.value ?? 0) / max;
     patch((prev) => ({
       ...prev,
@@ -64,7 +137,7 @@ function attachHudListeners(
   };
 
   const onNexus = (s: { value?: number; max?: number }) => {
-    const max = s.max || 100;
+    const max = s.max || GAME.BT_METER_MAX;
     const ratio = (s.value ?? 0) / max;
     patch((prev) => ({
       ...prev,
@@ -98,7 +171,7 @@ function attachHudListeners(
   };
 
   const onLife = (p?: { lives?: number }) => {
-    const gs = window.__NEON?.scene?.getScene('Game') as { lives?: number } | undefined;
+    const gs = window.__NEON?.scene?.getScene(SCENES.GAME) as { lives?: number } | undefined;
     const lives = typeof p?.lives === 'number' ? p.lives : gs?.lives;
     patch((prev) => ({
       ...prev,
@@ -135,8 +208,11 @@ function attachHudListeners(
   bus.on('hud:achieve', onAchieve);
   bus.on('hud:gambit', onGambit);
   bus.on('hud:powers', onPowers);
+  window.addEventListener('neon:storage', onStorage);
 
   onTreasury();
+  requestHudSync(game, patch);
+  requestAnimationFrame(() => requestHudSync(game, patch));
 
   return () => {
     bus.off('hud:stats', onStats);
@@ -151,6 +227,7 @@ function attachHudListeners(
     bus.off('hud:achieve', onAchieve);
     bus.off('hud:gambit', onGambit);
     bus.off('hud:powers', onPowers);
+    window.removeEventListener('neon:storage', onStorage);
   };
 }
 
@@ -179,11 +256,17 @@ export function useGameplayHudState() {
     const onReady = (e: Event) => {
       if (!isCurrentPlayMount(mountGen)) return;
       const game = (e as CustomEvent<{ game?: Phaser.Game }>).detail?.game;
-      setState(INITIAL_GAMEPLAY_HUD);
       tryAttach(game);
     };
 
+    const onHudSync = () => {
+      if (!isCurrentPlayMount(mountGen)) return;
+      const g = window.__NEON;
+      if (g) requestHudSync(g, patch);
+    };
+
     window.addEventListener('neon:game-ready', onReady);
+    window.addEventListener('neon:hud-sync', onHudSync);
     if (!tryAttach()) {
       poll = setInterval(() => {
         if (!isCurrentPlayMount(mountGen)) {
@@ -196,6 +279,7 @@ export function useGameplayHudState() {
 
     return () => {
       window.removeEventListener('neon:game-ready', onReady);
+      window.removeEventListener('neon:hud-sync', onHudSync);
       if (poll) clearInterval(poll);
       detach?.();
     };

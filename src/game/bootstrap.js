@@ -29,6 +29,7 @@ import { attachFullscreenListener, lockMobileViewport } from '../systems/Fullscr
 import { initNativeBridge } from '../systems/NativeBridge.js';
 import { attachAppLifecycle, detachAppLifecycle } from '../systems/AppLifecycle.js';
 import { runMigrations } from '../systems/SaveMigration.js';
+import { initPersistence } from '../../lib/persistence/Persistence';
 import {
   attachEscapeListener,
   attachNavigation,
@@ -273,12 +274,13 @@ export function destroyGame() {
   window.__NEON = null;
 }
 
-export function bootPlayGame() {
+export async function bootPlayGame() {
   if (game) {
     if (isGameAlive(game)) return game;
     destroyGame();
   }
   try {
+    await initPersistence();
     runMigrations();
   } catch (e) {
     console.warn('[Neon Nexus] save migration skipped', e);

@@ -1,6 +1,7 @@
 import { RunPersistence } from '@/src/systems/RunPersistence.js';
 import { SCENES } from '@/src/config/Constants.js';
 import { clearHubSession, isHubSessionWarm, markHubSessionActive, setPlayIntent } from '@/lib/shell/playIntent';
+import { pushRunSnapshot, schedulePush, syncIfSignedIn } from '@/lib/persistence/SyncEngine';
 import { audio } from '@/src/systems/AudioManager.js';
 import { SaveManager } from '@/src/systems/SaveManager.js';
 
@@ -50,6 +51,7 @@ export function destroyPhaserIfAny(): void {
   }
   window.__NEON = undefined;
   markHubSessionActive();
+  pushRunSnapshot();
   try {
     audio.teardownPlaySession();
     audio.init();
@@ -87,6 +89,7 @@ export function saveRunAndLeavePlay(targetPath: string, query: Record<string, st
   const gs = g?.scene?.getScene(SCENES.GAME);
   if (gs?.scene?.isActive?.() && !gs.over) {
     RunPersistence.saveRun(gs as Parameters<typeof RunPersistence.saveRun>[0]);
+    pushRunSnapshot();
   }
   window.location.href = pathWithQuery(targetPath, { from: 'play', ...query });
 }

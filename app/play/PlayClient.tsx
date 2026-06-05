@@ -77,7 +77,7 @@ export default function PlayClient() {
         if (cancelled || !isCurrentPlayMount(generation)) return;
 
         setBootSplash({ progress: 14, label: PHASES.engine });
-        const g = bootPlayGame();
+        const g = await bootPlayGame();
         if (cancelled || !isCurrentPlayMount(generation)) return;
 
         requestAnimationFrame(() => {

@@ -1,5 +1,7 @@
 /** Session-scoped hub reward queue — populated on play exit, consumed on home mount. */
 
+import { getItem, setItem } from '@/lib/persistence/LocalStore.js';
+
 const QUEUE_KEY = 'nn_hub_reward_queue';
 const JOURNAL_TOASTED_KEY = 'nn_journal_toasted';
 
@@ -81,9 +83,9 @@ export function queuePostRunSummary(
 }
 
 function readJournalToasted(): string[] {
-  if (typeof localStorage === 'undefined') return [];
+  if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(JOURNAL_TOASTED_KEY);
+    const raw = getItem(JOURNAL_TOASTED_KEY, null);
     if (raw === null) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
@@ -93,9 +95,8 @@ function readJournalToasted(): string[] {
 }
 
 function writeJournalToasted(ids: string[]): void {
-  if (typeof localStorage === 'undefined') return;
   try {
-    localStorage.setItem(JOURNAL_TOASTED_KEY, JSON.stringify(ids));
+    setItem(JOURNAL_TOASTED_KEY, JSON.stringify(ids));
   } catch {
     /* private mode */
   }

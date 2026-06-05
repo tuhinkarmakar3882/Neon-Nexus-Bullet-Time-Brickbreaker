@@ -55,17 +55,23 @@ a {
   flex-direction: column;
   width: 100%;
   min-height: 100dvh;
-  animation: shell-fade-in 0.28s ease-out;
+  animation: shell-fade-in 0.16s ease-out;
 }
 
 @keyframes shell-fade-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(3px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-route-enter {
+    animation: none;
   }
 }
 
@@ -2789,6 +2795,56 @@ body.shell-scroll:has(.ad-banner-slot--visible) .shell-page--title {
 .title-corner-btn--settings {
   right: var(--shell-pad-x);
   left: auto;
+}
+
+.cloud-sync-nudge {
+  position: fixed;
+  bottom: calc(16px + var(--safe-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: min(92vw, 420px);
+  pointer-events: auto;
+}
+
+.cloud-sync-nudge__inner {
+  padding: 14px 16px;
+  border-radius: var(--radius-card, 12px);
+  border: 1px solid var(--border-accent, rgba(102, 204, 255, 0.35));
+  background: rgba(8, 12, 22, 0.94);
+  box-shadow: var(--shadow-md, 0 8px 32px rgba(0, 0, 0, 0.45));
+}
+
+.cloud-sync-nudge__title {
+  margin: 0 0 6px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text, #e8f0ff);
+}
+
+.cloud-sync-nudge__body {
+  margin: 0 0 12px;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--text-muted, rgba(170, 190, 220, 0.85));
+}
+
+.cloud-sync-nudge__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-section__hint--warn {
+  color: #ffb4b4;
+}
+
+.settings-section__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .title-menu {

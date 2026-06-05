@@ -20,9 +20,9 @@ export function difficultyFor(level) {
     /** 1–10 HUD / level flash intensity — maps to level */
     rating: clamp(Math.ceil(level / 5), 1, 10),
 
-    ballSpeedMult: clamp(1 + t * 0.014, 1, 1.48),
-    bounceAccelMult: clamp(1 + t * 0.004, 1, 1.12),
-    brickHpMult: clamp(1 + t * 0.018 + (level <= 5 ? 0.08 : 0), 1, 1.55),
+    ballSpeedMult: clamp(1 + t * 0.016, 1, 1.52),
+    bounceAccelMult: clamp(1 + t * 0.0048, 1, 1.14),
+    brickHpMult: clamp(1 + t * 0.021 + (level <= 5 ? 0.06 : 0), 1, 1.58),
 
     rowBonus: Math.min(12, Math.floor(t / 1.05) + (level <= 4 ? 0 : level <= 8 ? 1 : 2)),
     layoutRowBonus: (compact
@@ -38,20 +38,20 @@ export function difficultyFor(level) {
       ? clamp(0.94 + t * 0.004, 0.94, 1.04)
       : clamp(1.06 + t * 0.005, 1.06, 1.16),
     /** Gnome pot cadence — slow early, ramps gently (beatable late game). */
-    potThrowRateMult: clamp(0.28 + t * 0.016, 0.28, 0.72),
-    potSpeedMult: clamp(0.46 + t * 0.018, 0.46, 0.95),
+    potThrowRateMult: clamp(0.3 + t * 0.018, 0.3, 0.76),
+    potSpeedMult: clamp(0.48 + t * 0.02, 0.48, 0.98),
     movingBoost: clamp(t * 0.008, 0, 0.28),
     moveSpeedMult: clamp(1 + t * 0.01, 1, 1.45),
 
-    gnomePopupMult: clamp(0.72 + t * 0.01, 0.72, 1.32),
-    gnomeSpawnChance: clamp(0.32 + t * 0.012, 0.32, 0.72),
-    gnomeMaxAlive: clamp(1 + Math.floor(t / 2.4), 1, JARDINAIN.MAX_ALIVE),
-    gnomeThrowMult: clamp(1 - t * 0.008, 0.55, 1),
-    gnomePressure: clamp(0.68 + t * 0.011, 0.68, 1.38),
+    gnomePopupMult: clamp(0.74 + t * 0.011, 0.74, 1.36),
+    gnomeSpawnChance: clamp(0.34 + t * 0.013, 0.34, 0.74),
+    gnomeMaxAlive: clamp(1 + Math.floor(t / 2.2), 1, JARDINAIN.MAX_ALIVE),
+    gnomeThrowMult: clamp(1 - t * 0.009, 0.52, 1),
+    gnomePressure: clamp(0.7 + t * 0.013, 0.7, 1.42),
     nestBudget: clamp(2 + Math.floor(level / 2), 2, JARDINAIN.MAX_ALIVE),
 
     enemyCountBonus: Math.floor(t / 2),
-    enemySpawnMult: clamp(1 - t * 0.038, 0.26, 1),
+    enemySpawnMult: clamp(1 - t * 0.042, 0.24, 1),
     hazardSpeedMult: clamp(1 + t * 0.011, 1, 1.52),
     powerFallMult: clamp(1 + t * 0.006, 1, 1.35),
 

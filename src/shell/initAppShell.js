@@ -1,4 +1,5 @@
 import { runMigrations } from '../systems/SaveMigration.js';
+import { initPersistence } from '../../lib/persistence/Persistence';
 import { initInstallPrompt } from '../systems/InstallPrompt.js';
 import { Monetization } from '../systems/Monetization.js';
 import { createAdProvider } from '../systems/createAdProvider.js';
@@ -17,6 +18,7 @@ export async function initAppShell({ showBanner = true } = {}) {
     if (showBanner) Monetization.showBanner();
     return;
   }
+  await initPersistence();
   runMigrations();
   initInstallPrompt();
   establishMenuHistory();

@@ -73,6 +73,10 @@ export function LevelCompleteOverlay({ data }: Props) {
   }, []);
 
   useEffect(() => {
+    void import('@/lib/persistence/SyncEngine').then(({ schedulePush }) => schedulePush());
+  }, []);
+
+  useEffect(() => {
     setBonus(data.bonus);
     setScore(data.score);
     setDoubled(false);

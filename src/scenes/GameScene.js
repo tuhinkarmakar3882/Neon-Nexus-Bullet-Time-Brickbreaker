@@ -165,6 +165,7 @@ export class GameScene extends Phaser.Scene {
     this.powerSys.onExpire = (key) => this.onPowerExpire(key);
     this.statusSys = new StatusSystem(this);
     this.challengeSys = new ChallengeSystem(this);
+    this.bus = this.game.events;
 
     this.paddle = new Paddle(this);
     this.balls = [new Ball(this, this.paddle, 0)];
@@ -218,14 +219,11 @@ export class GameScene extends Phaser.Scene {
       if (!this.scene.isActive(SCENES.UI)) this.scene.launch(SCENES.UI);
       dismissBootSplash('Garden ready — launch when you are');
     });
-    this.bus = this.game.events;
-    this.emitStats();
-    this.emitPowers();
+    this.refreshDomHud();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('neon:hud-sync'));
+    }
     consumeForceNew();
-    this.emitGnomeStreak();
-    this.emitBtMeter();
-    this.bus?.emit('hud:treasury', { value: MetaProgress.getTreasury() });
-    this.bus?.emit('hud:immersive', { on: true });
     this._onGambitReq = () => this.cashComboGambit();
     this._onNexusReq = () => this.trySpendNexus();
     this._onGnomeReq = () => this.trySpendGnome();
@@ -680,7 +678,7 @@ export class GameScene extends Phaser.Scene {
     this.enemySpawnMs = clamp((9000 - this.level * 450) * difficulty.enemySpawnMult, 2600, 9000);
     this.enemyTimer = this.enemySpawnMs * 0.65;
     this.balls.forEach((b) => this.syncBallSpeed(b, { reset: true }));
-    this.emitStats();
+    this.refreshDomHud();
   }
 
   initGnomeSpawner() {
@@ -3290,6 +3288,18 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.flushPendingDrafts();
+  }
+
+  /** Force-push all DOM HUD fields (React bridge may attach after first emit). */
+  refreshDomHud() {
+    if (!this.bus) return;
+    this.emitStats(true);
+    this.emitPowers();
+    this.emitGnomeStreak();
+    this.emitBtMeter();
+    this.bus.emit('hud:mutators', this.challengeSys?.mutators ?? []);
+    this.bus.emit('hud:treasury', { value: MetaProgress.getTreasury() });
+    this.bus.emit('hud:immersive', { on: true });
   }
 
   /** Push lives to DOM/canvas HUD immediately (stats + life pulse). */

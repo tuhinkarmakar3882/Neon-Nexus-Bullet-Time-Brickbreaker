@@ -82,6 +82,7 @@ const LEVEL_ARC_POOLS = {
   structural: ['arch', 'tunnel', 'gauntlet', 'ring', 'cross', 'split', 'towers', 'frame'],
   latticeMosaic: ['grid', 'checker', 'columns', 'braid', 'rows'],
   chaosTapestry: ['blend', 'perlin', 'emoji', 'diamond', 'tunnel', 'wave', 'spiral', 'braid', 'gauntlet'],
+  verticalDrama: ['pyramid', 'cascade', 'staircase', 'towers', 'spiral', 'chevron', 'hive', 'frame'],
 };
 
 const LEVEL_ARC_LABELS = {
@@ -90,6 +91,14 @@ const LEVEL_ARC_LABELS = {
   structural: 'STRUCT',
   latticeMosaic: 'MOSAIC',
   chaosTapestry: 'CHAOS',
+  verticalDrama: 'DRAMA',
+};
+
+/** Pace → preferred layout arcs (hybrid zone planning). */
+const PACE_ARC_BIAS = {
+  siege: ['structural', 'latticeMosaic', 'verticalDrama'],
+  standard: ['organicStorm', 'sculptural', 'chaosTapestry'],
+  blitz: ['organicStorm', 'chaosTapestry', 'sculptural'],
 };
 
 /** Per-zone lattice pack: flush = zero holes; others = structured or noisy gaps. */
@@ -226,10 +235,15 @@ function levelPackDensity(level, levelSeed = 0) {
   return clamp(base + jitter, 0.68, 0.92);
 }
 
-function pickLevelArc(level, campaignSeed, levelSeed) {
+function pickLevelArc(level, campaignSeed, levelSeed, paceLabel = 'standard') {
   const keys = Object.keys(LEVEL_ARC_POOLS);
-  const idx = ((campaignSeed >>> 0) ^ (levelSeed >>> 0) ^ level * 131) % keys.length;
-  return keys[idx];
+  const roll = ((campaignSeed >>> 0) ^ (levelSeed >>> 0) ^ level * 131) >>> 0;
+  const bias = PACE_ARC_BIAS[paceLabel] ?? PACE_ARC_BIAS.standard;
+  if (roll % 100 < 58) {
+    const pick = bias[roll % bias.length];
+    if (LEVEL_ARC_POOLS[pick]) return pick;
+  }
+  return keys[roll % keys.length];
 }
 
 /** Zone count varies by campaign + level so layout height/depth differs a lot. */
@@ -430,13 +444,13 @@ export function buildLevel(level, campaignSeed = 12345) {
       rowMetrics,
     });
   } else {
-    const layoutArc = pickLevelArc(level, campaignSeed, levelSeed);
+    const layoutArc = pickLevelArc(level, campaignSeed, levelSeed, paceLabel);
     const zoneCount = Math.min(
       pickLevelZoneCount(level, campaignSeed, diff.zoneCount, rng),
       Math.max(2, Math.floor(totalRows / 2)),
     );
-    const zoneRows = splitRows(totalRows, zoneCount, rng);
-    const zonePatterns = pickZonePatterns(level, levelSeed, zoneCount, rng, campaignSeed, layoutArc);
+    const zoneRows = splitRows(totalRows, zoneCount, rng, { layoutArc, paceLabel });
+    const zonePatterns = pickZonePatterns(level, levelSeed, zoneCount, rng, campaignSeed, layoutArc, paceLabel);
     patternNames.push(LEVEL_ARC_LABELS[layoutArc] ?? layoutArc.toUpperCase());
     let rowOffset = 0;
     for (let z = 0; z < zoneCount; z++) {
@@ -519,14 +533,36 @@ export function buildLevel(level, campaignSeed = 12345) {
   };
 }
 
-function splitRows(total, zones, rng) {
+/**
+ * Split total rows across hybrid zones — arc/pace bias row budget per band.
+ * Siege stacks depth low; blitz keeps the upper band busier; verticalDrama grows upward.
+ */
+function splitRows(total, zones, rng, opts = {}) {
   if (zones <= 1) return [total];
   zones = Math.min(zones, Math.max(1, total));
   const out = new Array(zones).fill(1);
   let rem = total - zones;
+  const { layoutArc, paceLabel } = opts;
+  const weights = out.map((_, i) => {
+    const t = zones <= 1 ? 0.5 : i / (zones - 1);
+    let w = 1;
+    if (paceLabel === 'siege') w += (1 - t) * 1.35;
+    else if (paceLabel === 'blitz') w += t * 1.25;
+    if (layoutArc === 'verticalDrama') w += t * 1.1 + (i === zones - 1 ? 0.45 : 0);
+    if (layoutArc === 'latticeMosaic') w += 0.35;
+    if (layoutArc === 'structural' && i === 0) w += 0.5;
+    return Math.max(0.25, w);
+  });
   let guard = 0;
   while (rem > 0 && guard++ < 512) {
-    out[Math.floor(rng() * zones)]++;
+    const roll = rng() * weights.reduce((s, w) => s + w, 0);
+    let acc = 0;
+    let slot = 0;
+    for (let i = 0; i < zones; i++) {
+      acc += weights[i];
+      if (roll <= acc) { slot = i; break; }
+    }
+    out[slot]++;
     rem--;
   }
   return out;
@@ -603,9 +639,14 @@ function contrastPickZone(out, index, eligible, used, usedGroups, rng, arcPool) 
 /**
  * Plan hybrid zones — unique pattern per zone, different families, arc-biased complex layouts.
  */
-function pickZonePatterns(level, levelSeed, zoneCount, rng, campaignSeed, layoutArc) {
-  const arc = layoutArc ?? pickLevelArc(level, campaignSeed, levelSeed);
+function pickZonePatterns(level, levelSeed, zoneCount, rng, campaignSeed, layoutArc, paceLabel = 'standard') {
+  const arc = layoutArc ?? pickLevelArc(level, campaignSeed, levelSeed, paceLabel);
   const arcPool = LEVEL_ARC_POOLS[arc] ?? LEVEL_ARC_POOLS.chaosTapestry;
+  const pacePool = paceLabel === 'siege'
+    ? [...arcPool, ...PATTERN_GROUPS.structural, ...PATTERN_GROUPS.lattice]
+    : paceLabel === 'blitz'
+      ? [...arcPool, ...PATTERN_GROUPS.organic, 'scatter', 'islands']
+      : arcPool;
   const boost = isCompactLayout() ? 1 : 0;
   let eligible = PATTERN_DEFS.filter((p) => level + boost >= p.minLevel && !BORING_PATTERNS.has(p.id));
   if (level <= 6) {
@@ -622,7 +663,7 @@ function pickZonePatterns(level, levelSeed, zoneCount, rng, campaignSeed, layout
     const freshGroup = pool.filter((p) => !usedGroups.has(patternGroup(p.id)));
     if (freshGroup.length) pool = freshGroup;
 
-    const arcHits = pool.filter((p) => arcPool.includes(p.id));
+    const arcHits = pool.filter((p) => pacePool.includes(p.id));
     if (arcHits.length && (z === 0 || rng() < 0.62)) pool = arcHits;
 
     if (latticeZones >= maxLattice) {
@@ -674,6 +715,23 @@ function pickZonePatterns(level, levelSeed, zoneCount, rng, campaignSeed, layout
       used.delete(prev);
       used.add(out[z]);
       usedGroups.add(patternGroup(out[z]));
+    }
+  }
+
+  /** Blend transition band between contrasting families (readable hybrid hand-off). */
+  if (zoneCount >= 3) {
+    for (let z = 1; z < out.length - 1; z++) {
+      const gPrev = patternGroup(out[z - 1]);
+      const gNext = patternGroup(out[z + 1]);
+      if (gPrev !== gNext && gPrev !== 'organic' && gNext !== 'organic' && eligible.some((p) => p.id === 'blend')) {
+        const roll = ((levelSeed + z * 73 + (campaignSeed >>> 0)) >>> 0) % 100;
+        if (roll < 42) {
+          used.delete(out[z]);
+          out[z] = 'blend';
+          used.add('blend');
+          usedGroups.add('organic');
+        }
+      }
     }
   }
 

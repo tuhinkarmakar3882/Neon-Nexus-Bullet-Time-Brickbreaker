@@ -1,20 +1,24 @@
 import { STORAGE, DEFAULT_SFX_VOLUME, DEFAULT_MUSIC_VOLUME } from '../config/Constants.js';
 import { normalizeVfxQuality, resolveSettings } from '../config/VfxQuality.js';
+import { getItem, setItem, removeItem } from '../../lib/persistence/LocalStore.js';
+import { markDirty } from '../../lib/persistence/dirty.js';
 
 const mem = {};
 
 function get(key, fallback) {
   try {
-    const v = localStorage.getItem(key);
-    return v === null ? fallback : v;
+    const v = getItem(key, null);
+    if (v !== null) return v;
   } catch {
-    return key in mem ? mem[key] : fallback;
+    /* fall through */
   }
+  return key in mem ? mem[key] : fallback;
 }
 
 function set(key, value) {
   try {
-    localStorage.setItem(key, String(value));
+    setItem(key, String(value));
+    markDirty();
   } catch {
     mem[key] = String(value);
   }
@@ -57,14 +61,6 @@ export const SaveManager = {
     const sound = this.getBool(STORAGE.SOUND, true);
     const music = this.getBool(STORAGE.MUSIC, true);
     const storedQuality = get(STORAGE.VFX_QUALITY, null);
-    const legacy = {
-      sound,
-      music,
-      particles: this.getBool(STORAGE.PARTICLES, true),
-      reducedFx: this.getBool(STORAGE.REDUCED_FX, false),
-      scanlines: this.getBool(STORAGE.SCANLINES, false),
-      vfxQuality: storedQuality,
-    };
     return resolveSettings({
       sound,
       music,
@@ -115,6 +111,11 @@ export const SaveManager = {
     if (snapshot) this.setJson(STORAGE.RUN, snapshot);
   },
   clearRun() {
-    try { localStorage.removeItem(STORAGE.RUN); } catch { delete mem[STORAGE.RUN]; }
+    try {
+      removeItem(STORAGE.RUN);
+      markDirty();
+    } catch {
+      delete mem[STORAGE.RUN];
+    }
   },
 };

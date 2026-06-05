@@ -46,3 +46,13 @@ self.addEventListener('fetch', (event) => {
       }),
   );
 });
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'neon-save-push') {
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+        clients.forEach((client) => client.postMessage({ type: 'neon-save-push' }));
+      }),
+    );
+  }
+});

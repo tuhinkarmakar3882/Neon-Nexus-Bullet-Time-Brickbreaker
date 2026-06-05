@@ -41,6 +41,12 @@ export function PauseOverlay({ data }: Props) {
   }, []);
 
   useEffect(() => {
+    void import('@/lib/persistence/SyncEngine').then(({ pushRunSnapshot }) => {
+      pushRunSnapshot();
+    });
+  }, []);
+
+  useEffect(() => {
     const el = adRef.current;
     if (!el || !showAd) return;
     mountPauseAdInContainer(el);

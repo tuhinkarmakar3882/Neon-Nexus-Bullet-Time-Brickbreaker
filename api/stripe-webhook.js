@@ -52,6 +52,30 @@ export default async function handler(req, res) {
     const session = event.data.object;
     const productId = productIdFromSession(session);
     const email = session.customer_details?.email ?? session.customer_email ?? null;
+    const uid = session.client_reference_id ?? session.metadata?.firebase_uid ?? null;
+
+    if (uid && productId && VALID_PRODUCTS.has(productId)) {
+      try {
+        const { upsertEntitlements, isMongoConfigured } = await import('../server/mongodb.js');
+        if (isMongoConfigured()) {
+          const patch = {
+            removeAds: productId === 'remove_ads',
+            premium: productId === 'premium',
+          };
+          await upsertEntitlements(uid, patch);
+          const { getPlayerSavesCollection } = await import('../server/mongodb.js');
+          const col = await getPlayerSavesCollection();
+          await col.updateOne(
+            { _id: uid },
+            { $set: { entitlements: patch, updatedAt: new Date() } },
+            { upsert: true },
+          );
+        }
+      } catch (e) {
+        console.warn('[stripe-webhook] entitlements upsert failed', e);
+      }
+    }
+
     if (productId && VALID_PRODUCTS.has(productId) && unlockKey) {
       const unlockCode = generateUnlockCode(productId, session.id, unlockKey);
       console.log('[stripe-webhook] fulfilled', { productId, email, unlockCode, sessionId: session.id });

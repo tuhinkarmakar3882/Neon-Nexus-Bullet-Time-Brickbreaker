@@ -16,6 +16,9 @@ import {
 import { AdBanner } from '@/components/ads/AdBanner';
 import { trackScreenView } from '@/lib/analytics/shellAnalytics';
 import { installProductionAnalyticsSink } from '@/lib/analytics/productionSink';
+import { initPersistence } from '@/lib/persistence/Persistence';
+import { startPeriodicSync, syncIfSignedIn, attachSyncLifecycle } from '@/lib/persistence/SyncEngine';
+import { AuthProvider } from '@/lib/auth/AuthProvider';
 import { registerServiceWorker } from '@/lib/shell/registerServiceWorker';
 
 type ShellProvidersProps = {
@@ -30,6 +33,21 @@ export function ShellProviders({ children }: ShellProvidersProps) {
     audio.attachDocumentLifecycle(() => window.__NEON);
     registerServiceWorker();
     installProductionAnalyticsSink();
+
+    const onSwPush = (e: MessageEvent) => {
+      if (e.data?.type === 'neon-save-push') {
+        void syncIfSignedIn();
+      }
+    };
+    navigator.serviceWorker?.addEventListener('message', onSwPush);
+
+    void initPersistence().then(() => {
+      attachSyncLifecycle();
+      startPeriodicSync();
+      void syncIfSignedIn();
+    });
+
+    return () => navigator.serviceWorker?.removeEventListener('message', onSwPush);
   }, []);
 
   /** Shell routes play menu music; /play level music is owned by GameScene. */
@@ -44,7 +62,7 @@ export function ShellProviders({ children }: ShellProvidersProps) {
       musicVolume: s.musicVolume ?? DEFAULT_MUSIC_VOLUME,
     });
     if (s.music) audio.setMenuMusic();
-  }, [isPlay, pathname]);
+  }, [isPlay]);
 
   useEffect(() => {
     if (pathname) trackScreenView(pathname);
@@ -87,9 +105,9 @@ export function ShellProviders({ children }: ShellProvidersProps) {
   }, [isPlay]);
 
   return (
-    <>
+    <AuthProvider>
       <div className="shell-app-root">{children}</div>
       <AdBanner visible={process.env.NEXT_PUBLIC_SHELL_ADS === '1'} />
-    </>
+    </AuthProvider>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { initPersistence } from '@/lib/persistence/Persistence';
 import { MetaProgress } from '@/src/systems/MetaProgress.js';
 import { SaveManager } from '@/src/systems/SaveManager.js';
 import { RunPersistence } from '@/src/systems/RunPersistence.js';
@@ -37,16 +38,16 @@ export function useGameMeta() {
   }, []);
 
   useEffect(() => {
-    refresh();
-    setHydrated(true);
-    const onStorage = (e: StorageEvent) => {
-      if (!e.key || e.key.includes('neon') || e.key.includes('nn_')) refresh();
-    };
-    window.addEventListener('storage', onStorage);
-    const id = window.setInterval(refresh, 2000);
+    void initPersistence().then(() => {
+      refresh();
+      setHydrated(true);
+    });
+    const onSync = () => refresh();
+    window.addEventListener('neon:save-synced', onSync);
+    window.addEventListener('neon:storage', onSync);
     return () => {
-      window.removeEventListener('storage', onStorage);
-      window.clearInterval(id);
+      window.removeEventListener('neon:save-synced', onSync);
+      window.removeEventListener('neon:storage', onSync);
     };
   }, [refresh]);
 

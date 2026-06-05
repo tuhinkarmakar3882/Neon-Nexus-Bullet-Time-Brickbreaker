@@ -13,6 +13,7 @@ import { hubFeaturedEntries, hubPrimaryEntry, hubSettingsEntry } from '@/lib/she
 import { APP_VERSION } from '@/src/config/Version.js';
 
 import { ProgressStrip } from '@/components/shell/ProgressStrip';
+import { HomeCloudSyncCard } from '@/components/shell/HomeCloudSyncCard';
 
 type SavedRun = {
   level: number;
@@ -159,6 +160,8 @@ export function TitleMenu({
           compact
           hydrated={hydrated}
         />
+
+        <HomeCloudSyncCard />
 
         {showGemPromise ? (
           <p className="title-screen__gem-promise" aria-label="First clear earns gems">

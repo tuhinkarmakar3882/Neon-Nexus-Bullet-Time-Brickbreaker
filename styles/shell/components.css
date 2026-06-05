@@ -1013,6 +1013,68 @@
   padding: 0 2px;
 }
 
+/* Hub cloud sync — between progress strip and main menu */
+.home-cloud-sync {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-cta);
+  border: 1px solid var(--border-accent);
+  background: rgba(8, 14, 28, 0.72);
+  text-align: center;
+}
+
+.home-cloud-sync__head {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.home-cloud-sync__icon {
+  color: var(--action);
+  opacity: 0.9;
+}
+
+.home-cloud-sync__title {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.home-cloud-sync__hint,
+.home-cloud-sync__status {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.home-cloud-sync__status {
+  margin-top: 2px;
+}
+
+.home-cloud-sync__warn {
+  margin: 4px 0 0;
+  font-size: 0.6875rem;
+  color: #ffb4b4;
+}
+
+.home-cloud-sync__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.home-cloud-sync--signed-in .home-cloud-sync__actions {
+  margin-top: 8px;
+}
+
 .title-screen__gem-promise,
 .title-screen__streak-badge {
   display: inline-flex;
