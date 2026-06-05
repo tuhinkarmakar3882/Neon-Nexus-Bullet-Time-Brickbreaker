@@ -20,8 +20,6 @@ import { initPersistence } from '@/lib/persistence/Persistence';
 import { startPeriodicSync, syncIfSignedIn, attachSyncLifecycle } from '@/lib/persistence/SyncEngine';
 import { AuthProvider } from '@/lib/auth/AuthProvider';
 import { unregisterLegacyServiceWorkers } from '@/lib/shell/unregisterLegacyServiceWorkers';
-import { warmHubCache, wireHubLinkPrefetch } from '@/lib/shell/warmHubCache';
-import { prefetchBeforeNavigate, prefetchHubRoutes } from '@/lib/shell/hubRoutePrefetch';
 import { registerShellRouter, unregisterShellRouter } from '@/lib/shell/shellRouter';
 import { recordShellNavigation, syncShellStackOnPop } from '@/lib/shell/shellNavStack';
 
@@ -36,33 +34,14 @@ export function ShellProviders({ children }: ShellProvidersProps) {
 
   useEffect(() => {
     registerShellRouter((href) => {
-      prefetchBeforeNavigate(router, href);
       router.push(href);
     });
     return () => unregisterShellRouter();
   }, [router]);
 
   useEffect(() => {
-    if (isPlay) return;
-    const prefetch = () => prefetchHubRoutes(router, { includePlay: pathname === '/' });
-    let idleId: number | undefined;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    if (typeof requestIdleCallback === 'function') {
-      idleId = requestIdleCallback(prefetch, { timeout: 3000 });
-    } else {
-      timeoutId = setTimeout(prefetch, 800);
-    }
-    return () => {
-      if (idleId != null && typeof cancelIdleCallback === 'function') cancelIdleCallback(idleId);
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [router, isPlay, pathname]);
-
-  useEffect(() => {
     audio.attachDocumentLifecycle(() => window.__NEON);
     unregisterLegacyServiceWorkers();
-    warmHubCache();
-    const offPrefetch = wireHubLinkPrefetch(document, router);
     installProductionAnalyticsSink();
 
     void initPersistence().then(() => {
@@ -70,11 +49,7 @@ export function ShellProviders({ children }: ShellProvidersProps) {
       startPeriodicSync();
       void syncIfSignedIn();
     });
-
-    return () => {
-      offPrefetch();
-    };
-  }, [router]);
+  }, []);
 
   /** Shell routes play menu music; /play level music is owned by GameScene. */
   useEffect(() => {
