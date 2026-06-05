@@ -1,10 +1,9 @@
-import { HUB_PREFETCH_ROUTES } from '@/lib/shell/hubRoutePrefetch';
+import { HUB_DOCUMENT_PREFETCH_ROUTES } from '@/lib/shell/hubRoutePrefetch';
 
-const PREFETCH_ROUTES = [...HUB_PREFETCH_ROUTES];
+const PREFETCH_ROUTES = [...HUB_DOCUMENT_PREFETCH_ROUTES];
 
 /**
- * Browser-native prefetch hints for hub routes.
- * Speculation Rules (Chrome) + classic link prefetch for broader support.
+ * Browser-native document prefetch for hub routes (excludes /codex/ — see hubRoutePrefetch).
  */
 export function HubSpeculationRules() {
   const rules = {
